@@ -1,0 +1,250 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.1b</storyId>
+    <title>Provision AWS Infrastructure with Terraform</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-07</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-1b-provision-aws-infrastructure.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>DevOps engineer</asA>
+    <iWant>to provision AWS infrastructure using Terraform Infrastructure as Code</iWant>
+    <soThat>I have a reproducible, version-controlled EC2 environment ready for deploying GamePulse</soThat>
+    <tasks>
+      - Task 1.1b.1: Create Terraform Directory Structure (AC: #1)
+      - Task 1.1b.2: Define EC2 Instance Resource (AC: #1, #3)
+      - Task 1.1b.3: Configure Networking Resources (AC: #3)
+      - Task 1.1b.4: Configure IAM Resources (AC: #3)
+      - Task 1.1b.5: Configure CloudWatch Log Groups (AC: #3)
+      - Task 1.1b.6: Create User Data Script (AC: #3, #4)
+      - Task 1.1b.7: Define Variables and Outputs (AC: #1, #4)
+      - Task 1.1b.8: Validate and Apply Terraform Configuration (AC: #2, #3)
+      - Task 1.1b.9: Verify Infrastructure Accessibility (AC: #4)
+      - Task 1.1b.10: Testing (AC: #1, #2, #3, #4)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Terraform Configuration Created
+       - Terraform modules created: ec2, iam, cloudwatch
+       - Directory structure: terraform/ with main.tf, variables.tf, outputs.tf, providers.tf
+       - terraform.tfvars.example provided (secrets excluded)
+       - user_data.sh script for Docker installation
+
+    2. Terraform Validation Passes
+       - terraform init executes without errors
+       - terraform validate confirms configuration is syntactically valid
+       - terraform plan executes without errors and shows expected resources
+
+    3. AWS Infrastructure Provisioned
+       - terraform apply provisions EC2 t2.micro successfully
+       - Elastic IP allocated and associated with EC2 instance
+       - Security group configured: SSH (admin IP only), HTTP (80), HTTPS (443)
+       - IAM role and instance profile attached to EC2 with CloudWatch permissions
+       - CloudWatch log groups created: /gamepulse/backend, /gamepulse/frontend
+
+    4. Infrastructure Accessible
+       - Can SSH to EC2 instance using provided key pair
+       - EC2 instance has Docker and Docker Compose pre-installed (via user_data)
+       - Elastic IP is static and reachable
+       - terraform output returns instance_id, public_ip, instance_state
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>AC-3: AWS Infrastructure Provisioning (lines 562-569)</section>
+        <snippet>Defines acceptance criteria for AWS infrastructure: Terraform modules (ec2, iam, cloudwatch), terraform plan/apply successful, EC2 t2.micro provisioned, Elastic IP allocated, Security group configured (SSH admin IP only, HTTP/HTTPS open), CloudWatch log groups created, SSH access verified.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>AWS Infrastructure table (lines 79-88)</section>
+        <snippet>AWS resource specifications: EC2 t2.micro (1 vCPU, 1GB RAM, Ubuntu 22.04 LTS, Docker pre-installed), Elastic IP (static public IP), Security Group (SSH port 22 admin IP only, HTTP 80, HTTPS 443 from all, restrict SSH to admin IP), IAM Role (CloudWatch Logs write, Parameter Store read), CloudWatch Log Group (/gamepulse/backend, /gamepulse/frontend, 7-day retention), EBS Volume (20GB gp3, auto-backup enabled).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Terraform Module Structure (lines 90-102)</section>
+        <snippet>Terraform directory structure: terraform/ with main.tf (main infrastructure definition), variables.tf (input variables: instance type, region, admin IP), outputs.tf (output values: public IP, instance ID), providers.tf (AWS provider configuration), modules/ subdirectory with ec2/, iam/, cloudwatch/ modules.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Dependencies table (line 523)</section>
+        <snippet>Terraform dependency: Version 1.9+ required for infrastructure provisioning.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Decision Summary - Deployment (line 52)</section>
+        <snippet>Deployment decision: Docker Compose + AWS EC2 t2.micro. Starter template provides production-ready Docker setup, deploy to EC2 free tier.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>gamepulse - Epic Breakdown</title>
+        <section>Epic 1: Project Foundation &amp; Infrastructure</section>
+        <snippet>Epic 1 Goal: Establish production-ready foundation using FastAPI full-stack template with deployment to AWS EC2. Technical Foundation includes Docker Compose orchestration, PostgreSQL 16 + TimescaleDB, GitHub Actions CI/CD, AWS EC2 t2.micro with Traefik. Story 1.1b provisions AWS infrastructure using Terraform.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>NFR-6.1: Budget Constraints</section>
+        <snippet>Budget constraint: Infrastructure must stay under $10/month. Influences choice of AWS free tier resources (EC2 t2.micro, 750 hours/month for 12 months).</snippet>
+      </doc>
+    </docs>
+    <code>
+      <!-- No existing code artifacts - this is an infrastructure provisioning story -->
+      <note>This story creates Terraform configuration files (IaC), not application code. Terraform files will be created in terraform/ directory.</note>
+    </code>
+    <dependencies>
+      <infrastructure>
+        <tool name="terraform" version="1.9+" purpose="Infrastructure as Code provisioning" />
+        <tool name="aws-cli" version="2.x" purpose="AWS command line interface for credentials" />
+      </infrastructure>
+      <aws-resources>
+        <resource name="EC2" type="t2.micro" specs="1 vCPU, 1GB RAM, 20GB gp3 storage" />
+        <resource name="Elastic IP" type="static-ip" purpose="Persistent public IP address" />
+        <resource name="Security Group" type="firewall" rules="SSH (22) admin IP, HTTP (80) all, HTTPS (443) all" />
+        <resource name="IAM Role" type="permissions" policies="CloudWatchAgentServerPolicy" />
+        <resource name="CloudWatch Log Groups" type="logging" groups="/gamepulse/backend, /gamepulse/frontend" retention="7 days" />
+        <resource name="EBS Volume" type="storage" specs="20GB gp3, auto-backup enabled" />
+      </aws-resources>
+      <ami>
+        <base-image name="Ubuntu" version="22.04 LTS" source="AWS official AMI" />
+        <preinstalled>Docker CE, Docker Compose plugin (via user_data.sh)</preinstalled>
+      </ami>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint id="c1" type="budget">
+      Infrastructure must stay under $10/month - use AWS free tier only (EC2 t2.micro: 750 hours/month for 12 months, CloudWatch Logs: 5GB free)
+    </constraint>
+    <constraint id="c2" type="security">
+      SSH access restricted to admin IP only (no 0.0.0.0/0 SSH access) - configure via var.admin_ip_cidr in terraform.tfvars
+    </constraint>
+    <constraint id="c3" type="architecture">
+      Single EC2 instance deployment (no multi-AZ, no auto-scaling, no load balancing) for MVP simplicity
+    </constraint>
+    <constraint id="c4" type="state-management">
+      Terraform state stored locally (not S3 backend) for MVP - terraform.tfstate file in terraform/ directory (gitignored)
+    </constraint>
+    <constraint id="c5" type="availability">
+      Single availability zone (no high availability requirements for portfolio demo)
+    </constraint>
+    <constraint id="c6" type="docker">
+      Docker and Docker Compose must be pre-installed on EC2 instance via user_data.sh bootstrap script
+    </constraint>
+    <constraint id="c7" type="logging">
+      CloudWatch log groups must exist before application deployment (Story 1.6 depends on these)
+    </constraint>
+    <constraint id="c8" type="networking">
+      HTTP (80) and HTTPS (443) must be open to all IPs (0.0.0.0/0) for public dashboard access
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <!-- Terraform Configuration Interfaces -->
+    <interface>
+      <name>Terraform Variables</name>
+      <kind>Terraform input</kind>
+      <signature>
+        variable "aws_region" { default = "us-east-1" }
+        variable "instance_type" { default = "t2.micro" }
+        variable "admin_ip_cidr" { type = string } # Required, no default
+      </signature>
+      <path>terraform/variables.tf</path>
+      <notes>User must provide admin_ip_cidr in terraform.tfvars for SSH access restriction</notes>
+    </interface>
+    <interface>
+      <name>Terraform Outputs</name>
+      <kind>Terraform output</kind>
+      <signature>
+        output "instance_id" { value = aws_instance.gamepulse_api.id }
+        output "public_ip" { value = aws_eip.gamepulse_eip.public_ip }
+        output "instance_state" { value = aws_instance.gamepulse_api.instance_state }
+      </signature>
+      <path>terraform/outputs.tf</path>
+      <notes>Story 1.6 (deployment) will use public_ip output to configure deployment target</notes>
+    </interface>
+    <interface>
+      <name>EC2 User Data Bootstrap</name>
+      <kind>Bash script</kind>
+      <signature>#!/bin/bash - Installs Docker CE, Docker Compose, adds ubuntu user to docker group</signature>
+      <path>terraform/user_data.sh</path>
+      <notes>Executed once on EC2 instance launch, ensures Docker ready before application deployment</notes>
+    </interface>
+    <interface>
+      <name>AWS Security Group</name>
+      <kind>AWS resource</kind>
+      <signature>
+        Ingress: SSH (22) from var.admin_ip_cidr, HTTP (80) from 0.0.0.0/0, HTTPS (443) from 0.0.0.0/0
+        Egress: All traffic to 0.0.0.0/0
+      </signature>
+      <path>terraform/main.tf - aws_security_group resource</path>
+      <notes>SSH restricted for security, HTTP/HTTPS open for public dashboard</notes>
+    </interface>
+    <interface>
+      <name>IAM Instance Profile</name>
+      <kind>AWS resource</kind>
+      <signature>IAM Role with CloudWatchAgentServerPolicy attached</signature>
+      <path>terraform/main.tf - aws_iam_instance_profile resource</path>
+      <notes>Allows EC2 instance to write logs to CloudWatch, used by Story 1.6 structured logging</notes>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      For this infrastructure provisioning story, testing focuses on Terraform validation and infrastructure verification:
+      - **Terraform Validation**: terraform init, terraform validate, terraform plan must all pass without errors
+      - **Infrastructure Testing**: Verify terraform apply provisions all resources successfully (EC2, EIP, SG, IAM, CloudWatch)
+      - **Security Testing**: Verify SSH restricted to admin IP (block attempts from other IPs), HTTP/HTTPS accessible from all IPs
+      - **Accessibility Testing**: Verify SSH access works with provided key pair, Docker installed and running, Elastic IP persistent after instance stop/start
+      - **Cost Estimation**: Use AWS pricing calculator or terraform cost estimation tools to verify &lt;$10/month target
+      - **No Unit Tests Required**: Infrastructure as Code validation via Terraform commands and manual verification
+      - **Frameworks**: Terraform built-in validation, manual testing via AWS CLI and SSH
+    </standards>
+    <locations>
+      - terraform/ (Terraform configuration files, not test files)
+      - Manual verification via: AWS Console, SSH, terraform CLI
+    </locations>
+    <ideas>
+      <idea ac="1,2" priority="high">
+        Terraform validation test: Run terraform init && terraform validate && terraform plan, verify all commands succeed with zero errors and plan shows expected resources (EC2, EIP, SG, IAM, CloudWatch)
+      </idea>
+      <idea ac="3" priority="high">
+        Infrastructure provisioning test: Run terraform apply, verify all resources created successfully, capture outputs (instance_id, public_ip), verify instance state = "running"
+      </idea>
+      <idea ac="4" priority="high">
+        SSH accessibility test: Retrieve public_ip from terraform output, run ssh -i ~/.ssh/gamepulse-key.pem ubuntu@&lt;PUBLIC_IP&gt;, verify connection succeeds
+      </idea>
+      <idea ac="4" priority="high">
+        Docker installation test: SSH to EC2, run "docker --version" and "docker compose version", verify both commands return version numbers (not "command not found")
+      </idea>
+      <idea ac="2" priority="medium">
+        Terraform syntax validation test: Run terraform validate with intentionally invalid syntax (e.g., missing closing brace), verify validation fails with clear error message
+      </idea>
+      <idea ac="3" priority="high">
+        Security group test: Attempt SSH from non-admin IP (should fail with timeout/connection refused), verify HTTP/HTTPS accessible from any IP using curl
+      </idea>
+      <idea ac="3" priority="medium">
+        IAM permissions test: SSH to EC2, install AWS CLI, configure credentials, attempt to write test log to CloudWatch using aws logs put-log-events, verify write succeeds
+      </idea>
+      <idea ac="4" priority="medium">
+        Elastic IP persistence test: Run terraform output public_ip (note IP), stop EC2 instance via AWS console, start instance, verify public_ip unchanged
+      </idea>
+      <idea ac="1,3" priority="medium">
+        Cost estimation test: Run terraform plan with cost estimation tools (e.g., infracost), verify estimated monthly cost &lt;$10
+      </idea>
+      <idea ac="3" priority="low">
+        CloudWatch log groups test: Use AWS CLI to describe log groups, verify /gamepulse/backend and /gamepulse/frontend exist with 7-day retention
+      </idea>
+    </ideas>
+  </tests>
+</story-context>

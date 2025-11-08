@@ -1,0 +1,1494 @@
+# Architecture
+
+**Version Verification Date:** 2025-11-07
+**All technology versions verified via WebSearch on November 7, 2025**
+
+## Executive Summary
+
+GamePulse is a data-first web application that combines real-time sports data streaming with batch sentiment analysis to surface the most exciting NCAA basketball games during peak season. The architecture prioritizes data pipeline reliability and time-series performance within AWS free-tier constraints, designed as a portfolio demonstration of modern data engineering patterns.
+
+## Project Initialization
+
+**First implementation story should execute:**
+
+```bash
+# Using copier (recommended - handles .env setup):
+pipx run copier copy https://github.com/fastapi/full-stack-fastapi-template gamepulse --trust
+
+# Or direct git clone:
+git clone https://github.com/fastapi/full-stack-fastapi-template gamepulse
+cd gamepulse
+```
+
+**This establishes the base architecture with these decisions:**
+
+| Technology | Version | Provided By | Rationale |
+|------------|---------|-------------|-----------|
+| FastAPI | 0.121.0 | Starter | Modern async Python framework, auto-generated API docs |
+| React + TypeScript | 18.x | Starter | Type-safe frontend with modern hooks |
+| Vite | 7.2.2 | Starter | Fast build tool with HMR |
+| PostgreSQL | 16.x | Starter | Relational database with mature ecosystem |
+| TimescaleDB | 2.23.0 | Manual Add | Time-series extension for Postgres |
+| SQLModel | 0.0.23 | Starter | Type-safe ORM for FastAPI + Postgres |
+| Alembic | 1.17.1 | Starter | Database migration management |
+| Poetry | 2.2.1 | Starter | Python dependency management |
+| Chakra UI | 3.29.0 | Starter | React component library with dark mode |
+| Docker Compose | 2.40.3 | Starter | Local development orchestration |
+| GitHub Actions | N/A | Starter | CI/CD pipeline |
+| Traefik | 3.5.4 | Starter | Reverse proxy for automatic HTTPS |
+
+## Decision Summary
+
+| Category | Decision | Version | Affects Epics | Rationale |
+| -------- | -------- | ------- | ------------- | --------- |
+| **Starter Template** | FastAPI Full-Stack Template | Latest (2025) | All Epics | Production-ready Docker setup, CI/CD pipeline, modern frontend tooling. Saves 8-10 hours in Week 1 vs manual setup. |
+| **Database** | PostgreSQL + TimescaleDB | 16.x + 2.23.0 | Epic 2, 3, 4, 5, 6 | PostgreSQL for learning transferability (highly marketable skill). TimescaleDB extension adds time-series optimization. Trade-off: Slightly slower than QuestDB but negligible at GamePulse scale (60MB data). |
+| **ORM** | SQLModel | 0.0.23 | Epic 2, 4, 7 | Type-safe ORM, native FastAPI integration, automatic Pydantic validation. Keep starter template default. |
+| **Migrations** | Alembic | 1.17.1 | All Backend Epics | Standard migration tool for SQLAlchemy/SQLModel. Keep starter template default. |
+| **Package Manager** | Poetry | 2.2.1 | All Backend Epics | Mature dependency management, already configured in template. Avoid migration overhead. |
+| **Backend Framework** | FastAPI | 0.121.0 | Epic 7 | Async/await support, automatic OpenAPI docs, high performance. Starter template default. |
+| **Frontend Framework** | React + TypeScript + Vite | 18.x + 7.2.2 | Epic 8 | Modern React with type safety, fast builds with Vite. Starter template default. |
+| **UI Components** | Chakra UI | 3.29.0 | Epic 8 | Pre-built components, dark mode support, responsive design system. Faster than building custom Tailwind components. Keep starter template default. |
+| **Deployment** | Docker Compose + AWS EC2 | 2.40.3 + t2.micro | Epic 1 | Starter provides production-ready Docker setup. Deploy to EC2 free tier. |
+| **CI/CD** | GitHub Actions | N/A | Epic 1 | Pre-configured in starter template. Auto-deploy on push to main. |
+| **Background Jobs** | APScheduler | 3.11.1 | Epic 2, 3, 4 | Lightweight in-process scheduler for polling jobs (15 min intervals). No Redis dependency. Can migrate to Celery + Redis for production scale if needed. |
+| **Streaming Infrastructure** | flumine | 2.9.1 | Epic 5 | Purpose-built framework for Betfair WebSocket streaming. Handles auth, reconnection, event callbacks automatically. Saves 2-3 days vs building WebSocket client from scratch. |
+| **Time-Series Config** | TimescaleDB Hypertables | 1-day chunks | Epic 4, 5 | Create hypertables for `excitement_scores` and `betting_odds` with 1-day chunk intervals. Compression deferred to Growth phase (data only ~60MB). |
+| **HTTP Client** | httpx | 0.28.1 | Epic 2, 3 | Async HTTP client matching FastAPI async architecture. Modern replacement for requests with async/await support. |
+| **Sentiment Analysis** | VADER (vaderSentiment) | 3.3.2 | Epic 4 | Rule-based sentiment for social media text. 339x faster than transformers, optimized for Reddit slang/caps/punctuation. Good-enough accuracy for excitement scoring. |
+| **Chart Library** | Recharts | 3.3.0 | Epic 8 | React-native declarative charting. Simple API for sparkline timelines. 30-min implementation vs 2-3 days with D3. |
+| **Retry Logic** | tenacity | 9.1.2 | Epic 2, 3, 5, 7 | Declarative retry with exponential backoff for external API failures. Graceful degradation per NFR-4.2. |
+| **Frontend State** | React Query (TanStack Query) | 5.90.7 | Epic 8 | API data caching, auto-refresh, stale-while-revalidate. Already included in starter template. Perfect for 10-15 min polling. |
+| **Logging** | structlog | 25.5.0 | All Backend Epics | Structured JSON logging for CloudWatch integration. Context binding, queryable logs. Matches NFR-4.3 requirement. |
+
+## Project Structure
+
+```
+gamepulse/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── routes/
+│   │   │   │   ├── games.py           # GET /api/games/today, /api/games/{id}/timeline
+│   │   │   │   ├── moments.py         # GET /api/games/{id}/moments
+│   │   │   │   └── health.py          # GET /api/health
+│   │   │   └── deps.py                # Database session dependencies
+│   │   ├── core/
+│   │   │   ├── config.py              # Settings, environment variables
+│   │   │   ├── db.py                  # Database connection, SQLModel engine
+│   │   │   └── security.py            # (Remove auth - not needed for MVP)
+│   │   ├── models/
+│   │   │   ├── team.py                # Team, Conference SQLModel schemas
+│   │   │   ├── game.py                # Game SQLModel schema
+│   │   │   ├── reddit.py              # RedditPost SQLModel schema
+│   │   │   ├── excitement.py          # ExcitementScore SQLModel schema
+│   │   │   └── betting.py             # BettingOdds SQLModel schema
+│   │   ├── schemas/
+│   │   │   ├── game.py                # Pydantic response models for API
+│   │   │   └── health.py              # Health check response models
+│   │   ├── services/
+│   │   │   ├── ncaa_client.py         # NCAA API polling (batch)
+│   │   │   ├── reddit_client.py       # Reddit API polling (batch)
+│   │   │   ├── betfair_stream.py      # Betfair WebSocket streaming
+│   │   │   ├── excitement_scorer.py   # Excitement algorithm
+│   │   │   ├── time_mapper.py         # Wall-clock -> game-clock logic
+│   │   │   └── matching.py            # Reddit post -> game matching
+│   │   ├── workers/
+│   │   │   ├── ncaa_poller.py         # Scheduled job: every 15 min
+│   │   │   ├── reddit_poller.py       # Scheduled job: every 15 min
+│   │   │   └── excitement_calculator.py # Scheduled job: every 15 min
+│   │   ├── alembic/
+│   │   │   ├── versions/              # Migration files
+│   │   │   └── env.py
+│   │   └── main.py                    # FastAPI app entry point
+│   ├── tests/
+│   │   ├── unit/
+│   │   ├── integration/
+│   │   └── e2e/
+│   ├── pyproject.toml                 # Poetry dependencies
+│   ├── Dockerfile                     # Multi-stage build
+│   └── alembic.ini
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── GameCard.tsx           # Game display with excitement badge
+│   │   │   ├── ExcitementTimeline.tsx # Sparkline chart
+│   │   │   ├── TopMoments.tsx         # Reddit posts list
+│   │   │   └── LoadingSkeleton.tsx
+│   │   ├── pages/
+│   │   │   └── Dashboard.tsx          # Main page
+│   │   ├── hooks/
+│   │   │   ├── useGames.ts            # React Query for /api/games/today
+│   │   │   └── usePolling.ts          # Auto-refresh every 10-15 min
+│   │   ├── utils/
+│   │   │   ├── api.ts                 # Axios client
+│   │   │   └── formatters.ts
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── tests/
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── Dockerfile
+├── docker-compose.yml                 # Local development orchestration
+├── docker-compose.prod.yml            # Production deployment
+├── .github/
+│   └── workflows/
+│       └── deploy.yml                 # CI/CD pipeline
+└── README.md
+```
+
+## Epic to Architecture Mapping
+
+| Epic | Architecture Components | Database Tables | External APIs | Dependencies |
+|------|------------------------|-----------------|---------------|--------------|
+| Epic 1: Foundation & Deployment | Docker Compose, AWS EC2, GitHub Actions, TimescaleDB setup | Initial schema | N/A | None |
+| Epic 2: Game Data Ingestion | `services/ncaa_client.py`, `workers/ncaa_poller.py`, `models/team.py`, `models/game.py` | `teams`, `conferences`, `games` | NCAA API (henrygd/ncaa-api) | httpx, APScheduler, SQLModel |
+| Epic 3: Reddit Social Sentiment | `services/reddit_client.py`, `services/matching.py`, `workers/reddit_poller.py`, `models/reddit.py` | `reddit_posts` | Reddit API (PRAW) | PRAW, httpx, APScheduler |
+| Epic 4: Excitement Score Algorithm | `services/excitement_scorer.py`, `workers/excitement_calculator.py`, `models/excitement.py` | `excitement_scores` (hypertable) | N/A | vaderSentiment, APScheduler, reads from Epic 2/3/5 tables |
+| Epic 5: Streaming Odds Integration | `services/betfair_stream.py`, `models/betting.py` | `betting_odds` (hypertable) | Betfair WebSocket API | flumine, structlog |
+| Epic 6: Time Mapping & Context | `services/time_mapper.py` | Updates `reddit_posts` (game_time_context, estimated_game_clock) | N/A | Depends on Epic 2 (games) and Epic 3 (posts) |
+| Epic 7: Backend API Development | `api/routes/games.py`, `api/routes/moments.py`, `api/routes/health.py`, `schemas/game.py`, `schemas/health.py` | All tables (read-only) | N/A | FastAPI, SQLModel, tenacity (for health checks) |
+| Epic 8: Frontend Dashboard | `components/GameCard.tsx`, `components/ExcitementTimeline.tsx`, `components/TopMoments.tsx`, `hooks/useGames.ts`, `pages/Dashboard.tsx` | N/A | Backend API (Epic 7) | React Query, Recharts, Chakra UI |
+| Epic 9: Testing & Quality | `tests/unit/`, `tests/integration/`, `tests/e2e/` | Test database | Mocked APIs | pytest, pytest-asyncio, httpx (test client) |
+| Epic 10: Documentation & Polish | README.md, ADRs, OpenAPI docs | N/A | N/A | None |
+
+**Module Boundaries:**
+
+**Data Ingestion Layer** (Epic 2, 3, 5):
+- Owns: External API clients, polling workers, streaming processes
+- Writes to: Database tables (games, reddit_posts, betting_odds)
+- No direct communication with API layer
+
+**Processing Layer** (Epic 4, 6):
+- Owns: Business logic (excitement scoring, time mapping)
+- Reads from: Database tables
+- Writes to: Database tables (excitement_scores, updates reddit_posts)
+- No external API calls
+
+**API Layer** (Epic 7):
+- Owns: REST endpoints, Pydantic schemas
+- Reads from: Database tables (joins across all tables)
+- No writes to database (read-only)
+- Serves: Frontend
+
+**Frontend Layer** (Epic 8):
+- Owns: React components, UI state management
+- Communicates with: API layer only (no direct database access)
+- No external API calls
+
+**Integration Points:**
+
+1. **Data Ingestion → Database:**
+   - NCAA poller writes to `games` table every 15 min
+   - Reddit poller writes to `reddit_posts` table every 15 min
+   - Betfair stream writes to `betting_odds` table (real-time)
+   - Connection: SQLModel async session
+
+2. **Processing → Database:**
+   - Excitement calculator reads `games`, `reddit_posts`, `betting_odds`
+   - Writes to `excitement_scores` table every 15 min
+   - Time mapper reads `games` and `reddit_posts`, updates `reddit_posts`
+   - Connection: SQLModel async session
+
+3. **API → Database:**
+   - FastAPI endpoints read via SQLModel ORM
+   - Complex queries use JOIN across tables
+   - Connection pooling (5-10 connections)
+
+4. **Frontend → API:**
+   - React Query fetches JSON over HTTP
+   - Polling every 10-15 min (configurable)
+   - Auto-retry on failure with exponential backoff
+
+5. **APScheduler → Workers:**
+   - In-process scheduler triggers worker functions
+   - Shares database connection pool with FastAPI
+   - Runs in separate async tasks
+
+6. **flumine → Database:**
+   - Long-running WebSocket listener
+   - Writes odds updates to `betting_odds` table
+   - Independent process from API/workers
+
+## Technology Stack Details
+
+### Core Technologies
+
+**Backend Stack:**
+- **FastAPI 0.115+**: Async Python web framework
+  - Automatic OpenAPI/Swagger documentation
+  - Pydantic validation
+  - High performance (comparable to Node.js)
+  - Native async/await support
+
+- **PostgreSQL 16 + TimescaleDB**: Relational database with time-series optimization
+  - TimescaleDB creates hypertables for `excitement_scores` and `betting_odds`
+  - Automatic data partitioning by time
+  - Optimized aggregation queries (e.g., sparkline data)
+
+- **SQLModel**: Type-safe ORM
+  - Combines SQLAlchemy + Pydantic
+  - Automatic API response validation
+  - IDE autocomplete for database queries
+
+- **Alembic**: Database migrations
+  - Version-controlled schema changes
+  - Automatic migration generation from model changes
+
+**Frontend Stack:**
+- **React 18 + TypeScript**: Type-safe component library
+- **Vite**: Fast build tool with hot module replacement (HMR)
+- **Chakra UI**: Component library with dark mode support
+- **React Query**: Server state management, automatic caching, polling
+- **Recharts**: Sparkline chart library for excitement timelines
+
+**Data Pipeline:**
+- **NCAA API Client** (henrygd/ncaa-api): Batch polling every 15 min
+- **PRAW** (Python Reddit API Wrapper): Batch polling every 15 min (100 QPM limit)
+- **flumine + Betfair API**: Real-time WebSocket streaming for betting odds
+- **VADER Sentiment**: Lightweight sentiment analysis (339x faster than transformers)
+
+**DevOps:**
+- **Docker + Docker Compose**: Containerization and orchestration
+- **GitHub Actions**: CI/CD pipeline (lint, test, build, deploy)
+- **AWS EC2 t2.micro**: Free tier deployment target
+- **Traefik**: Reverse proxy for automatic HTTPS
+
+### Integration Points
+
+**Data Flow Architecture:**
+
+```
+External Sources → Data Ingestion → Database → API → Frontend
+```
+
+**1. Data Ingestion Layer:**
+- **Batch Sources** (Scheduled workers):
+  - NCAA API → `ncaa_poller.py` (every 15 min) → `games` table
+  - Reddit API → `reddit_poller.py` (every 15 min) → `reddit_posts` table
+
+- **Streaming Source** (Long-running process):
+  - Betfair WebSocket → `betfair_stream.py` (real-time) → `betting_odds` table
+
+**2. Processing Layer:**
+- **Excitement Calculator** (Scheduled worker):
+  - Reads: `games`, `reddit_posts`, `betting_odds`
+  - Calculates: Multi-factor excitement score
+  - Writes: `excitement_scores` table (every 15 min)
+
+**3. API Layer:**
+- **FastAPI REST endpoints**:
+  - `GET /api/games/today` → Queries `games` + `excitement_scores` (JOIN)
+  - `GET /api/games/{id}/moments` → Queries `reddit_posts` (filtered by game_id)
+  - `GET /api/games/{id}/timeline` → Queries `excitement_scores` (time-series)
+  - `GET /api/health` → System status check
+
+**4. Frontend Layer:**
+- **React dashboard**:
+  - React Query fetches `/api/games/today` every 10-15 min (polling)
+  - Displays game cards with Chakra UI components
+  - Recharts renders sparkline excitement timelines
+
+**Communication Protocols:**
+- Backend ↔ Frontend: REST API over HTTP/HTTPS (JSON)
+- Backend ↔ PostgreSQL: SQLModel ORM (connection pooling)
+- Backend ↔ External APIs: HTTP polling (NCAA, Reddit) + WebSocket (Betfair)
+
+## Implementation Patterns
+
+### Naming Conventions
+
+**Database:**
+- Table names: Lowercase, plural (e.g., `games`, `reddit_posts`, `excitement_scores`)
+- Column names: Snake_case (e.g., `game_id`, `home_score`, `created_at`)
+- Foreign keys: `{table}_id` format (e.g., `team_id`, `game_id`)
+
+**Backend (Python):**
+- Files: Snake_case (e.g., `excitement_scorer.py`, `ncaa_client.py`)
+- Classes: PascalCase (e.g., `ExcitementScore`, `RedditClient`)
+- Functions: Snake_case (e.g., `calculate_excitement()`, `match_post_to_game()`)
+- Constants: UPPER_SNAKE_CASE (e.g., `MAX_GAMES`, `POLLING_INTERVAL`)
+
+**Frontend (TypeScript/React):**
+- Components: PascalCase (e.g., `GameCard.tsx`, `ExcitementTimeline.tsx`)
+- Hooks: camelCase with `use` prefix (e.g., `useGames.ts`, `usePolling.ts`)
+- Utilities: camelCase (e.g., `formatTimestamp()`, `getTeamColor()`)
+- Files: Match component/hook name (e.g., `GameCard.tsx` exports `GameCard`)
+
+**API Endpoints:**
+- REST pattern: `/api/{resource}/{id?}/{action?}`
+- Examples: `/api/games/today`, `/api/games/{game_id}/moments`
+- Lowercase with hyphens for multi-word (e.g., `/api/game-threads`)
+
+### Code Organization
+
+**Backend Organization:**
+- **models/**: SQLModel database schemas (one file per domain entity)
+- **schemas/**: Pydantic API response models (separate from DB models)
+- **api/routes/**: FastAPI endpoint definitions (one file per resource)
+- **services/**: Business logic, external API clients (reusable functions)
+- **workers/**: Scheduled background jobs (polling, calculations)
+- **core/**: Cross-cutting concerns (config, database, security)
+
+**Frontend Organization:**
+- **components/**: Reusable UI components (one file per component)
+- **pages/**: Top-level page components (match routes)
+- **hooks/**: Custom React hooks for data fetching, state
+- **utils/**: Pure utility functions (formatting, validation)
+
+**Test Organization:**
+- **tests/unit/**: Pure function tests (excitement calculation, matching logic)
+- **tests/integration/**: API endpoint tests with mocked database
+- **tests/e2e/**: Full pipeline tests with test database
+
+### Error Handling
+
+**Backend Error Strategy:**
+
+**Retry Logic (External APIs):**
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=60)
+)
+async def fetch_ncaa_games():
+    # Retries 3 times with exponential backoff: 2s, 4s, 8s
+    response = await ncaa_client.get_games()
+    return response
+```
+
+**Graceful Degradation:**
+- NCAA API down → Serve cached game data, show stale data warning
+- Reddit API down → Show games without social sentiment data
+- Betfair stream disconnects → Auto-reconnect, continue with last known odds
+- Database unreachable → Return HTTP 503 with error message
+
+**Error Response Format:**
+```json
+{
+  "detail": "NCAA API temporarily unavailable",
+  "error_code": "EXTERNAL_API_ERROR",
+  "retry_after": 60
+}
+```
+
+**Frontend Error Handling:**
+- API failures → Show cached data + yellow banner "Last updated X min ago"
+- Network errors → Display offline indicator, retry automatically
+- No games today → Show empty state "No games scheduled"
+
+### Date/Time Handling
+
+**Timezone Convention:**
+```python
+from datetime import datetime, timezone
+
+# ALWAYS use UTC internally
+utc_now = datetime.now(timezone.utc)
+
+# Store as TIMESTAMPTZ in PostgreSQL (preserves timezone)
+# API responses: ISO 8601 format
+api_timestamp = utc_now.isoformat()  # "2025-11-07T20:00:00+00:00"
+```
+
+**Wall-Clock → Game-Clock Mapping:**
+- Input: Reddit post timestamp (UTC), game start time (UTC)
+- Processing: Calculate elapsed time, account for halftime
+- Output: Estimated game clock ("10:00 1st Half"), confidence score
+- Location: `services/time_mapper.py`
+
+**Rule**: All timestamps stored as UTC, converted only for display.
+
+### API Response Format
+
+**Success Response:**
+```json
+{
+  "games": [...],
+  "updated_at": "2025-11-07T20:00:00Z"
+}
+```
+
+**Error Response:**
+```json
+{
+  "detail": "NCAA API temporarily unavailable",
+  "error_code": "EXTERNAL_API_ERROR",
+  "retry_after": 60
+}
+```
+
+**Pydantic Schema Enforcement:**
+```python
+from pydantic import BaseModel
+from datetime import datetime
+
+class GamesResponse(BaseModel):
+    games: List[GameSchema]
+    updated_at: datetime
+```
+
+### Testing Strategy
+
+**Test Organization:**
+- `tests/unit/`: Pure functions (excitement calculation, matching, time mapping)
+- `tests/integration/`: API endpoints with mocked database
+- `tests/e2e/`: Full pipeline with test database
+
+**Coverage Target**: >70% for core logic
+
+**pytest Fixtures:**
+- Database sessions (test DB)
+- Mocked external APIs (NCAA, Reddit, Betfair)
+- Sample game data for testing
+
+### Logging Strategy
+
+**Structured Logging (JSON format):**
+```python
+import logging
+import structlog
+
+logger = structlog.get_logger()
+
+# Example log output:
+logger.info(
+    "excitement_score_calculated",
+    game_id="401234567",
+    score=94.5,
+    reddit_velocity=12.3,
+    sentiment=0.82,
+    duration_ms=45
+)
+```
+
+**Log Levels:**
+- **DEBUG**: Detailed diagnostic info (local development only)
+- **INFO**: General operational events (API requests, job completions)
+- **WARNING**: Degraded performance, retries, stale data served
+- **ERROR**: API failures, exceptions, data quality issues
+
+**Log Destinations:**
+- Local dev: stdout (colored, human-readable)
+- Production: stdout → Docker logs → CloudWatch Logs (JSON)
+
+**Key Metrics Logged:**
+- API response times (middleware logs all requests)
+- Polling job completion (games fetched, posts matched, scores calculated)
+- External API failures (NCAA, Reddit, Betfair errors)
+- Data quality metrics (match confidence, missing data)
+
+## Data Architecture
+
+### Database Schema (PostgreSQL + TimescaleDB)
+
+**Dimensional Tables:**
+
+```sql
+-- Teams (slow-changing dimension)
+CREATE TABLE teams (
+    team_id VARCHAR PRIMARY KEY,
+    team_name VARCHAR NOT NULL,
+    team_abbr VARCHAR,
+    conference_id VARCHAR,
+    primary_color VARCHAR,
+    aliases TEXT[],
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Conferences
+CREATE TABLE conferences (
+    conference_id VARCHAR PRIMARY KEY,
+    conference_name VARCHAR NOT NULL,
+    sport VARCHAR DEFAULT 'NCAA_MBB',
+    rivalry_factor FLOAT DEFAULT 1.0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**Fact Tables (High-Frequency):**
+
+```sql
+-- Games (updated every 15 min during live games)
+CREATE TABLE games (
+    game_id VARCHAR PRIMARY KEY,
+    game_date TIMESTAMPTZ NOT NULL,
+    home_team_id VARCHAR REFERENCES teams(team_id),
+    away_team_id VARCHAR REFERENCES teams(team_id),
+    home_score INT,
+    away_score INT,
+    game_status VARCHAR,  -- scheduled, live, halftime, final
+    game_clock VARCHAR,   -- "2:34 2nd Half"
+    game_start_time TIMESTAMPTZ,
+    game_end_time TIMESTAMPTZ,
+    venue VARCHAR,
+    is_rivalry BOOLEAN,
+    is_tournament BOOLEAN,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Reddit posts (batch ingested every 15 min)
+CREATE TABLE reddit_posts (
+    post_id VARCHAR PRIMARY KEY,
+    game_id VARCHAR REFERENCES games(game_id),
+    post_type VARCHAR,  -- game_thread, moment, pre_game, post_game
+    title TEXT NOT NULL,
+    author VARCHAR,
+    upvotes INT,
+    comments_count INT,
+    awards_count INT,
+    post_time TIMESTAMPTZ NOT NULL,
+    game_time_context VARCHAR,
+    estimated_game_clock VARCHAR,
+    time_mapping_confidence FLOAT,
+    url TEXT,
+    match_method VARCHAR,
+    match_confidence FLOAT,
+    is_game_thread BOOLEAN DEFAULT FALSE,
+    engagement_score FLOAT,
+    sentiment_score FLOAT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Excitement scores (time-series hypertable)
+CREATE TABLE excitement_scores (
+    game_id VARCHAR NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    score FLOAT NOT NULL,
+    reddit_velocity FLOAT,
+    reddit_engagement INT,
+    sentiment_score FLOAT,
+    odds_volatility FLOAT,
+    game_context_factor FLOAT,
+    rivalry_bonus FLOAT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Convert to TimescaleDB hypertable
+SELECT create_hypertable('excitement_scores', 'timestamp');
+
+-- Betting odds (streaming, time-series hypertable)
+CREATE TABLE betting_odds (
+    game_id VARCHAR NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    market_type VARCHAR,  -- moneyline, spread, total
+    home_odds FLOAT,
+    away_odds FLOAT,
+    implied_home_prob FLOAT,
+    implied_away_prob FLOAT,
+    volume INT,
+    odds_shift_5min FLOAT,
+    odds_volatility_score FLOAT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Convert to TimescaleDB hypertable
+SELECT create_hypertable('betting_odds', 'timestamp');
+```
+
+**Indexes for Performance:**
+
+```sql
+-- Games lookup by date
+CREATE INDEX idx_games_date ON games(game_date);
+CREATE INDEX idx_games_status ON games(game_status);
+
+-- Reddit posts by game and time
+CREATE INDEX idx_reddit_posts_game ON reddit_posts(game_id, post_time);
+CREATE INDEX idx_reddit_posts_engagement ON reddit_posts(engagement_score DESC);
+
+-- Excitement scores time-series queries (TimescaleDB auto-creates on timestamp)
+CREATE INDEX idx_excitement_game ON excitement_scores(game_id, timestamp DESC);
+
+-- Betting odds time-series queries
+CREATE INDEX idx_betting_odds_game ON betting_odds(game_id, timestamp DESC);
+```
+
+### Data Relationships
+
+**Primary Relationships:**
+- `games.home_team_id` → `teams.team_id` (Many-to-One)
+- `games.away_team_id` → `teams.team_id` (Many-to-One)
+- `reddit_posts.game_id` → `games.game_id` (Many-to-One)
+- `excitement_scores.game_id` → `games.game_id` (Many-to-One, time-series)
+- `betting_odds.game_id` → `games.game_id` (Many-to-One, time-series)
+
+**Key Queries:**
+
+**Dashboard "Games Today" Query:**
+```sql
+SELECT
+    g.*,
+    ht.team_name AS home_team_name,
+    ht.primary_color AS home_color,
+    at.team_name AS away_team_name,
+    at.primary_color AS away_color,
+    e.score AS excitement_score,
+    e.timestamp AS excitement_updated_at
+FROM games g
+JOIN teams ht ON g.home_team_id = ht.team_id
+JOIN teams at ON g.away_team_id = at.team_id
+LEFT JOIN LATERAL (
+    SELECT score, timestamp
+    FROM excitement_scores
+    WHERE game_id = g.game_id
+    ORDER BY timestamp DESC
+    LIMIT 1
+) e ON TRUE
+WHERE g.game_date >= CURRENT_DATE
+  AND g.game_date < CURRENT_DATE + INTERVAL '1 day'
+ORDER BY e.score DESC NULLS LAST
+LIMIT 10;
+```
+
+**Sparkline Timeline Query:**
+```sql
+SELECT timestamp, score
+FROM excitement_scores
+WHERE game_id = $1
+  AND timestamp >= NOW() - INTERVAL '4 hours'
+ORDER BY timestamp ASC;
+```
+
+**Top Moments Query:**
+```sql
+SELECT *
+FROM reddit_posts
+WHERE game_id = $1
+  AND post_type IN ('moment', 'game_thread')
+ORDER BY engagement_score DESC
+LIMIT 10;
+```
+
+## API Contracts
+
+### REST API Specification
+
+**Base URL:** `http://localhost:8000/api` (dev), `https://gamepulse.example.com/api` (prod)
+
+**Endpoints:**
+
+**1. GET /api/games/today**
+
+Fetch today's games with excitement scores.
+
+**Query Parameters:**
+- `limit` (optional, default=10): Max games to return
+- `sort` (optional, default=excitement_desc): Sort order
+
+**Response:**
+```json
+{
+  "games": [
+    {
+      "game_id": "401234567",
+      "home_team": {
+        "id": "du",
+        "name": "Duke",
+        "color": "#003087"
+      },
+      "away_team": {
+        "id": "unc",
+        "name": "UNC",
+        "color": "#7BAFD4"
+      },
+      "home_score": 78,
+      "away_score": 81,
+      "status": "final",
+      "game_clock": null,
+      "excitement_score": 94.5,
+      "is_rivalry": true,
+      "excitement_trend": [
+        {"timestamp": "2025-11-07T19:00:00Z", "score": 45},
+        {"timestamp": "2025-11-07T19:15:00Z", "score": 58},
+        {"timestamp": "2025-11-07T19:30:00Z", "score": 72}
+      ]
+    }
+  ],
+  "updated_at": "2025-11-07T20:00:00Z"
+}
+```
+
+**2. GET /api/games/{game_id}/moments**
+
+Fetch top Reddit posts for a game.
+
+**Query Parameters:**
+- `type` (optional): Filter by post_type (all | moment | game_thread)
+
+**Response:**
+```json
+{
+  "game_id": "401234567",
+  "game_thread": {
+    "post_id": "xyz",
+    "title": "[Game Thread] Duke vs UNC",
+    "url": "https://reddit.com/r/CollegeBasketball/...",
+    "comments_count": 1247
+  },
+  "moments": [
+    {
+      "post_id": "abc123",
+      "title": "Duke opens with 12-0 run, crowd silenced",
+      "upvotes": 342,
+      "comments_count": 87,
+      "game_time_context": "1st_half",
+      "estimated_game_clock": "10:00 1st Half",
+      "time_mapping_confidence": 0.85,
+      "url": "https://reddit.com/..."
+    }
+  ]
+}
+```
+
+**3. GET /api/games/{game_id}/timeline**
+
+Fetch excitement score time-series for sparkline chart.
+
+**Response:**
+```json
+{
+  "game_id": "401234567",
+  "timeline": [
+    {"timestamp": "2025-11-07T19:00:00Z", "score": 45},
+    {"timestamp": "2025-11-07T19:15:00Z", "score": 58}
+  ]
+}
+```
+
+**4. GET /api/health**
+
+System health check.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "last_update": "2025-11-07T20:00:00Z",
+  "sources": {
+    "ncaa_api": {
+      "status": "ok",
+      "last_poll": "2025-11-07T19:58:00Z",
+      "games_tracked": 8
+    },
+    "reddit_api": {
+      "status": "ok",
+      "rate_limit_remaining": 87,
+      "posts_ingested": 342
+    },
+    "betfair": {
+      "status": "connected",
+      "lag_ms": 150
+    }
+  },
+  "database": {
+    "status": "ok",
+    "row_counts": {
+      "games": 5000,
+      "reddit_posts": 12000,
+      "excitement_scores": 50000
+    }
+  }
+}
+```
+
+## Security Architecture
+
+**Authentication:**
+- **MVP**: No user authentication required (public read-only dashboard)
+- **Remove from starter template**: JWT auth endpoints, user models, password hashing
+
+**API Security:**
+- **External API credentials**: Stored in environment variables (.env files, gitignored)
+- **Rate limiting**: Respect upstream API limits (Reddit 100 QPM, NCAA 5 req/s)
+- **CORS**: FastAPI CORS middleware configured for frontend origin
+
+**Data Privacy:**
+- No personal user data collected
+- Public Reddit data only (usernames, post content)
+- No analytics cookies or tracking
+
+**Dependency Security:**
+- Run `poetry audit` in CI/CD pipeline
+- Pin dependency versions in `pyproject.toml`
+- Dependabot auto-updates for security patches
+
+## Performance Considerations
+
+**Database Optimization:**
+- TimescaleDB hypertables for `excitement_scores` and `betting_odds`
+- Automatic time-based partitioning (PARTITION BY DAY implied)
+- SYMBOL columns in QuestDB → VARCHAR with indexes in Postgres
+- Connection pooling via SQLAlchemy (default 5-10 connections)
+
+**API Performance:**
+- Response time target: <500ms for `/api/games/today`
+- Caching: React Query caches API responses (10-15 min stale time)
+- Database query optimization: Use LATERAL JOINs for latest excitement scores
+
+**Frontend Performance:**
+- Code splitting: React.lazy for non-critical components
+- Bundle size budget: <500KB gzipped (enforced in Vite config)
+- Image lazy loading for team logos
+- React.memo for GameCard components (prevent re-renders)
+
+**Scalability:**
+- **MVP scale**: 5-10 concurrent games, 200 posts/day, 10-50 users
+- **EC2 t2.micro capacity**: 1 vCPU, 1GB RAM (sufficient for MVP)
+- **Upgrade path**: Vertical scale to t3.small (2 vCPU, 2GB) if needed
+
+## Deployment Architecture
+
+**Local Development (Docker Compose):**
+
+```yaml
+# docker-compose.yml
+services:
+  db:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: gamepulse
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    command: uvicorn app.main:app --reload --host 0.0.0.0
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://gamepulse:${DB_PASSWORD}@db:5432/gamepulse
+
+  frontend:
+    build: ./frontend
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+```
+
+**Production Deployment (AWS EC2 t2.micro):**
+
+**Infrastructure:**
+- **EC2 Instance**: t2.micro (1 vCPU, 1GB RAM, free tier)
+- **Storage**: 20GB EBS volume (GP2, free tier)
+- **Networking**: Elastic IP, Security Group (ports 80, 443, 22)
+- **Reverse Proxy**: Traefik for automatic HTTPS (Let's Encrypt)
+
+**Deployment Process:**
+
+1. **GitHub Actions Workflow** (`.github/workflows/deploy.yml`):
+   - Trigger: Push to `main` branch
+   - Steps:
+     - Run linters (ruff, mypy, eslint)
+     - Run tests (pytest, vitest)
+     - Build Docker images (backend, frontend)
+     - Push images to Docker Hub
+     - SSH to EC2, pull images
+     - Run `docker-compose -f docker-compose.prod.yml up -d`
+     - Smoke test: `curl https://gamepulse.example.com/api/health`
+
+2. **Production Docker Compose** (`docker-compose.prod.yml`):
+   - Traefik reverse proxy with HTTPS
+   - PostgreSQL with persistent volume
+   - Backend API container
+   - Frontend static files served by Nginx
+   - All containers on Docker network
+
+**Environment Variables:**
+- **Local**: `.env` file (gitignored)
+- **Production**: AWS Systems Manager Parameter Store (loaded at container start)
+
+## Development Environment
+
+### Prerequisites
+
+**Required:**
+- Git
+- Docker + Docker Compose
+- Python 3.11+
+- Node.js 20+
+- pipx (for copier)
+
+**Optional but Recommended:**
+- VSCode with extensions: Python, ESLint, Prettier
+- Postman or Insomnia (API testing)
+
+### Setup Commands
+
+**Initial Project Setup:**
+
+```bash
+# 1. Clone the FastAPI full-stack template
+pipx run copier copy https://github.com/fastapi/full-stack-fastapi-template gamepulse --trust
+
+cd gamepulse
+
+# 2. Add TimescaleDB to PostgreSQL Dockerfile
+# Edit backend/Dockerfile, add after FROM postgres:16:
+# RUN apt-get update && apt-get install -y timescaledb-2-postgresql-16
+
+# 3. Create .env files (template generates these)
+# Edit backend/.env with your credentials
+
+# 4. Start local development environment
+docker-compose up -d
+
+# 5. Run database migrations
+docker-compose exec backend alembic upgrade head
+
+# 6. Create TimescaleDB hypertables
+docker-compose exec db psql -U gamepulse -d gamepulse -c "
+  SELECT create_hypertable('excitement_scores', 'timestamp');
+  SELECT create_hypertable('betting_odds', 'timestamp');
+"
+
+# 7. Access services:
+# - Frontend: http://localhost:5173
+# - Backend API: http://localhost:8000
+# - API docs: http://localhost:8000/docs
+```
+
+**Daily Development:**
+
+```bash
+# Start services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+
+# Run backend tests
+docker-compose exec backend pytest
+
+# Run frontend tests
+docker-compose exec frontend npm test
+
+# Stop services
+docker-compose down
+```
+
+**Database Operations:**
+
+```bash
+# Create new migration
+docker-compose exec backend alembic revision --autogenerate -m "Add excitement_scores table"
+
+# Apply migrations
+docker-compose exec backend alembic upgrade head
+
+# Rollback migration
+docker-compose exec backend alembic downgrade -1
+
+# Access PostgreSQL CLI
+docker-compose exec db psql -U gamepulse -d gamepulse
+```
+
+## Architecture Decision Records (ADRs)
+
+### ADR-001: PostgreSQL + TimescaleDB over QuestDB
+
+**Context:** GamePulse requires time-series storage for excitement scores and betting odds with high query performance.
+
+**Decision:** Use PostgreSQL 16 with TimescaleDB extension instead of QuestDB.
+
+**Rationale:**
+- **Learning value**: PostgreSQL knowledge is highly transferable (top 3 databases in industry)
+- **Ecosystem maturity**: SQLModel ORM, Alembic migrations, extensive tutorials
+- **Starter template fit**: FastAPI full-stack template already configured for Postgres
+- **Performance acceptable**: At GamePulse scale (60MB total data, ~100 writes/min), TimescaleDB queries are sub-100ms
+- **Trade-off acknowledged**: QuestDB would be 6x faster for time-series aggregations, but speed difference negligible at this scale
+
+**Consequences:**
+- SQLModel ORM can be used (type-safe queries)
+- Alembic manages schema migrations
+- Slightly higher memory footprint (~500MB vs ~300MB for QuestDB)
+- Single database handles both dimensional and time-series data
+
+### ADR-002: FastAPI Full-Stack Starter Template
+
+**Context:** GamePulse has a 2-3 week MVP timeline requiring rapid setup.
+
+**Decision:** Use official FastAPI full-stack template as project foundation.
+
+**Rationale:**
+- **Time savings**: 8-10 hours saved in Week 1 vs manual Docker/CI setup
+- **Production patterns**: Pre-configured Docker Compose, GitHub Actions, automatic HTTPS
+- **Modern tooling**: Vite, React Query, TypeScript, Poetry already integrated
+- **Best practices**: Follows FastAPI recommendations for project structure
+
+**Consequences:**
+- Must remove authentication boilerplate (~30 min)
+- Locked into template's opinions (Poetry, Chakra UI) - decided to keep these
+- Slightly more complex than minimal setup, but comprehensive
+
+### ADR-003: Poetry over uv for Package Management
+
+**Context:** Modern Python package managers include Poetry (mature) and uv (new, 100x faster).
+
+**Decision:** Keep Poetry (starter template default) for MVP.
+
+**Rationale:**
+- **Zero setup time**: Template already configured
+- **Maturity**: Proven, stable, extensive documentation
+- **Performance acceptable**: Install time (1-2 min) not a bottleneck for portfolio project
+- **Migration cost**: Switching to uv would consume 1-2 hours with no portfolio value gain
+
+**Consequences:**
+- Slower dependency installs than uv
+- Can migrate to uv in Week 3 if desired (low risk)
+
+### ADR-004: Chakra UI over Tailwind CSS
+
+**Context:** Frontend needs dark theme, responsive design, and component library.
+
+**Decision:** Keep Chakra UI (starter template default) instead of swapping to Tailwind CSS.
+
+**Rationale:**
+- **Pre-built components**: Button, Card, Modal already implemented (saves time)
+- **Dark mode built-in**: `useColorMode()` hook trivial to implement
+- **Responsive design system**: Breakpoints and spacing already configured
+- **Time cost of migration**: Swapping CSS frameworks is 4-6 hours of non-portfolio-value work
+
+**Consequences:**
+- Larger bundle size than Tailwind (~50KB extra gzipped)
+- More opinionated styling (less low-level control)
+- Can customize Chakra theme to match mockups
+
+### ADR-005: Batch Polling + WebSocket Streaming (Dual Paradigms)
+
+**Context:** GamePulse needs to demonstrate both batch and streaming data processing for portfolio value.
+
+**Decision:**
+- **Batch processing**: NCAA API (15 min polling), Reddit API (15 min polling)
+- **Streaming**: Betfair WebSocket for betting odds (real-time)
+
+**Rationale:**
+- **Portfolio demonstration**: Shows understanding of when to use each paradigm
+- **API constraints**: Reddit (100 QPM), NCAA (5 req/s) are polling-only
+- **Cost efficiency**: Betfair delayed API is free, provides real WebSocket streaming
+- **Interview narrative**: "I chose batch for rate-limited APIs and streaming for real-time data"
+
+**Consequences:**
+- Data freshness: 10-15 min lag for games/Reddit, <3 sec for betting odds
+- Dual architecture: Scheduled workers (batch) + long-running stream process
+- Complexity increase: Must handle both paradigms in codebase
+
+### ADR-006: Reddit Post-Level Tracking (Not Comments)
+
+**Context:** Reddit provides both posts and comments. Comments have richer data but API limits are strict.
+
+**Decision:** Track posts only for MVP, defer comments to Growth phase.
+
+**Rationale:**
+- **API efficiency**: 100 QPM limit sufficient for ~100 posts/hour, but not for 1000s of comments
+- **Signal quality**: Post titles capture key moments ("BUZZER BEATER"), comments add detail but not core value
+- **Time constraints**: Comment ingestion adds 2-3 days of implementation time
+
+**Consequences:**
+- MVP excitement algorithm based on post engagement only
+- Game thread comments not analyzed for sentiment
+- Can add comment tracking in Growth phase without architecture changes
+
+---
+
+## Extended Implementation Patterns (Agent Consistency)
+
+### Import Patterns (CRITICAL - Prevents Module Errors)
+
+**Python - ALWAYS Use Absolute Imports:**
+```python
+✅ from app.models.game import Game
+✅ from app.services.ncaa_client import fetch_games
+✅ from app.core.db import get_session
+
+❌ from ..models.game import Game  # Relative imports forbidden
+❌ from models.game import Game  # Missing app prefix
+```
+
+**TypeScript - Use Path Aliases:**
+```typescript
+✅ import { GameCard } from '@/components/GameCard';
+✅ import { useGames } from '@/hooks/useGames';
+
+❌ import { GameCard } from '../../components/GameCard';  # Relative forbidden
+```
+
+### File Location Patterns (WHERE Things Go)
+
+**Backend Structure:**
+```
+app/models/{domain}.py          → SQLModel database models (Team, Game, RedditPost)
+app/schemas/{domain}.py         → Pydantic API response schemas (GameSchema, GamesResponse)
+app/api/routes/{resource}.py    → FastAPI endpoints (games.py, moments.py, health.py)
+app/services/{logic}.py         → Business logic (excitement_scorer, time_mapper)
+app/services/{api}_client.py    → External API clients (ncaa_client, reddit_client)
+app/workers/{job}_poller.py     → Background jobs (ncaa_poller, reddit_poller)
+app/core/{concern}.py           → Cross-cutting (config, db, logging)
+```
+
+**Frontend Structure:**
+```
+src/components/{Component}.tsx   → Reusable UI (GameCard, ExcitementTimeline)
+src/pages/{Page}.tsx             → Top-level pages (Dashboard)
+src/hooks/{useSomething}.ts      → Custom hooks (useGames, usePolling)
+src/utils/{utility}.ts           → Pure functions (formatters, colors)
+```
+
+### Async/Await Patterns (MANDATORY for I/O)
+
+**Python - ALL I/O Operations Must Be Async:**
+```python
+✅ async def fetch_games() -> List[Game]:
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.json()
+
+✅ async def get_game(session: AsyncSession, game_id: str):
+    result = await session.exec(select(Game).where(Game.game_id == game_id))
+    return result.one()
+
+❌ def fetch_games():  # Missing async - BLOCKS event loop
+    response = requests.get(url)  # Sync I/O forbidden in FastAPI
+```
+
+**TypeScript - React Query Pattern:**
+```typescript
+✅ const { data } = useQuery({
+    queryKey: ['games'],
+    queryFn: async () => {
+      const res = await fetch('/api/games/today');
+      return res.json();
+    }
+  });
+
+❌ fetch('/api/games').then(...)  # Use async/await, not .then()
+```
+
+### SQLModel Schema Patterns
+
+**Database Model (table=True):**
+```python
+from sqlmodel import SQLModel, Field
+from datetime import datetime
+
+class Game(SQLModel, table=True):
+    __tablename__ = "games"  # Explicit name (plural, lowercase)
+
+    game_id: str = Field(primary_key=True)
+    home_team_id: str = Field(foreign_key="teams.team_id")
+    home_score: int | None = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+```
+
+**API Response Schema (Pydantic):**
+```python
+from pydantic import BaseModel
+
+class GameSchema(BaseModel):
+    game_id: str
+    home_team: TeamSchema  # Nested schema
+    excitement_score: float
+
+    class Config:
+        from_attributes = True  # Allow ORM conversion
+```
+
+### Logging Patterns (structlog)
+
+**Event Naming (snake_case, past tense):**
+```python
+logger.info(
+    "excitement_calculated",  # NOT "calculate_excitement"
+    game_id="401234567",
+    score=94.5,
+    duration_ms=45
+)
+
+logger.error(
+    "api_fetch_failed",  # NOT "fetch_api_failure"
+    api="ncaa",
+    status_code=500,
+    retry_attempt=2
+)
+```
+
+### APScheduler Job Pattern
+
+**Interval-Based Polling:**
+```python
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+scheduler = AsyncIOScheduler()
+
+scheduler.add_job(
+    poll_ncaa_games,  # async function
+    'interval',
+    seconds=900,  # 15 minutes
+    id='ncaa_poller',
+    replace_existing=True
+)
+
+async def poll_ncaa_games():
+    logger.info("ncaa_poll_started")
+    games = await fetch_ncaa_games()
+    await save_games(games)
+    logger.info("ncaa_poll_completed", count=len(games))
+```
+
+### Configuration Pattern
+
+**Environment Variables (Pydantic Settings):**
+```python
+# backend/app/core/config.py
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    REDDIT_API_KEY: str
+    BETFAIR_API_KEY: str
+    POLLING_INTERVAL: int = 900
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+## Novel Patterns
+
+GamePulse implements two custom patterns that don't have standard off-the-shelf solutions. These patterns are critical for AI agent consistency and require explicit implementation guidance.
+
+### Pattern 1: Excitement Score Calculation
+
+**Purpose:** Multi-factor algorithm combining Reddit velocity, sentiment, betting odds volatility, and game context to score game excitement from 0-100.
+
+**Implementation Location:** `backend/app/services/excitement_scorer.py`
+
+**Database Target:** Writes to `excitement_scores` hypertable every 15 min
+
+**Inputs:**
+- `reddit_velocity`: Posts per 15-min window (float, 0-∞)
+- `sentiment_score`: VADER compound sentiment -1 to 1 (float)
+- `odds_volatility`: 5-min odds shift magnitude (float, 0-1)
+- `rivalry_bonus`: 0 (no) or 10 (rivalry game) (int)
+- `game_context_factor`: Tournament multiplier 1.0-1.5 (float)
+
+**Algorithm Steps:**
+
+1. **Normalize Reddit Velocity** (0-40 scale):
+   ```python
+   reddit_component = min(reddit_velocity * 4, 40)
+   # 0 posts = 0, 10+ posts = 40
+   ```
+
+2. **Convert Sentiment Score** (0-20 scale):
+   ```python
+   sentiment_component = max(0, sentiment_score * 20)
+   # Only positive sentiment counts: -1 to 1 → 0 to 20
+   ```
+
+3. **Normalize Odds Volatility** (0-30 scale):
+   ```python
+   odds_component = min(odds_volatility * 600, 30)
+   # 0.05+ shift = 30 (5% price movement is highly volatile)
+   ```
+
+4. **Calculate Base Score**:
+   ```python
+   base_score = reddit_component + sentiment_component + odds_component
+   # Range: 0-90
+   ```
+
+5. **Apply Multipliers and Bonuses**:
+   ```python
+   final_score = (base_score * game_context_factor) + rivalry_bonus
+   # game_context_factor: 1.0 (regular), 1.2 (conference), 1.5 (tournament)
+   # rivalry_bonus: +10 for rivalry games (Duke vs UNC, etc.)
+   ```
+
+6. **Clamp to Valid Range**:
+   ```python
+   excitement_score = min(max(final_score, 0), 100)
+   ```
+
+**Edge Cases:**
+
+| Scenario | Handling | Rationale |
+|----------|----------|-----------|
+| No Reddit posts for game | Use `odds_volatility` + `game_context` only | Betting market still signals excitement |
+| Reddit API down | Set `reddit_velocity = 0`, calculate with remaining factors | Graceful degradation per NFR-4.2 |
+| No betting odds available | Exclude `odds_component`, scale other factors proportionally | Early-season games may lack betting data |
+| Negative sentiment dominant | `sentiment_component = 0` (only positive sentiment counts) | Controversy ≠ exciting gameplay |
+| Post-game posts | Timestamp filter: only posts during live game window | Avoid post-game analysis skewing scores |
+
+**Output Schema:**
+```python
+class ExcitementScore(SQLModel, table=True):
+    game_id: str
+    timestamp: datetime  # UTC
+    score: float  # 0-100
+    reddit_velocity: float
+    reddit_engagement: int  # Total upvotes + comments
+    sentiment_score: float
+    odds_volatility: float
+    game_context_factor: float
+    rivalry_bonus: float
+```
+
+**States and Transitions:**
+
+```
+[Calculating] → [Current] → [Stale]
+    ↓             ↓           ↓
+   15min       <10min      >20min
+```
+
+- **Calculating**: Worker actively computing score
+- **Current**: Score calculated <10 min ago, safe to display
+- **Stale**: Score >20 min old, show "Last updated X min ago" warning
+
+**Testing Strategy:**
+- Unit tests: Mock Reddit/betting data, verify score ranges
+- Edge case tests: Zero values, missing data, extreme values
+- Integration tests: End-to-end with test database
+
+---
+
+### Pattern 2: Wall-Clock to Game-Clock Time Mapping
+
+**Purpose:** Convert Reddit post timestamps (UTC wall-clock) to estimated game clock (e.g., "10:34 2nd Half") for contextualizing moments.
+
+**Implementation Location:** `backend/app/services/time_mapper.py`
+
+**Database Target:** Updates `reddit_posts.game_time_context`, `reddit_posts.estimated_game_clock`, `reddit_posts.time_mapping_confidence`
+
+**Inputs:**
+- `post_time`: Reddit post timestamp UTC (datetime)
+- `game_start_time`: Scheduled game start UTC (datetime)
+- `game_status`: scheduled | live | halftime | final (str)
+- `actual_game_clock` (optional): Real game clock from NCAA API if available (str)
+
+**Algorithm Steps:**
+
+1. **Calculate Elapsed Time**:
+   ```python
+   elapsed_seconds = (post_time - game_start_time).total_seconds()
+   elapsed_min = elapsed_seconds / 60
+   ```
+
+2. **Apply Halftime Adjustment**:
+   ```python
+   HALFTIME_DURATION = 15  # minutes
+   FIRST_HALF_DURATION = 20  # minutes
+
+   if elapsed_min > FIRST_HALF_DURATION + HALFTIME_DURATION:
+       # Post is in 2nd half, subtract halftime
+       game_elapsed_min = elapsed_min - HALFTIME_DURATION
+   else:
+       game_elapsed_min = elapsed_min
+   ```
+
+3. **Determine Period and Clock**:
+   ```python
+   if game_elapsed_min < 0:
+       context = "pre_game"
+       clock = None
+   elif game_elapsed_min <= 20:
+       context = "1st_half"
+       clock_remaining = 20 - game_elapsed_min
+       clock = f"{int(clock_remaining):02d}:{int((clock_remaining % 1) * 60):02d} 1st Half"
+   elif game_elapsed_min <= 40:
+       context = "2nd_half"
+       clock_remaining = 40 - game_elapsed_min
+       clock = f"{int(clock_remaining):02d}:{int((clock_remaining % 1) * 60):02d} 2nd Half"
+   else:
+       context = "post_game"
+       clock = "Final"
+   ```
+
+4. **Calculate Confidence Score**:
+   ```python
+   if game_status == "live" and 0 <= game_elapsed_min <= 55:
+       confidence = 0.9  # High confidence during typical game window
+   elif game_status == "scheduled":
+       confidence = 0.3  # Pre-game posts, low confidence
+   elif game_elapsed_min > 55:
+       confidence = 0.5  # Post-game, medium confidence
+   else:
+       confidence = 0.7  # Default
+
+   # Boost confidence if actual game clock available from NCAA API
+   if actual_game_clock:
+       confidence = min(confidence + 0.1, 1.0)
+   ```
+
+**Edge Cases:**
+
+| Scenario | Handling | Confidence | Rationale |
+|----------|----------|------------|-----------|
+| Post before game start | `context = "pre_game"`, `clock = None` | 1.0 | Exact classification |
+| Post >2 hours after start | `context = "post_game"` | 0.8 | Likely post-game analysis |
+| Game status "scheduled" but post exists | `context = "pre_game"` | 1.0 | Pre-game discussion |
+| Overtime game | Extend 2nd half clock beyond 20:00 | 0.6 | Less predictable timing |
+| Delayed game start | Use NCAA API `actual_start_time` if available | 0.9 | Corrected for real start |
+
+**Output Schema:**
+```python
+# Updates to reddit_posts table
+game_time_context: str  # pre_game, 1st_half, halftime, 2nd_half, post_game
+estimated_game_clock: str | None  # "15:30 2nd Half" or None
+time_mapping_confidence: float  # 0.0-1.0
+```
+
+**Context Categories:**
+
+| Context | Description | Typical Use Case |
+|---------|-------------|------------------|
+| `pre_game` | Post before tipoff | Hype, predictions, lineup discussions |
+| `1st_half` | 0:00-20:00 game time | Early game moments, hot starts |
+| `halftime` | Between halves | Score reactions, adjustment discussions |
+| `2nd_half` | 20:00-40:00 game time | Late-game drama, buzzer beaters |
+| `post_game` | After final buzzer | Recap, highlights, analysis |
+
+**States and Transitions:**
+
+```
+[Pre-Game] → [1st Half] → [Halftime] → [2nd Half] → [Post-Game]
+   ↓            ↓            ↓            ↓             ↓
+ t < 0      0-20 min    20-35 min    35-55 min     t > 55 min
+```
+
+**Integration with Excitement Scoring:**
+- Time-mapped posts enable period-specific excitement trends
+- "2nd Half" posts weighted higher (clutch moments more exciting)
+- Pre-game posts excluded from excitement velocity calculations
+
+**Testing Strategy:**
+- Unit tests: Known timestamps → expected game clock outputs
+- Edge case tests: Pre-game, overtime, delayed starts
+- Confidence validation: Assert confidence scores in expected ranges
+
+---
+
+_Generated by BMAD Decision Architecture Workflow v1.3.2_
+_Date: 2025-11-07_
+_For: Philip (GamePulse Project)_

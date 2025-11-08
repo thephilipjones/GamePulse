@@ -1,0 +1,237 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.1</storyId>
+    <title>Initialize FastAPI Full-Stack Template</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-07</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/story-1.1-initialize-fastapi-template.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>to initialize the project using the FastAPI full-stack template</iWant>
+    <soThat>I have a production-ready foundation with Docker, CI/CD, and modern tooling pre-configured</soThat>
+    <tasks>
+      - Task 1.1.1: Install Prerequisites (AC: #1)
+      - Task 1.1.2: Initialize FastAPI Template (AC: #1)
+      - Task 1.1.3: Configure Environment Variables (AC: #2)
+      - Task 1.1.4: Start Docker Services (AC: #3)
+      - Task 1.1.5: Verify Services Accessible (AC: #3)
+      - Task 1.1.6: Initialize Git Repository (AC: #4)
+      - Task 1.1.7: Testing (AC: #1, #2, #3)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Template Initialized Successfully
+       - FastAPI full-stack template successfully initialized using copier command
+       - Project structure created with backend/, frontend/, docker-compose.yml, and .github/workflows/
+       - All configuration files present (.env templates, pyproject.toml, package.json)
+
+    2. Environment Configuration Complete
+       - .env file created in backend/ from .env.example template
+       - PROJECT_NAME set to "gamepulse"
+       - DATABASE_URL configured for PostgreSQL connection
+       - BACKEND_CORS_ORIGINS includes frontend URL (http://localhost:5173)
+
+    3. Docker Services Operational
+       - Docker Compose starts all services without errors
+       - Can access backend API at http://localhost:8000/docs
+       - Can access frontend at http://localhost:5173
+
+    4. Git Repository Initialized
+       - Git repository initialized with initial commit
+       - .gitignore configured to exclude .env files
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>AC-1: Template Initialization (lines 548-554)</section>
+        <snippet>Defines acceptance criteria for FastAPI template initialization: template cloned with copier, .env configured with PROJECT_NAME=gamepulse, Docker Compose starts all services, backend accessible at localhost:8000/docs, frontend at localhost:3000.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Services and Modules (lines 56-68)</section>
+        <snippet>Infrastructure modules provided by template: FastAPI Application (main.py), Database Engine (SQLModel connection), Configuration Management (Pydantic Settings), Alembic Migrations, Docker Orchestration, Traefik Proxy, GitHub Actions CI/CD.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Dependencies table (lines 510-524)</section>
+        <snippet>External dependencies with versions: FastAPI 0.121.0, SQLModel 0.0.23, Alembic 1.17.1, PostgreSQL 16.x, TimescaleDB 2.23.0, React 18.x, TypeScript 5.x, Vite 7.2.2, Chakra UI 3.29.0, Docker Compose 2.40.3, Traefik 3.5.4.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Initial Setup Workflow (lines 337-354)</section>
+        <snippet>Step-by-step workflow: Developer runs copier template with prompts (PROJECT_NAME, PostgreSQL credentials, CORS origins), template generates backend/frontend/docker-compose.yml/.github/workflows/, manual .env configuration, verify with docker-compose up and access http://localhost:8080.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Project Initialization (lines 12-38)</section>
+        <snippet>First implementation story should execute: pipx run copier copy https://github.com/fastapi/full-stack-fastapi-template gamepulse --trust. Establishes base architecture with technology decisions table: FastAPI 0.121.0, React 18.x, Vite 7.2.2, PostgreSQL 16.x, TimescaleDB 2.23.0, SQLModel 0.0.23, Alembic 1.17.1, Poetry 2.2.1, Chakra UI 3.29.0, Docker Compose 2.40.3, Traefik 3.5.4.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Decision Summary (lines 42-62)</section>
+        <snippet>Architecture decisions with rationale: Starter Template (FastAPI Full-Stack) saves 8-10 hours in Week 1 vs manual setup, provides production-ready Docker setup, CI/CD pipeline, modern frontend tooling. PostgreSQL + TimescaleDB chosen for learning transferability (highly marketable skill), time-series optimization for excitement_scores and betting_odds tables.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Project Structure (lines 64-100)</section>
+        <snippet>Template establishes structure: backend/app/ (api/routes/, core/, models/, schemas/, services/, workers/, alembic/), frontend/src/ (components/, client/), docker-compose.yml, .github/workflows/. Core modules: main.py (FastAPI entry point), core/db.py (SQLModel connection), core/config.py (Pydantic Settings).</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>gamepulse - Epic Breakdown</title>
+        <section>Epic 1: Project Foundation &amp; Infrastructure, Story 1.1 (line 40)</section>
+        <snippet>Story 1.1: Initialize FastAPI Full-Stack Template - Includes .env configuration. Goal: Establish production-ready foundation using FastAPI full-stack template with Docker Compose orchestration, PostgreSQL 16 + TimescaleDB, GitHub Actions CI/CD, AWS EC2 t2.micro with Traefik reverse proxy.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR-8.1: Deployment Automation</section>
+        <snippet>Deployment automation requirement drives use of FastAPI template with pre-configured GitHub Actions and Docker Compose for rapid setup and deployment pipeline.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <!-- No existing code artifacts - this is the first story that creates the codebase -->
+    </code>
+    <dependencies>
+      <!-- Dependencies will be established by the template initialization -->
+      <python>
+        <package name="fastapi" version="0.121.0" source="template-provided" />
+        <package name="sqlmodel" version="0.0.23" source="template-provided" />
+        <package name="alembic" version="1.17.1" source="template-provided" />
+        <package name="pydantic" version="^2.0" source="template-provided" />
+        <package name="uvicorn" version="^0.30" source="template-provided" />
+        <package name="poetry" version="2.2.1" manager="true" />
+      </python>
+      <javascript>
+        <package name="react" version="^18.0.0" source="template-provided" />
+        <package name="typescript" version="^5.0.0" source="template-provided" />
+        <package name="vite" version="7.2.2" source="template-provided" />
+        <package name="@chakra-ui/react" version="3.29.0" source="template-provided" />
+        <package name="@tanstack/react-query" version="^5.0.0" source="template-provided" />
+      </javascript>
+      <infrastructure>
+        <service name="postgresql" version="16.x" type="database" />
+        <service name="docker-compose" version="2.40.3" type="orchestration" />
+        <service name="traefik" version="3.5.4" type="reverse-proxy" />
+      </infrastructure>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint id="c1" type="architecture">
+      All services must run via Docker Compose orchestration - no local Python/Node installations required
+    </constraint>
+    <constraint id="c2" type="configuration">
+      Template version must be latest 2025 release (verified via GitHub before cloning)
+    </constraint>
+    <constraint id="c3" type="database">
+      PostgreSQL 16 required (TimescaleDB 2.23.0 extension will be added in Story 1.2)
+    </constraint>
+    <constraint id="c4" type="cors">
+      CORS must allow frontend URL for local development (http://localhost:5173) - configured in BACKEND_CORS_ORIGINS
+    </constraint>
+    <constraint id="c5" type="deployment">
+      All services must run on single machine (Docker Compose orchestration) for MVP
+    </constraint>
+    <constraint id="c6" type="pattern">
+      Use SQLModel ORM + Pydantic validation for type-safe database operations
+    </constraint>
+    <constraint id="c7" type="pattern">
+      Use async/await patterns with FastAPI for high performance
+    </constraint>
+    <constraint id="c8" type="security">
+      .env files must be gitignored - no secrets in version control
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <!-- Initial endpoints provided by template -->
+    <interface>
+      <name>Root Endpoint</name>
+      <kind>REST endpoint</kind>
+      <signature>GET / → {"message": "GamePulse API", "docs": "/docs"}</signature>
+      <path>backend/app/main.py</path>
+      <notes>Template default root endpoint</notes>
+    </interface>
+    <interface>
+      <name>Health Check Endpoint</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /api/health → {"status": "healthy", "database": "connected", "timestamp": "ISO8601", "version": "0.1.0"}</signature>
+      <path>backend/app/api/routes/health.py</path>
+      <notes>Basic health check for monitoring - checks database connectivity</notes>
+    </interface>
+    <interface>
+      <name>OpenAPI Documentation</name>
+      <kind>Auto-generated docs</kind>
+      <signature>GET /docs (Swagger UI), GET /redoc (ReDoc UI), GET /openapi.json (schema)</signature>
+      <path>backend/app/main.py</path>
+      <notes>FastAPI auto-generated interactive API documentation</notes>
+    </interface>
+    <interface>
+      <name>SQLModel Database Connection</name>
+      <kind>Python module</kind>
+      <signature>from app.core.db import get_session # Async session factory</signature>
+      <path>backend/app/core/db.py</path>
+      <notes>Database connection pool (5-10 connections), async session factory for dependency injection</notes>
+    </interface>
+    <interface>
+      <name>Configuration Settings</name>
+      <kind>Python module</kind>
+      <signature>from app.core.config import settings # Pydantic Settings with .env support</signature>
+      <path>backend/app/core/config.py</path>
+      <notes>Environment variable loading via Pydantic Settings - PROJECT_NAME, DATABASE_URL, BACKEND_CORS_ORIGINS</notes>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      For this infrastructure story, testing focuses on integration and smoke tests rather than unit tests:
+      - **Integration Testing**: Verify docker-compose up succeeds and all services start healthy
+      - **Smoke Testing**: Verify URLs accessible (frontend at localhost:5173, backend /docs at localhost:8000/docs, backend /health at localhost:8000/api/health)
+      - **No Unit Tests Required**: This story is infrastructure setup, not business logic
+      - **Manual Verification**: Template files present, directory structure correct, .env configuration valid
+      - **Framework**: Template provides pytest for backend, jest for frontend (not heavily used in Story 1.1)
+    </standards>
+    <locations>
+      - backend/tests/ (pytest tests, provided by template)
+      - frontend/src/**/*.test.tsx (jest/vitest tests, provided by template)
+    </locations>
+    <ideas>
+      <idea ac="1" priority="high">
+        Integration test: Verify docker-compose up completes without errors and all 4 services (backend, frontend, db, traefik) show status "Up"
+      </idea>
+      <idea ac="3" priority="high">
+        Smoke test: HTTP GET to http://localhost:8000/docs returns 200 OK with Swagger UI HTML
+      </idea>
+      <idea ac="3" priority="high">
+        Smoke test: HTTP GET to http://localhost:5173 returns 200 OK with React app HTML
+      </idea>
+      <idea ac="3" priority="high">
+        Smoke test: HTTP GET to http://localhost:8000/api/health returns 200 OK with JSON {"status": "healthy"}
+      </idea>
+      <idea ac="2" priority="medium">
+        Configuration test: Verify .env file contains PROJECT_NAME="gamepulse", DATABASE_URL with correct format, BACKEND_CORS_ORIGINS includes http://localhost:5173
+      </idea>
+      <idea ac="4" priority="medium">
+        Git test: Verify .gitignore includes .env pattern (prevent secrets in version control)
+      </idea>
+      <idea ac="1,2,3" priority="medium">
+        Restart test: docker-compose down && docker-compose up -d succeeds, services restart without errors
+      </idea>
+    </ideas>
+  </tests>
+</story-context>
