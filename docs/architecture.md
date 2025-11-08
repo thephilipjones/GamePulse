@@ -24,18 +24,18 @@ cd gamepulse
 
 | Technology | Version | Provided By | Rationale |
 |------------|---------|-------------|-----------|
-| FastAPI | 0.121.0 | Starter | Modern async Python framework, auto-generated API docs |
-| React + TypeScript | 18.x | Starter | Type-safe frontend with modern hooks |
-| Vite | 7.2.2 | Starter | Fast build tool with HMR |
-| PostgreSQL | 16.x | Starter | Relational database with mature ecosystem |
+| FastAPI | 0.114.2+ | Starter | Modern async Python framework, auto-generated API docs |
+| React + TypeScript | 18.2+ | Starter | Type-safe frontend with modern hooks |
+| Vite | Latest | Starter | Fast build tool with HMR |
+| PostgreSQL | 12+ (16+ target) | Starter | Relational database with mature ecosystem |
 | TimescaleDB | 2.23.0 | Manual Add | Time-series extension for Postgres |
-| SQLModel | 0.0.23 | Starter | Type-safe ORM for FastAPI + Postgres |
-| Alembic | 1.17.1 | Starter | Database migration management |
-| Poetry | 2.2.1 | Starter | Python dependency management |
-| Chakra UI | 3.29.0 | Starter | React component library with dark mode |
-| Docker Compose | 2.40.3 | Starter | Local development orchestration |
+| SQLModel | 0.0.21+ | Starter | Type-safe ORM for FastAPI + Postgres |
+| Alembic | 1.12.1+ | Starter | Database migration management |
+| uv | Latest | Starter | Modern Python dependency management (100x faster than Poetry) |
+| Chakra UI | 3.8+ | Starter | React component library with dark mode |
+| Docker Compose | 2.x | Starter | Local development orchestration |
 | GitHub Actions | N/A | Starter | CI/CD pipeline |
-| Traefik | 3.5.4 | Starter | Reverse proxy for automatic HTTPS |
+| Traefik | 3.0+ | Starter | Reverse proxy for automatic HTTPS |
 
 ## Decision Summary
 
@@ -43,12 +43,12 @@ cd gamepulse
 | -------- | -------- | ------- | ------------- | --------- |
 | **Starter Template** | FastAPI Full-Stack Template | Latest (2025) | All Epics | Production-ready Docker setup, CI/CD pipeline, modern frontend tooling. Saves 8-10 hours in Week 1 vs manual setup. |
 | **Database** | PostgreSQL + TimescaleDB | 16.x + 2.23.0 | Epic 2, 3, 4, 5, 6 | PostgreSQL for learning transferability (highly marketable skill). TimescaleDB extension adds time-series optimization. Trade-off: Slightly slower than QuestDB but negligible at GamePulse scale (60MB data). |
-| **ORM** | SQLModel | 0.0.23 | Epic 2, 4, 7 | Type-safe ORM, native FastAPI integration, automatic Pydantic validation. Keep starter template default. |
-| **Migrations** | Alembic | 1.17.1 | All Backend Epics | Standard migration tool for SQLAlchemy/SQLModel. Keep starter template default. |
-| **Package Manager** | Poetry | 2.2.1 | All Backend Epics | Mature dependency management, already configured in template. Avoid migration overhead. |
-| **Backend Framework** | FastAPI | 0.121.0 | Epic 7 | Async/await support, automatic OpenAPI docs, high performance. Starter template default. |
-| **Frontend Framework** | React + TypeScript + Vite | 18.x + 7.2.2 | Epic 8 | Modern React with type safety, fast builds with Vite. Starter template default. |
-| **UI Components** | Chakra UI | 3.29.0 | Epic 8 | Pre-built components, dark mode support, responsive design system. Faster than building custom Tailwind components. Keep starter template default. |
+| **ORM** | SQLModel | 0.0.21+ | Epic 2, 4, 7 | Type-safe ORM, native FastAPI integration, automatic Pydantic validation. Keep starter template default. |
+| **Migrations** | Alembic | 1.12.1+ | All Backend Epics | Standard migration tool for SQLAlchemy/SQLModel. Keep starter template default. |
+| **Package Manager** | uv | Latest | All Backend Epics | Modern Python dependency management, 100x faster than Poetry. Template default as of 2025. |
+| **Backend Framework** | FastAPI | 0.114.2+ | Epic 7 | Async/await support, automatic OpenAPI docs, high performance. Starter template default. |
+| **Frontend Framework** | React + TypeScript + Vite | 18.2+ | Epic 8 | Modern React with type safety, fast builds with Vite. Starter template default. |
+| **UI Components** | Chakra UI | 3.8+ | Epic 8 | Pre-built components, dark mode support, responsive design system. Faster than building custom Tailwind components. Keep starter template default. |
 | **Deployment** | Docker Compose + AWS EC2 | 2.40.3 + t2.micro | Epic 1 | Starter provides production-ready Docker setup. Deploy to EC2 free tier. |
 | **CI/CD** | GitHub Actions | N/A | Epic 1 | Pre-configured in starter template. Auto-deploy on push to main. |
 | **Background Jobs** | APScheduler | 3.11.1 | Epic 2, 3, 4 | Lightweight in-process scheduler for polling jobs (15 min intervals). No Redis dependency. Can migrate to Celery + Redis for production scale if needed. |
@@ -105,7 +105,7 @@ gamepulse/
 │   │   ├── unit/
 │   │   ├── integration/
 │   │   └── e2e/
-│   ├── pyproject.toml                 # Poetry dependencies
+│   ├── pyproject.toml                 # uv dependencies (pyproject.toml standard)
 │   ├── Dockerfile                     # Multi-stage build
 │   └── alembic.ini
 ├── frontend/
@@ -1032,29 +1032,31 @@ docker-compose exec db psql -U gamepulse -d gamepulse
 **Rationale:**
 - **Time savings**: 8-10 hours saved in Week 1 vs manual Docker/CI setup
 - **Production patterns**: Pre-configured Docker Compose, GitHub Actions, automatic HTTPS
-- **Modern tooling**: Vite, React Query, TypeScript, Poetry already integrated
+- **Modern tooling**: Vite, React Query, TypeScript, uv already integrated
 - **Best practices**: Follows FastAPI recommendations for project structure
 
 **Consequences:**
 - Must remove authentication boilerplate (~30 min)
-- Locked into template's opinions (Poetry, Chakra UI) - decided to keep these
+- Locked into template's opinions (uv, Chakra UI) - decided to keep these
 - Slightly more complex than minimal setup, but comprehensive
 
-### ADR-003: Poetry over uv for Package Management
+### ADR-003: uv for Package Management
 
-**Context:** Modern Python package managers include Poetry (mature) and uv (new, 100x faster).
+**Context:** Modern Python package managers include Poetry (mature) and uv (new, 100x faster). As of 2025, the FastAPI full-stack template has migrated to uv as the default.
 
-**Decision:** Keep Poetry (starter template default) for MVP.
+**Decision:** Use uv (starter template default) for dependency management.
 
 **Rationale:**
-- **Zero setup time**: Template already configured
-- **Maturity**: Proven, stable, extensive documentation
-- **Performance acceptable**: Install time (1-2 min) not a bottleneck for portfolio project
-- **Migration cost**: Switching to uv would consume 1-2 hours with no portfolio value gain
+- **Template default**: FastAPI template v0.8.0 (Feb 2025) uses uv by default
+- **Performance**: 100x faster than Poetry for dependency resolution and installation
+- **Modern tooling**: Written in Rust, actively maintained by Astral (creators of ruff)
+- **Zero migration cost**: Template already configured with uv
+- **Compatibility**: Fully compatible with pyproject.toml standard
 
 **Consequences:**
-- Slower dependency installs than uv
-- Can migrate to uv in Week 3 if desired (low risk)
+- Extremely fast dependency installs (seconds vs minutes)
+- Newer tool with smaller ecosystem than Poetry, but rapidly growing adoption
+- Template handles all configuration, no manual setup required
 
 ### ADR-004: Chakra UI over Tailwind CSS
 

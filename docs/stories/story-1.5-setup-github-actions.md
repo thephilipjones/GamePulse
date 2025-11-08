@@ -55,8 +55,8 @@ So that every push to main branch automatically deploys the latest code.
 - name: Lint backend
   run: |
     cd backend
-    poetry run ruff check .
-    poetry run mypy .
+    uv run ruff check .
+    uv run mypy .
 ```
 
 2. **Test Step:**
@@ -64,7 +64,7 @@ So that every push to main branch automatically deploys the latest code.
 - name: Test backend
   run: |
     cd backend
-    poetry run pytest
+    uv run pytest
 ```
 
 3. **Docker Build:**

@@ -509,19 +509,19 @@ Commit: "Remove auth boilerplate - public dashboard"
 
 | Dependency | Version | Purpose | Installation Method |
 |------------|---------|---------|-------------------|
-| FastAPI | 0.121.0 | Web framework | Poetry (from template) |
-| SQLModel | 0.0.23 | Type-safe ORM | Poetry (from template) |
-| Alembic | 1.17.1 | Database migrations | Poetry (from template) |
-| PostgreSQL | 16.x | Database | Docker image |
+| FastAPI | 0.114.2+ | Web framework | uv (from template) |
+| SQLModel | 0.0.21+ | Type-safe ORM | uv (from template) |
+| Alembic | 1.12.1+ | Database migrations | uv (from template) |
+| PostgreSQL | 12+ (16+ target) | Database | Docker image |
 | TimescaleDB | 2.23.0 | Time-series extension | PostgreSQL extension |
-| React | 18.x | Frontend framework | npm (from template) |
+| React | 18.2+ | Frontend framework | npm (from template) |
 | TypeScript | 5.x | Type safety | npm (from template) |
-| Vite | 7.2.2 | Build tool | npm (from template) |
-| Chakra UI | 3.29.0 | UI components | npm (from template) |
-| Docker Compose | 2.40.3 | Orchestration | Binary install |
-| Traefik | 3.5.4 | Reverse proxy | Docker image |
+| Vite | Latest | Build tool | npm (from template) |
+| Chakra UI | 3.8+ | UI components | npm (from template) |
+| Docker Compose | 2.x | Orchestration | Binary install |
+| Traefik | 3.0+ | Reverse proxy | Docker image |
 | Terraform | 1.9+ | Infrastructure as Code | Binary install |
-| structlog | 25.5.0 | Structured logging | Poetry (manual add) |
+| structlog | 25.5.0 | Structured logging | uv (manual add) |
 
 **AWS Service Dependencies:**
 - EC2 (t2.micro free tier)
