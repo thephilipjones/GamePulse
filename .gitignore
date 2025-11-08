@@ -1,0 +1,12 @@
+.vscode
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# Environment variables - never commit secrets!
+.env
+.env.local
+.env.*.local
+**/frontend/.env
