@@ -1,0 +1,104 @@
+# GamePulse Terraform Configuration Example
+# Copy this file to terraform.tfvars and fill in your actual values
+# NEVER commit terraform.tfvars to git (it's in .gitignore)
+
+# ============================================================================
+# Project Configuration
+# ============================================================================
+
+project_name = "gamepulse"
+environment  = "production"
+
+# ============================================================================
+# AWS Configuration
+# ============================================================================
+
+aws_region        = "us-east-1"
+availability_zone = "us-east-1a"
+
+# ============================================================================
+# VPC Configuration
+# ============================================================================
+
+vpc_cidr            = "10.1.0.0/16"
+public_subnet_cidr  = "10.1.1.0/24"  # EC2 instances
+private_subnet_cidr = "10.1.2.0/24"  # Future RDS database
+
+# ============================================================================
+# Compute Configuration
+# ============================================================================
+
+instance_type    = "t2.micro"  # Free tier eligible
+root_volume_size = 20          # GB
+
+# ============================================================================
+# Security Configuration
+# ============================================================================
+
+# Your public IP addresses (CIDR notation)
+# Find your IP: curl -4 ifconfig.me
+# Then append /32 for single IP (e.g., "203.0.113.42/32")
+admin_ip_cidrs = [
+  "YOUR_HOME_IP/32",     # Replace with your actual home IP
+  "YOUR_OFFICE_IP/32",   # Optional: Add office/other IPs
+]
+
+# Specific Tailscale device IPs allowed to SSH
+# Get from: tailscale status
+# Format: Tailscale IP + /32 (e.g., "100.64.1.2/32")
+tailscale_device_ips = [
+  "YOUR_DEVICE_1_TAILSCALE_IP/32",  # Replace with your laptop Tailscale IP
+  "YOUR_DEVICE_2_TAILSCALE_IP/32",  # Replace with your desktop Tailscale IP
+]
+
+# ============================================================================
+# Monitoring Configuration
+# ============================================================================
+
+log_retention_days = 7  # CloudWatch log retention
+
+# ============================================================================
+# Configuration Instructions
+# ============================================================================
+
+# 1. Get your public home IP:
+#    curl -4 ifconfig.me
+#    Example output: 203.0.113.42
+#    Use: "203.0.113.42/32"
+
+# 2. Get your Tailscale device IPs:
+#    tailscale status
+#    Look for your machines (laptop, desktop, etc.)
+#    Example: 100.64.1.2
+#    Use: "100.64.1.2/32"
+
+# 3. Create your actual config:
+#    cp terraform.tfvars.example terraform.tfvars
+#    # Edit terraform.tfvars with your real IPs
+#    # NEVER commit terraform.tfvars to git!
+
+# ============================================================================
+# Security Notes
+# ============================================================================
+
+# SSH Access Strategy:
+# - admin_ip_cidrs: Your public home/office IPs (changes when you move/ISP changes)
+# - tailscale_device_ips: Specific Tailscale devices (stable, VPN-based)
+# - Only IPs listed above can SSH to EC2 instance
+# - HTTP (80) and HTTPS (443) are open to all IPs for public dashboard
+
+# Defense-in-Depth:
+# - Public IP restriction prevents random SSH attacks
+# - Tailscale device restriction prevents unauthorized access even if Tailscale account compromised
+# - Even with valid Tailscale account, only YOUR specific devices can SSH
+
+# Cost Optimization:
+# - t2.micro: $0/month for first 12 months (free tier), ~$8.50/month after
+# - Root volume 20GB: $0/month (free tier 30GB), ~$1.60/month after
+# - CloudWatch logs 7-day retention: ~$0.50/month (typical usage)
+# - Total: $0/month (free tier), ~$11/month after
+
+# To reduce costs after free tier:
+# - Stop instance when not demoing: Saves ~$8.50/month
+# - Reduce volume to 10GB: Saves $0.80/month
+# - Set log retention to 3 days: Reduces storage costs

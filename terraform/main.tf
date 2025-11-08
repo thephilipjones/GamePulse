@@ -1,0 +1,48 @@
+# GamePulse AWS Infrastructure - Root Module
+# Orchestrates VPC and Compute modules for production deployment
+
+# ============================================================================
+# Local Variables
+# ============================================================================
+
+locals {
+  common_tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "terraform"
+    Repository  = "gamepulse"
+  }
+}
+
+# ============================================================================
+# VPC Module - Networking Foundation
+# ============================================================================
+
+module "vpc" {
+  source = "./modules/vpc"
+
+  project_name        = var.project_name
+  vpc_cidr            = var.vpc_cidr
+  public_subnet_cidr  = var.public_subnet_cidr
+  private_subnet_cidr = var.private_subnet_cidr
+  availability_zone   = var.availability_zone
+  tags                = local.common_tags
+}
+
+# ============================================================================
+# Compute Module - Application Server
+# ============================================================================
+
+module "compute" {
+  source = "./modules/compute"
+
+  project_name         = var.project_name
+  vpc_id               = module.vpc.vpc_id
+  subnet_id            = module.vpc.public_subnet_id
+  instance_type        = var.instance_type
+  root_volume_size     = var.root_volume_size
+  admin_ip_cidrs       = var.admin_ip_cidrs
+  tailscale_device_ips = var.tailscale_device_ips
+  log_retention_days   = var.log_retention_days
+  tags                 = local.common_tags
+}
