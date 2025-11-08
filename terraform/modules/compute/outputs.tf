@@ -25,7 +25,7 @@ output "security_group_id" {
 
 output "ssh_command" {
   description = "SSH command to connect to the instance"
-  value       = "ssh -i ~/.ssh/gamepulse-key.pem ubuntu@${aws_eip.app.public_ip}"
+  value       = "ssh -i ~/.ssh/gamepulse-key -p 22 ubuntu@${aws_eip.app.public_ip}"
 }
 
 output "cloudwatch_log_groups" {

@@ -156,6 +156,22 @@ resource "aws_cloudwatch_log_group" "frontend" {
 }
 
 # ============================================================================
+# SSH Key Pair
+# ============================================================================
+
+resource "aws_key_pair" "deployer" {
+  key_name   = "${var.project_name}-key"
+  public_key = file(pathexpand("~/.ssh/gamepulse-key.pub"))
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-ssh-key"
+    }
+  )
+}
+
+# ============================================================================
 # EC2 Instance
 # ============================================================================
 
@@ -163,6 +179,7 @@ resource "aws_instance" "app" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   subnet_id     = var.subnet_id
+  key_name      = aws_key_pair.deployer.key_name
 
   # IAM instance profile for CloudWatch access
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
