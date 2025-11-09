@@ -1,0 +1,362 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>1.2</storyId>
+    <title>Remove Authentication Boilerplate</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-09</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-2-remove-authentication.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>to remove unnecessary authentication boilerplate from the FastAPI template</iWant>
+    <soThat>the codebase remains clean and focused on the public read-only dashboard without unused user authentication code</soThat>
+    <tasks>
+      <task id="1.2.1" ac="1">
+        <summary>Identify Authentication Files</summary>
+        <subtasks>
+          <subtask>List all authentication-related files in codebase</subtask>
+          <subtask>Find backend/app/core/security.py</subtask>
+          <subtask>Find backend/app/api/routes/login.py</subtask>
+          <subtask>Find backend/app/api/routes/users.py</subtask>
+          <subtask>Find backend/app/models/user.py (if separate from models.py)</subtask>
+          <subtask>Search for user-related migration files in backend/app/alembic/versions/</subtask>
+          <subtask>Identify migration files by name pattern (e.g., *user*, *auth*)</subtask>
+        </subtasks>
+      </task>
+      <task id="1.2.2" ac="1,3">
+        <summary>Remove Authentication Files</summary>
+        <subtasks>
+          <subtask>Delete backend/app/core/security.py</subtask>
+          <subtask>Delete backend/app/api/routes/login.py</subtask>
+          <subtask>Delete backend/app/api/routes/users.py</subtask>
+          <subtask>Delete User model from backend/app/models.py (or delete user.py if separate)</subtask>
+          <subtask>Delete user table migration files from backend/app/alembic/versions/</subtask>
+          <subtask>Document deleted migration file names in commit message</subtask>
+        </subtasks>
+      </task>
+      <task id="1.2.3" ac="2">
+        <summary>Clean Router Imports</summary>
+        <subtasks>
+          <subtask>Edit backend/app/api/main.py: Remove 'from app.api.routes import login, users' import</subtask>
+          <subtask>Edit backend/app/api/main.py: Remove 'api_router.include_router(login.router)' line</subtask>
+          <subtask>Edit backend/app/api/main.py: Remove 'api_router.include_router(users.router)' line</subtask>
+          <subtask>Grep for 'from app.core.security' across codebase</subtask>
+          <subtask>Grep for 'from app.models.user' or User model references</subtask>
+          <subtask>Remove any remaining dead imports</subtask>
+        </subtasks>
+      </task>
+      <task id="1.2.4" ac="3">
+        <summary>Verify Database Schema</summary>
+        <subtasks>
+          <subtask>Start PostgreSQL container: docker-compose up -d db</subtask>
+          <subtask>Connect to database: docker exec -it gamepulse-postgres psql -U postgres</subtask>
+          <subtask>List tables: \dt - confirm no users or user_tokens tables</subtask>
+          <subtask>If tables exist, drop them: DROP TABLE IF EXISTS user_tokens CASCADE; DROP TABLE IF EXISTS users CASCADE;</subtask>
+          <subtask>Verify Alembic migration history is clean</subtask>
+        </subtasks>
+      </task>
+      <task id="1.2.5" ac="4,5">
+        <summary>Run Tests and Verify</summary>
+        <subtasks>
+          <subtask>Start application: docker-compose up backend</subtask>
+          <subtask>Verify application starts without import errors</subtask>
+          <subtask>Run pytest: docker-compose exec backend pytest</subtask>
+          <subtask>Check for any failures related to missing auth modules</subtask>
+          <subtask>Access API docs: http://localhost:8000/docs - verify no auth endpoints</subtask>
+        </subtasks>
+      </task>
+      <task id="1.2.6" ac="5">
+        <summary>Code Quality Check</summary>
+        <subtasks>
+          <subtask>Run linter: docker-compose exec backend ruff check .</subtask>
+          <subtask>Search for dead code with grep</subtask>
+          <subtask>Review backend/app/main.py for cleanliness</subtask>
+          <subtask>Verify CORS configuration is appropriate for public API</subtask>
+        </subtasks>
+      </task>
+      <task id="1.2.7" ac="4">
+        <summary>Testing</summary>
+        <subtasks>
+          <subtask>Unit Test: Import check - test that main.py imports successfully</subtask>
+          <subtask>Integration Test: API docs verification - test /docs and /openapi.json</subtask>
+          <subtask>Smoke Test: Application startup - test uvicorn starts without errors</subtask>
+        </subtasks>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <summary>Authentication Files Deleted</summary>
+      <items>
+        <item>Deleted file: backend/app/core/security.py (JWT token generation, password hashing)</item>
+        <item>Deleted file: backend/app/api/routes/login.py (user authentication endpoints)</item>
+        <item>Deleted file: backend/app/api/routes/users.py (user CRUD operations)</item>
+        <item>Deleted file: backend/app/models/user.py or User model from models.py (User SQLModel schema)</item>
+      </items>
+    </criterion>
+    <criterion id="2">
+      <summary>Router References Cleaned</summary>
+      <items>
+        <item>Removed user-related router imports from backend/app/api/main.py</item>
+        <item>Removed login router imports from backend/app/api/main.py</item>
+        <item>Updated backend/app/api/__init__.py if it imports auth routes</item>
+      </items>
+    </criterion>
+    <criterion id="3">
+      <summary>Database Migrations Cleaned</summary>
+      <items>
+        <item>Deleted user table migration files from backend/app/alembic/versions/</item>
+        <item>Verified no remaining references to User model in other migrations</item>
+        <item>Database does not contain users or user_tokens tables</item>
+      </items>
+    </criterion>
+    <criterion id="4">
+      <summary>Tests Pass Without Auth</summary>
+      <items>
+        <item>pytest runs successfully with no broken imports</item>
+        <item>No test files reference deleted authentication modules</item>
+        <item>API documentation at /docs (Swagger) shows no auth endpoints</item>
+      </items>
+    </criterion>
+    <criterion id="5">
+      <summary>Code Quality Verification</summary>
+      <items>
+        <item>No dead imports remain (security, User model, login routes)</item>
+        <item>Grep confirms no remaining references to deleted files</item>
+        <item>Application starts without errors: uvicorn app.main:app</item>
+      </items>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation & Infrastructure</title>
+        <section>AC-2: Authentication Removal</section>
+        <snippet>Epic 1 establishes production-ready infrastructure. Authentication removal (AC-2) focuses on removing unnecessary auth boilerplate from FastAPI template since GamePulse is a public read-only dashboard. Modules to remove: security.py, login.py, users.py, user.py, and user-related migrations.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation & Infrastructure</title>
+        <section>Modules to Remove (Authentication Not Needed)</section>
+        <snippet>Table lists files for deletion: backend/app/core/security.py (JWT, password hashing), login.py/users.py (auth endpoints), models/user.py (User schema), and user migration files. Rationale: GamePulse is public dashboard with no user accounts.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation & Infrastructure</title>
+        <section>Authentication Removal Workflow</section>
+        <snippet>Workflow steps: Identify auth files → Delete files + references in main.py → Remove user table migrations → Test with pytest → Commit "Remove auth boilerplate - public dashboard"</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Security Architecture</section>
+        <snippet>MVP requires no user authentication (public read-only dashboard). Template auth endpoints, user models, and password hashing should be removed. CORS configured for public access. No credential storage vulnerabilities.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Import Patterns (CRITICAL)</section>
+        <snippet>Python - ALWAYS use absolute imports: ✅ from app.models.game import Game, ✅ from app.core.db import get_session. ❌ Relative imports forbidden. This prevents module errors.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>File Location Patterns</section>
+        <snippet>Backend structure: app/models/{domain}.py → SQLModel database models, app/api/routes/{resource}.py → FastAPI endpoints, app/core/{concern}.py → Cross-cutting concerns (config, db, logging)</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>NFR-5.1: Code Maintainability</section>
+        <snippet>Code maintainability requirement supports removing unused authentication boilerplate to keep codebase clean and focused.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/core/security.py</path>
+        <kind>module</kind>
+        <symbol>Various auth functions</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - contains JWT token generation, password hashing (passlib, bcrypt), and security utilities not needed for public dashboard</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/login.py</path>
+        <kind>route</kind>
+        <symbol>login router</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - user authentication endpoints (/login, /token) not needed for public API</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/users.py</path>
+        <kind>route</kind>
+        <symbol>users router</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - user CRUD operations not needed (no user accounts in GamePulse)</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/main.py</path>
+        <kind>router</kind>
+        <symbol>api_router</symbol>
+        <lines>3,7-8</lines>
+        <reason>File to be modified - remove imports for login and users routes (lines 3, 7-8: from app.api.routes import login, users and include_router calls)</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/main.py</path>
+        <kind>application</kind>
+        <symbol>app</symbol>
+        <lines>entire file</lines>
+        <reason>Main FastAPI application entry point - currently includes api_router which contains auth routes. No direct changes needed here (auth removal happens in api/main.py)</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/e2412789c190_initialize_models.py</path>
+        <kind>migration</kind>
+        <symbol>initialize_models</symbol>
+        <lines>unknown</lines>
+        <reason>Initial migration - likely contains User model table creation. Needs inspection and potential deletion/modification.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/utils/user.py</path>
+        <kind>test_utility</kind>
+        <symbol>user test helpers</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - test utilities for user creation not needed after auth removal</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/crud/test_user.py</path>
+        <kind>test</kind>
+        <symbol>user CRUD tests</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - tests for user CRUD operations no longer relevant</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/api/routes/test_login.py</path>
+        <kind>test</kind>
+        <symbol>login endpoint tests</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - tests for login endpoints no longer needed</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/api/routes/test_users.py</path>
+        <kind>test</kind>
+        <symbol>users endpoint tests</symbol>
+        <lines>entire file</lines>
+        <reason>File to be deleted - tests for users endpoints no longer needed</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="fastapi[standard]" version=">=0.115.0,<1.0.0" />
+        <package name="passlib[bcrypt]" version=">=1.7.4,<2.0.0" note="Auth-related - may be removable after auth cleanup" />
+        <package name="pyjwt" version=">=2.9.0,<3.0.0" note="Auth-related - may be removable after auth cleanup" />
+        <package name="bcrypt" version="==4.0.1" note="Auth-related - may be removable after auth cleanup" />
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0" />
+        <package name="alembic" version=">=1.13.0,<2.0.0" />
+        <package name="psycopg[binary]" version=">=3.2.0,<4.0.0" />
+        <package name="pydantic" version=">=2.9.0,<3.0.0" />
+        <package name="pytest" version=">=8.3.0,<9.0.0" dev="true" />
+        <package name="ruff" version=">=0.7.0,<1.0.0" dev="true" />
+        <package name="mypy" version=">=1.11.0,<2.0.0" dev="true" />
+      </python>
+      <javascript>
+        <package name="react" version="^18.2.0" />
+        <package name="@chakra-ui/react" version="^3.8.0" />
+        <package name="@tanstack/react-query" version="^5.28.14" />
+        <package name="@tanstack/react-router" version="1.19.1" />
+        <package name="axios" version="1.7.4" />
+        <package name="vite" version="^5.4.14" dev="true" />
+        <package name="typescript" version="^5.2.2" dev="true" />
+      </javascript>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Use absolute imports only: from app.core.security (not relative imports). This prevents module errors.</constraint>
+    <constraint>GamePulse is a public read-only dashboard - no user authentication needed</constraint>
+    <constraint>CORS should be configured permissively (allow_origins=["*"]) for public data access</constraint>
+    <constraint>All API endpoints are public and read-only GET operations only</constraint>
+    <constraint>Template includes user management by default - requires explicit removal</constraint>
+    <constraint>Must preserve health check and core FastAPI functionality</constraint>
+    <constraint>Database migrations referencing User model must be removed to prevent schema conflicts</constraint>
+    <constraint>All router imports must be cleaned to prevent broken references</constraint>
+    <constraint>Remove auth-related test files to prevent test failures</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>FastAPI Application</name>
+      <kind>FastAPI app instance</kind>
+      <signature>app = FastAPI(title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json")</signature>
+      <path>backend/app/main.py</path>
+    </interface>
+    <interface>
+      <name>API Router</name>
+      <kind>FastAPI APIRouter</kind>
+      <signature>api_router = APIRouter()</signature>
+      <path>backend/app/api/main.py</path>
+      <note>Currently includes login.router and users.router which need to be removed</note>
+    </interface>
+    <interface>
+      <name>CORS Middleware</name>
+      <kind>Middleware configuration</kind>
+      <signature>app.add_middleware(CORSMiddleware, allow_origins=settings.all_cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])</signature>
+      <path>backend/app/main.py</path>
+      <note>Should be verified for public API appropriateness (may need allow_credentials=False)</note>
+    </interface>
+    <interface>
+      <name>OpenAPI Documentation</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /docs (Swagger UI), GET /redoc (ReDoc UI), GET /openapi.json (schema)</signature>
+      <path>Auto-generated by FastAPI</path>
+      <note>Should show NO auth endpoints after cleanup</note>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing framework: pytest (>=8.3.0) with async support. Tests organized in backend/app/tests/ with subdirectories: unit/, integration/, e2e/, api/routes/, crud/, utils/. Use docker-compose exec backend pytest to run tests. Code quality verified with ruff (linter) and mypy (type checker). For this cleanup story: focus on import verification, API docs validation, and smoke tests for application startup. Coverage target not applicable (code removal story).
+    </standards>
+    <locations>
+      <location>backend/app/tests/unit/</location>
+      <location>backend/app/tests/integration/</location>
+      <location>backend/app/tests/api/routes/</location>
+      <location>backend/app/tests/crud/</location>
+      <location>backend/app/tests/utils/</location>
+    </locations>
+    <ideas>
+      <test ac="4">
+        <name>test_main_imports_successfully</name>
+        <description>Unit test: Verify that backend/app/main.py can be imported without ModuleNotFoundError or ImportError related to deleted auth modules</description>
+      </test>
+      <test ac="4">
+        <name>test_api_main_imports_successfully</name>
+        <description>Unit test: Verify that backend/app/api/main.py can be imported after removing login and users router imports</description>
+      </test>
+      <test ac="4">
+        <name>test_openapi_no_auth_endpoints</name>
+        <description>Integration test: GET /openapi.json and verify response does not contain /login, /users, or /token endpoints</description>
+      </test>
+      <test ac="4">
+        <name>test_swagger_docs_accessible</name>
+        <description>Integration test: GET /docs returns 200 status code and contains valid Swagger UI HTML</description>
+      </test>
+      <test ac="5">
+        <name>test_application_startup</name>
+        <description>Smoke test: Start uvicorn app.main:app and verify it starts without errors, listens on port, and /health responds</description>
+      </test>
+      <test ac="1,5">
+        <name>test_no_auth_file_references</name>
+        <description>Code quality test: Grep codebase for 'from app.core.security', 'from app.models.user', confirm no matches in non-deleted files</description>
+      </test>
+      <test ac="3">
+        <name>test_database_no_user_tables</name>
+        <description>Integration test: Connect to PostgreSQL, query pg_tables for 'users' and 'user_tokens' tables, verify they do not exist</description>
+      </test>
+    </ideas>
+  </tests>
+</story-context>

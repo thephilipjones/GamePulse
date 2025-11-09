@@ -43,7 +43,7 @@ development_status:
   epic-1: contexted
   1-1-initialize-fastapi-template: done
   1-1b-provision-aws-infrastructure: review
-  1-2-remove-authentication: drafted
+  1-2-remove-authentication: done
   1-3-configure-timescaledb: drafted
   1-4-create-database-schema: drafted
   1-5-setup-github-actions: drafted
