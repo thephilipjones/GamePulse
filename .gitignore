@@ -19,3 +19,6 @@ terraform.tfstate.backup
 terraform.tfvars
 *.tfvars
 !terraform.tfvars.example
+
+# Claude Code local settings
+.claude/settings.local.json
