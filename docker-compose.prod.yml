@@ -1,5 +1,9 @@
 # Production overrides for docker-compose.yml
 # Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file:
+# - Adds Traefik proxy with Let's Encrypt SSL
+# - Excludes dev-only services (adminer, mailcatcher, playwright)
 
 services:
   proxy:
@@ -44,6 +48,19 @@ services:
     networks:
       - traefik-public
       - default
+
+  # Disable dev-only services in production
+  adminer:
+    deploy:
+      replicas: 0
+
+  mailcatcher:
+    deploy:
+      replicas: 0
+
+  playwright:
+    deploy:
+      replicas: 0
 
 volumes:
   traefik-certificates:
