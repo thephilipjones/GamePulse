@@ -89,25 +89,40 @@ resource "aws_iam_policy" "github_actions_deployment" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # SSM Session Manager permissions for deployment
+      # SSM permissions for EC2 instances (with Project tag condition)
       {
         Effect = "Allow"
         Action = [
           "ssm:StartSession",
           "ssm:SendCommand",
-          "ssm:GetCommandInvocation",
           "ssm:DescribeInstanceInformation"
         ]
         Resource = [
-          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*",
-          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"
         ]
         Condition = {
           StringEquals = {
             "ssm:resourceTag/Project" = var.project_name
           }
         }
+      },
+      # SSM permission to use AWS-RunShellScript document (no tag condition - it's AWS-managed)
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:SendCommand"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"
+        ]
+      },
+      # SSM permission to get command invocation status (no tag condition - commands don't have tags)
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetCommandInvocation"
+        ]
+        Resource = "*"
       },
       # EC2 describe permissions to find target instance
       {
