@@ -1,0 +1,219 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>4</storyId>
+    <title>Create Multi-Sport Database Schema</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-09</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-4-create-database-schema.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>to create the multi-sport database schema with SQLModel and Alembic</iWant>
+    <soThat>I can store teams, team groups, rivalries, and game data for NCAAM with future expansion to NFL and NBA</soThat>
+    <tasks>
+- Task 1.4.1: Create SQLModel Database Schemas (AC: #1)
+  - Create backend/app/models/team.py with Team, TeamGroup, TeamRivalry models
+  - Create backend/app/models/game.py with Game model
+  - Add PostgreSQL ARRAY column type for team aliases
+  - Define foreign key relationships between models
+  - Add proper indexes via Field() declarations
+
+- Task 1.4.2: Generate and Review Alembic Migration (AC: #2)
+  - Run alembic revision --autogenerate -m "Create multi-sport schema"
+  - Review generated migration file for correctness
+  - Verify index creation statements in migration
+  - Check foreign key constraints are included
+
+- Task 1.4.3: Apply Migration and Verify Tables (AC: #2, #3)
+  - Run alembic upgrade head to apply migration
+  - Query PostgreSQL to verify tables exist: \dt in psql
+  - Verify indexes created: \di in psql
+  - Test foreign key constraints work correctly
+
+- Task 1.4.4: Create Sample Data Seed Script (AC: #4)
+  - Create backend/app/data/seed_data.py script
+  - Define 5 NCAAM teams with proper team_id format ("ncaam_duke", etc.)
+  - Define 2 team groups (ACC, Big 12)
+  - Define 1 rivalry (Duke-UNC with rivalry_factor=1.5, type="historic")
+  - Include sample game record to test Game model
+
+- Task 1.4.5: Run Seed Script and Verify Data (AC: #4)
+  - Execute seed script via docker-compose exec backend python -m app.data.seed_data
+  - Query teams table: SELECT * FROM teams;
+  - Query team_groups table: SELECT * FROM team_groups;
+  - Query team_rivalries table: SELECT * FROM team_rivalries;
+  - Verify sample game inserted successfully
+</tasks>
+  </story>
+
+  <acceptanceCriteria>
+1. SQLModel models created
+   - Team, TeamGroup, TeamRivalry, Game models defined in backend/app/models/
+   - Proper type annotations and foreign key relationships
+   - PostgreSQL ARRAY column for team aliases
+   - Models follow type-safe ORM patterns from architecture
+
+2. Alembic migration generated and applied
+   - Migration file created via alembic revision --autogenerate
+   - Migration successfully applied: alembic upgrade head
+   - All tables exist: teams, team_groups, team_rivalries, games
+   - Migration is reversible (downgrade works)
+
+3. Indexes created for query performance
+   - sport, date, status, type indexes on games table
+   - sport index on teams table
+   - team lookup indexes for games (home_team_id, away_team_id)
+   - Indexes verified via \di command in psql
+
+4. Sample data seeded
+   - 5 NCAAM teams minimum (Duke, UNC, Kansas, Kentucky, Villanova)
+   - 2 team groups (ACC, Big 12 conferences)
+   - 1 rivalry relationship (Duke-UNC with rivalry_factor=1.5)
+   - Sample game record to test Game model
+</acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Technical Specification - Epic 1</title>
+        <section>Initial Database Schema (Multi-Sport Data Engineering Foundation)</section>
+        <snippet>Defines complete SQL schema for teams, team_groups, team_rivalries, and games tables with sport-agnostic design. Uses sport-namespaced team IDs (e.g., "ncaam_duke") and flexible team_groups hierarchy supporting both NCAAM conferences and future NFL divisions.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Technical Specification - Epic 1</title>
+        <section>SQLModel Schemas (Type-Safe ORM for Multi-Sport Data)</section>
+        <snippet>Provides complete Python SQLModel classes for Team, TeamGroup, TeamRivalry, and Game. Demonstrates PostgreSQL ARRAY usage for team aliases and proper field indexing patterns.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Technical Specification - Epic 1</title>
+        <section>Database Structure Setup</section>
+        <snippet>Describes PostgreSQL 16 with TimescaleDB extension, connection pooling via SQLModel async engine, and Alembic migration system with auto-generation from SQLModel models.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>Database Schema (PostgreSQL + TimescaleDB)</section>
+        <snippet>Defines dimensional tables (teams, conferences) and fact tables (games, reddit_posts). Includes index strategies for BI tool optimization and time-series queries.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>Naming Conventions</section>
+        <snippet>Database tables use lowercase plural names, columns use snake_case, foreign keys follow {table}_id format. Backend Python uses snake_case for files/functions and PascalCase for classes.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Documentation</title>
+        <section>SQLModel Schema Patterns</section>
+        <snippet>Demonstrates SQLModel table=True pattern with explicit __tablename__, Field() for primary/foreign keys, and datetime default_factory patterns. Shows separation between database models and API response schemas.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/models.py</path>
+        <kind>models</kind>
+        <symbol>Item, ItemBase, ItemCreate, ItemUpdate, ItemPublic</symbol>
+        <lines>1-51</lines>
+        <reason>Existing template demo model showing SQLModel patterns. Story 1.4 will create models/ directory alongside this file and add new domain models (Team, Game, etc.) without removing Item model.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/db.py</path>
+        <kind>database</kind>
+        <symbol>engine</symbol>
+        <lines>1-11</lines>
+        <reason>SQLModel engine configuration. New models must be imported before using this engine for Alembic auto-detection to work.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/env.py</path>
+        <kind>migration</kind>
+        <symbol>target_metadata, run_migrations_online, run_migrations_offline</symbol>
+        <lines>1-85</lines>
+        <reason>Alembic environment configured to import from app.models and use SQLModel.metadata for auto-generation. New models in models/ directory must be imported in models/__init__.py to be detected.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/001_initialize_item_model.py</path>
+        <kind>migration</kind>
+        <symbol>upgrade, downgrade</symbol>
+        <lines>1-39</lines>
+        <reason>Example migration showing upgrade/downgrade pattern and PostgreSQL extension creation (uuid-ossp). Story 1.4 migration will follow similar pattern with proper upgrade/downgrade functions.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0">Type-safe ORM combining SQLAlchemy and Pydantic for database models</package>
+        <package name="alembic" version=">=1.13.0,<2.0.0">Database migration tool with auto-generation support</package>
+        <package name="psycopg" version=">=3.2.0,<4.0.0">PostgreSQL database adapter for Python (binary version)</package>
+        <package name="pydantic" version=">=2.9.0,<3.0.0">Data validation library used by SQLModel</package>
+        <package name="fastapi" version=">=0.115.0,<1.0.0">Web framework for API endpoints (uses SQLModel models)</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - MUST create models/ directory structure: backend/app/models/{team.py, game.py, __init__.py}
+    - MUST NOT remove existing Item model from backend/app/models.py (kept per Story 1.2)
+    - MUST use SQLModel with table=True for database models (not raw SQLAlchemy)
+    - MUST use explicit __tablename__ attribute (lowercase, plural: "teams", "games", etc.)
+    - MUST use sport-namespaced team IDs: format "{sport}_{slug}" (e.g., "ncaam_duke", "nfl_chiefs")
+    - MUST use PostgreSQL ARRAY column type for team.aliases field via sa_column=Column(ARRAY(String))
+    - MUST add Field(index=True) for frequently queried columns (sport, game_date, game_status, game_type)
+    - MUST use TIMESTAMPTZ for all timestamp columns with datetime.utcnow default_factory
+    - MUST implement foreign key relationships via Field(foreign_key="table.column")
+    - MUST add proper indexes for BI tool optimization (sport, date, status, type on games; sport on teams)
+    - MUST make Alembic migration reversible with proper downgrade() function
+    - MUST import new models in models/__init__.py for Alembic auto-detection
+    - MUST follow naming conventions: snake_case columns, {table}_id for foreign keys
+    - MUST defer TimescaleDB hypertables to Epic 5 (not in this story)
+    - Sample data seed script MUST be idempotent (running twice shouldn't create duplicates)
+    - MUST verify migration with manual psql commands (\dt, \di, \d teams)
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>SQLModel.metadata</name>
+      <kind>ORM metadata</kind>
+      <signature>from app.models import SQLModel; target_metadata = SQLModel.metadata</signature>
+      <path>backend/app/alembic/env.py</path>
+      <description>Alembic uses SQLModel.metadata for auto-generation. All new models must inherit from SQLModel with table=True to be included in metadata.</description>
+    </interface>
+    <interface>
+      <name>Database Engine</name>
+      <kind>SQLModel engine</kind>
+      <signature>from app.core.db import engine; create_engine(str(settings.SQLALCHEMY_DATABASE_URI))</signature>
+      <path>backend/app/core/db.py</path>
+      <description>Centralized database engine for all SQLModel operations. Models must be imported before engine usage to ensure proper relationship initialization.</description>
+    </interface>
+    <interface>
+      <name>Alembic CLI</name>
+      <kind>migration tool</kind>
+      <signature>alembic revision --autogenerate -m "message"; alembic upgrade head; alembic downgrade -1</signature>
+      <path>backend/app/alembic/</path>
+      <description>Migration commands for schema versioning. Auto-generation requires models to be imported in app.models namespace.</description>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+Story 1.4 focuses on database schema definition, not application logic, so traditional unit tests are not required. Testing is accomplished through manual verification commands and migration testing. Migration testing: verify alembic upgrade head applies cleanly, test alembic downgrade -1 rollback works, confirm idempotency by applying migration twice (should succeed with no duplicate table errors). Schema validation uses manual psql commands: \dt to list tables, \d teams to describe table structure, \di to verify indexes exist. Data seeding scripts must be idempotent (running twice shouldn't create duplicates). Integration tests for ORM usage will be covered in Epic 2 stories.
+    </standards>
+    <locations>
+      - backend/app/alembic/versions/ - Migration files with upgrade/downgrade functions
+      - Manual verification via docker-compose exec db psql -U app_user -d app commands
+    </locations>
+    <ideas>
+      <idea ac="1">Verify SQLModel models are properly defined: import models in Python shell and check __tablename__, __table__.columns, __table__.foreign_keys</idea>
+      <idea ac="2">Test migration applies: alembic upgrade head should create all 4 tables (teams, team_groups, team_rivalries, games) without errors</idea>
+      <idea ac="2">Test migration rollback: alembic downgrade -1 should drop all tables and allow re-applying migration</idea>
+      <idea ac="2">Test migration idempotency: running alembic upgrade head twice should not raise duplicate table errors</idea>
+      <idea ac="3">Verify indexes created: psql \di should show idx_games_sport, idx_games_date, idx_games_status, idx_games_type, idx_teams_sport, idx_games_teams</idea>
+      <idea ac="3">Verify index structure: psql \d games should show indexes on correct columns with proper names</idea>
+      <idea ac="4">Test foreign key constraints: attempt to insert game with invalid team_id, should fail with FK violation</idea>
+      <idea ac="4">Verify sample data: SELECT COUNT(*) FROM teams should return 5; SELECT * FROM team_rivalries WHERE team_a_id LIKE '%duke%' should return Duke-UNC rivalry</idea>
+      <idea ac="4">Test seed script idempotency: run seed_data.py twice, verify no duplicate rows created (use UPSERT or check-before-insert pattern)</idea>
+    </ideas>
+  </tests>
+</story-context>

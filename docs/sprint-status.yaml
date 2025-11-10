@@ -42,11 +42,11 @@ development_status:
   # Epic 1: Project Foundation & Infrastructure (7 stories - reordered sequence)
   epic-1: contexted
   1-1-initialize-fastapi-template: done
-  1-1b-provision-aws-infrastructure: review
+  1-1b-provision-aws-infrastructure: done
   1-2-remove-authentication: done
   1-3-configure-timescaledb: done
-  1-4-create-database-schema: drafted
-  1-5-setup-github-actions: drafted
+  1-4-create-database-schema: done
+  1-5-setup-github-actions: ready-for-dev
   1-6-deploy-to-aws-ec2: drafted
   epic-1-retrospective: optional
 
