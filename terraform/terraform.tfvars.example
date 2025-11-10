@@ -65,8 +65,9 @@ log_retention_days = 7  # CloudWatch log retention
 # Example: "yourusername" or "your-org"
 github_org = "YOUR_GITHUB_USERNAME"
 
-# Repository name (should match your repo)
-github_repo = "gamepulse"
+# Repository name (MUST be case-sensitive and match actual GitHub repo name!)
+# Example: If your repo is https://github.com/username/GamePulse, use "GamePulse" not "gamepulse"
+github_repo = "GamePulse"
 
 # Branch patterns allowed to deploy via GitHub Actions
 # Default: ["main", "staging"]
