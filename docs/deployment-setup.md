@@ -74,7 +74,7 @@ Create `/opt/gamepulse/.env` with production configuration:
 cat > /opt/gamepulse/.env <<'EOF'
 # Domain Configuration
 DOMAIN=gamepulse.top
-FRONTEND_HOST=https://dashboard.gamepulse.top
+FRONTEND_HOST=https://gamepulse.top
 
 # Environment
 ENVIRONMENT=production
@@ -84,7 +84,7 @@ PROJECT_NAME=GamePulse
 STACK_NAME=gamepulse
 
 # Backend Configuration
-BACKEND_CORS_ORIGINS=["https://gamepulse.top","https://dashboard.gamepulse.top","https://api.gamepulse.top","https://www.gamepulse.top"]
+BACKEND_CORS_ORIGINS=["https://gamepulse.top","https://www.gamepulse.top","https://api.gamepulse.top"]
 SECRET_KEY=CHANGE_ME_GENERATE_SECURE_KEY
 FIRST_SUPERUSER=admin@gamepulse.com
 FIRST_SUPERUSER_PASSWORD=CHANGE_ME_SECURE_PASSWORD
@@ -160,7 +160,7 @@ curl https://api.gamepulse.top/docs
 # Should return HTML for Swagger UI
 
 # Check frontend
-curl https://dashboard.gamepulse.top/
+curl https://gamepulse.top/
 # Should return HTML for React app
 ```
 
@@ -222,7 +222,7 @@ curl https://api.gamepulse.top/api/v1/utils/health-check/
 open https://api.gamepulse.top/docs
 
 # Check frontend
-open https://dashboard.gamepulse.top
+open https://gamepulse.top
 ```
 
 ## Troubleshooting
@@ -280,10 +280,9 @@ After initial setup, every push to `main` automatically:
 ## SSL Certificates
 
 Traefik automatically provisions Let's Encrypt SSL certificates for:
-- `gamepulse.top`
-- `api.gamepulse.top`
-- `dashboard.gamepulse.top`
-- `www.gamepulse.top`
+- `gamepulse.top` (frontend/main app)
+- `www.gamepulse.top` (frontend/www alias)
+- `api.gamepulse.top` (backend API)
 
 **First deployment may take 1-2 minutes** while Traefik requests certificates from Let's Encrypt.
 

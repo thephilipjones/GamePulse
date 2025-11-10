@@ -1,55 +1,81 @@
-import type { ApiError } from "./client"
-import useCustomToast from "./hooks/useCustomToast"
+import type { ApiError } from "./client";
+import useCustomToast from "./hooks/useCustomToast";
 
 export const emailPattern = {
   value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
   message: "Invalid email address",
-}
+};
 
 export const namePattern = {
   value: /^[A-Za-z\s\u00C0-\u017F]{1,30}$/,
   message: "Invalid name",
+};
+
+interface PasswordRules {
+  minLength: {
+    value: number;
+    message: string;
+  };
+  required?: string;
 }
 
-export const passwordRules = (isRequired = true) => {
-  const rules: any = {
+export const passwordRules = (isRequired = true): PasswordRules => {
+  const rules: PasswordRules = {
     minLength: {
       value: 8,
       message: "Password must be at least 8 characters",
     },
-  }
+  };
 
   if (isRequired) {
-    rules.required = "Password is required"
+    rules.required = "Password is required";
   }
 
-  return rules
+  return rules;
+};
+
+interface FormValues {
+  password?: string;
+  new_password?: string;
+}
+
+interface ConfirmPasswordRules {
+  validate: (value: string) => true | string;
+  required?: string;
 }
 
 export const confirmPasswordRules = (
-  getValues: () => any,
+  getValues: () => FormValues,
   isRequired = true,
-) => {
-  const rules: any = {
+): ConfirmPasswordRules => {
+  const rules: ConfirmPasswordRules = {
     validate: (value: string) => {
-      const password = getValues().password || getValues().new_password
-      return value === password ? true : "The passwords do not match"
+      const password = getValues().password || getValues().new_password;
+      return value === password ? true : "The passwords do not match";
     },
-  }
+  };
 
   if (isRequired) {
-    rules.required = "Password confirmation is required"
+    rules.required = "Password confirmation is required";
   }
 
-  return rules
+  return rules;
+};
+
+interface ErrorDetail {
+  msg: string;
 }
 
 export const handleError = (err: ApiError) => {
-  const { showErrorToast } = useCustomToast()
-  const errDetail = (err.body as any)?.detail
-  let errorMessage = errDetail || "Something went wrong."
-  if (Array.isArray(errDetail) && errDetail.length > 0) {
-    errorMessage = errDetail[0].msg
+  const { showErrorToast } = useCustomToast();
+  const errDetail = err.body?.detail as string | ErrorDetail[] | undefined;
+  let errorMessage = "Something went wrong.";
+
+  if (typeof errDetail === "string") {
+    errorMessage = errDetail;
+  } else if (Array.isArray(errDetail) && errDetail.length > 0) {
+    errorMessage = errDetail[0].msg;
   }
-  showErrorToast(errorMessage)
-}
+
+  showErrorToast(errorMessage);
+};
