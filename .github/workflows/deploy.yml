@@ -89,7 +89,8 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci-pipeline
           FIRST_SUPERUSER: test@example.com
           FIRST_SUPERUSER_PASSWORD: testpassword123
-          ENVIRONMENT: testing
+          ENVIRONMENT: local
+          PROJECT_NAME: gamepulse
         run: |
           uv sync --frozen
           uv run alembic upgrade head
