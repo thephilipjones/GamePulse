@@ -58,6 +58,21 @@ tailscale_device_ips = [
 log_retention_days = 7  # CloudWatch log retention
 
 # ============================================================================
+# GitHub OIDC Configuration (for CI/CD)
+# ============================================================================
+
+# Your GitHub username or organization name
+# Example: "yourusername" or "your-org"
+github_org = "YOUR_GITHUB_USERNAME"
+
+# Repository name (should match your repo)
+github_repo = "gamepulse"
+
+# Branch patterns allowed to deploy via GitHub Actions
+# Default: ["main", "staging"]
+allowed_branch_patterns = ["main", "staging"]
+
+# ============================================================================
 # Configuration Instructions
 # ============================================================================
 
@@ -72,9 +87,13 @@ log_retention_days = 7  # CloudWatch log retention
 #    Example: 100.64.1.2
 #    Use: "100.64.1.2/32"
 
-# 3. Create your actual config:
+# 3. Set your GitHub username/org:
+#    Use your GitHub username (e.g., "philipbrown")
+#    Or organization name if using an org repo
+
+# 4. Create your actual config:
 #    cp terraform.tfvars.example terraform.tfvars
-#    # Edit terraform.tfvars with your real IPs
+#    # Edit terraform.tfvars with your real values
 #    # NEVER commit terraform.tfvars to git!
 
 # ============================================================================

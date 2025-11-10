@@ -62,16 +62,36 @@ output "cloudwatch_log_groups" {
 }
 
 # ============================================================================
+# GitHub OIDC Outputs
+# ============================================================================
+
+output "github_actions_role_arn" {
+  description = "ARN of the IAM role for GitHub Actions (use this in workflow with role-to-assume)"
+  value       = module.github_oidc.github_actions_role_arn
+}
+
+output "github_actions_role_name" {
+  description = "Name of the IAM role for GitHub Actions"
+  value       = module.github_oidc.github_actions_role_name
+}
+
+output "oidc_provider_arn" {
+  description = "ARN of the GitHub OIDC provider"
+  value       = module.github_oidc.oidc_provider_arn
+}
+
+# ============================================================================
 # Connection Information
 # ============================================================================
 
 output "connection_info" {
   description = "All connection information"
   value = {
-    public_ip   = module.compute.public_ip
-    private_ip  = module.compute.private_ip
-    ssh_command = module.compute.ssh_command
-    instance_id = module.compute.instance_id
-    vpc_id      = module.vpc.vpc_id
+    public_ip               = module.compute.public_ip
+    private_ip              = module.compute.private_ip
+    ssh_command             = module.compute.ssh_command
+    instance_id             = module.compute.instance_id
+    vpc_id                  = module.vpc.vpc_id
+    github_actions_role_arn = module.github_oidc.github_actions_role_arn
   }
 }

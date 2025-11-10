@@ -46,3 +46,18 @@ module "compute" {
   log_retention_days   = var.log_retention_days
   tags                 = local.common_tags
 }
+
+# ============================================================================
+# GitHub OIDC Module - Zero-Secret CI/CD Authentication
+# ============================================================================
+
+module "github_oidc" {
+  source = "./modules/github-oidc"
+
+  project_name            = var.project_name
+  github_org              = var.github_org
+  github_repo             = var.github_repo
+  allowed_branch_patterns = var.allowed_branch_patterns
+  aws_region              = var.aws_region
+  tags                    = local.common_tags
+}

@@ -97,6 +97,22 @@ EOF
 systemctl restart docker
 
 # ============================================================================
+# Install AWS SSM Agent (for Session Manager access)
+# ============================================================================
+
+echo "=== Installing AWS SSM Agent via snap ==="
+snap install amazon-ssm-agent --classic
+
+echo "=== Enabling SSM Agent service ==="
+systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+echo "=== Starting SSM Agent service ==="
+systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+echo "=== Verifying SSM Agent status ==="
+systemctl status snap.amazon-ssm-agent.amazon-ssm-agent.service --no-pager
+
+# ============================================================================
 # Install Tailscale (Optional - requires auth key to connect)
 # ============================================================================
 
@@ -118,10 +134,12 @@ echo "Get auth key: https://login.tailscale.com/admin/settings/keys"
 echo "=== Bootstrap complete! ==="
 echo "Docker version: $(docker --version)"
 echo "Docker Compose version: $(docker compose version)"
+echo "SSM Agent status: $(systemctl is-active snap.amazon-ssm-agent.amazon-ssm-agent.service)"
 echo "Tailscale version: $(tailscale version)"
 echo "Ubuntu user added to docker group (will take effect on next login)"
 echo ""
 echo "Next steps:"
 echo "1. SSH to instance: ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<PUBLIC_IP>"
+echo "   OR use SSM Session Manager: aws ssm start-session --target <INSTANCE_ID>"
 echo "2. Connect to Tailscale: sudo tailscale up --authkey=YOUR_KEY"
 echo "3. Verify: tailscale status"

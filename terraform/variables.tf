@@ -121,3 +121,29 @@ variable "log_retention_days" {
     error_message = "Log retention must be one of: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365 days."
   }
 }
+
+# ============================================================================
+# GitHub OIDC Configuration
+# ============================================================================
+
+variable "github_org" {
+  description = "GitHub organization or username (for OIDC authentication)"
+  type        = string
+}
+
+variable "github_repo" {
+  description = "GitHub repository name (for OIDC trust policy)"
+  type        = string
+  default     = "gamepulse"
+}
+
+variable "allowed_branch_patterns" {
+  description = "Branch patterns allowed to deploy via GitHub Actions OIDC (e.g., ['main', 'staging'])"
+  type        = list(string)
+  default     = ["main", "staging"]
+
+  validation {
+    condition     = length(var.allowed_branch_patterns) > 0
+    error_message = "At least one branch pattern must be specified for OIDC authentication."
+  }
+}

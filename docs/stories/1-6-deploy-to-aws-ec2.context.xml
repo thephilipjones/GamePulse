@@ -1,0 +1,443 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>6</storyId>
+    <title>Deploy to AWS EC2 with GitHub OIDC and SSM Session Manager</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-10</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/story-1.6-deploy-to-aws-ec2.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a developer</asA>
+    <iWant>to deploy GamePulse to AWS EC2 using GitHub OIDC authentication and SSM Session Manager for zero-secret, auditable deployments</iWant>
+    <soThat>I have a secure, production-grade CI/CD pipeline with a live public URL accessible for demos and interviews</soThat>
+    <tasks>
+### Task 1.6.1: Create Terraform GitHub OIDC Module (AC: #1)
+- Create terraform/modules/github-oidc/ directory structure
+- Define OIDC provider resource with GitHub token URL
+- Define IAM role with trust policy restricting to gamepulse repo
+- Attach least-privilege IAM policies (SSM, EC2 describe, CloudWatch)
+- Output role ARN for workflow configuration
+- Test: terraform plan succeeds without errors
+- Test: terraform apply creates OIDC provider and role
+- Test: Verify role ARN in Terraform outputs
+
+### Task 1.6.2: Update EC2 Configuration for SSM (AC: #2)
+- Update terraform/modules/compute/user_data.sh to install SSM Agent
+- Add SSM Agent systemd enable/start commands
+- Update EC2 IAM role to include AmazonSSMManagedInstanceCore policy
+- Add instance tags for SSM targeting (Environment, Project, ManagedBy)
+- Test: SSH to instance and verify SSM Agent status
+- Test: Check instance appears "online" in AWS Systems Manager Fleet Manager
+- Test: Run aws ssm describe-instance-information and verify instance listed
+
+### Task 1.6.3: Configure Secure Network Rules (AC: #3)
+- Update security group to restrict SSH to admin IP only
+- Remove any 0.0.0.0/0 SSH rules (GitHub Actions will use SSM)
+- Verify HTTP (80) and HTTPS (443) remain open to internet
+- Verify outbound rules allow all traffic (required for SSM connectivity)
+- Enable CloudTrail logging for SSM session auditing
+- Test: Verify SSH from admin IP succeeds
+- Test: Verify SSH from other IPs is blocked
+- Test: Verify CloudTrail logs are being created
+
+### Task 1.6.4: Create Docker Compose Production Configuration (AC: #4)
+- Create docker-compose.prod.yml with Traefik service
+- Configure Traefik with Let's Encrypt for HTTPS
+- Add TimescaleDB service with persistent volume
+- Add backend service with production environment variables
+- Add frontend service with production build args
+- Create .env.example with required variables documented
+- Test: docker-compose -f docker-compose.yml -f docker-compose.prod.yml config validates
+- Test: Start services locally with prod config and verify health
+
+### Task 1.6.5: Update GitHub Actions Workflow for OIDC (AC: #5)
+- Update workflow to use aws-actions/configure-aws-credentials@v4
+- Add id-token: write permission to workflow
+- Configure role-to-assume with GitHub Actions role ARN
+- Replace appleboy/ssh-action with AWS SSM commands
+- Add SSM Session Manager commands for deployment
+- Update deployment script to use git pull + docker-compose rebuild
+- Add smoke test with curl to health endpoint
+- Test: Trigger workflow and verify OIDC authentication succeeds
+- Test: Verify no SSH keys are used (check GitHub Secrets)
+- Test: Verify deployment completes successfully
+
+### Task 1.6.6: Perform Manual First Deployment (AC: #6)
+- SSH to EC2 instance using admin key
+- Clone gamepulse repository
+- Create .env file with production secrets (DB_PASSWORD, DOMAIN, SECRET_KEY)
+- Run docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+- Verify all containers are running with docker-compose ps
+- Verify health check responds: curl http://localhost:8000/api/v1/utils/health-check/
+- Wait for Traefik to provision Let's Encrypt certificate (~2 minutes)
+- Test: Verify HTTPS certificate at https://gamepulse.top
+- Test: Verify frontend accessible at https://gamepulse.top
+- Test: Verify backend API accessible at https://gamepulse.top/api
+
+### Task 1.6.7: Test Automated Deployment via GitHub Actions (AC: #7)
+- Make test commit to main branch (e.g., update README)
+- Monitor GitHub Actions workflow execution
+- Verify OIDC authentication step passes
+- Verify SSM Session Manager connection succeeds
+- Verify git pull executes successfully
+- Verify docker-compose rebuild completes
+- Verify smoke tests pass
+- Check CloudTrail logs for SSM session activity
+- Test: Verify application updated with latest changes
+- Test: Verify zero downtime during deployment
+
+### Task 1.6.8: Document Deployment Process and Rollback
+- Document OIDC authentication setup in README
+- Document SSM Session Manager usage for manual access
+- Document environment variables required in .env
+- Document rollback procedure (git revert + redeploy)
+- Update architecture documentation with deployment flow
+- Test: Follow documentation to perform manual deployment
+- Test: Execute rollback procedure successfully
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### AC1: AWS OIDC Provider and IAM Configuration
+
+**Given** I have AWS infrastructure provisioned via Terraform (Story 1.1b)
+**When** I configure GitHub Actions authentication
+**Then** the following AWS resources are created via Terraform:
+
+- OIDC Identity Provider configured for GitHub Actions (Provider URL: https://token.actions.githubusercontent.com, Audience: sts.amazonaws.com, Thumbprint: GitHub's OIDC thumbprint)
+- IAM Role for GitHub Actions with trust policy (Allows GitHub OIDC provider to assume role, Restricts to specific repository: {org}/{repo}, Restricts to specific branch patterns)
+- IAM Policies attached to GitHub Actions role (SSM Session Manager permissions, EC2 describe permissions, CloudWatch Logs write permissions, Principle of least privilege)
+
+**And** the GitHub Actions role ARN is output from Terraform for workflow configuration
+
+### AC2: EC2 Instance Configuration for SSM
+
+**Given** I have an EC2 instance provisioned
+**When** the instance launches
+**Then** it is configured with:
+
+- SSM Agent installed via user_data script (required for Ubuntu)
+- EC2 IAM Role updated with policies (AmazonSSMManagedInstanceCore, CloudWatchAgentServerPolicy)
+- SSM Agent status verified as running
+- Instance tags configured for SSM targeting (Environment: production, Project: gamepulse, ManagedBy: Terraform)
+
+**And** the instance appears as "online" in AWS Systems Manager Fleet Manager
+
+### AC3: Secure Network Configuration
+
+**Given** I have an EC2 instance with security group
+**When** I configure network access
+**Then** the security group rules are:
+
+**Inbound:**
+- Port 22 (SSH): ONLY from admin IPs + Tailscale CIDR (NO 0.0.0.0/0)
+- Port 80 (HTTP): From 0.0.0.0/0
+- Port 443 (HTTPS): From 0.0.0.0/0
+
+**Outbound:**
+- All traffic to 0.0.0.0/0 (required for SSM to reach AWS endpoints)
+
+**And** SSH from GitHub Actions IP ranges (0.0.0.0/0) is removed because SSM Session Manager is used instead
+**And** CloudTrail logging is enabled to audit all SSM sessions
+
+### AC4: Docker Compose Production Configuration
+
+**Given** I have application code ready for deployment
+**When** I create production configuration
+**Then** a docker-compose.prod.yml file exists with:
+
+- Traefik reverse proxy for automatic HTTPS via Let's Encrypt
+- TimescaleDB (PostgreSQL 16) with persistent volume
+- Backend API container (FastAPI)
+- Frontend container (Vite + React served by Nginx)
+- Health check endpoints configured
+- Environment variables loaded from .env file
+
+**And** the .env file contains: DB_PASSWORD, DOMAIN, SECRET_KEY
+
+### AC5: GitHub Actions Workflow with OIDC Authentication
+
+**Given** I have a GitHub Actions workflow (Story 1.5)
+**When** I update the workflow to use OIDC
+**Then** the workflow:
+
+- Uses aws-actions/configure-aws-credentials@v4 with role-to-assume and id-token: write permission
+- Replaces appleboy/ssh-action with SSM Session Manager commands for deployment
+- Executes smoke tests after deployment
+
+**And** no SSH private keys are stored in GitHub Secrets
+**And** deployment credentials are temporary (15-minute expiry via OIDC)
+
+### AC6: Manual First Deployment
+
+**Given** I have all infrastructure provisioned
+**When** I perform the first deployment manually
+**Then** I:
+
+1. SSH to EC2 instance using admin SSH key
+2. Clone repository
+3. Create .env file with production secrets
+4. Start services with docker-compose
+5. Verify containers are running
+6. Verify health check endpoint
+
+**And** Traefik provisions Let's Encrypt SSL certificate automatically
+**And** application is accessible at https://gamepulse.top
+
+### AC7: Subsequent Deployments via GitHub Actions
+
+**Given** I have completed the first manual deployment
+**When** I push code to the main branch
+**Then** GitHub Actions workflow:
+
+- Authenticates to AWS via OIDC (no secrets)
+- Connects to EC2 via SSM Session Manager (no SSH)
+- Pulls latest code
+- Rebuilds Docker images
+- Runs database migrations
+- Restarts services with zero downtime
+- Executes smoke tests
+
+**And** the workflow succeeds with all steps passing
+**And** CloudTrail logs show the SSM session activity
+**And** application is updated and accessible
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>AC-6: GitHub Actions CI/CD</section>
+        <snippet>Lines 585-591 specify GitHub Actions CI/CD requirements including workflow file creation, push triggers, sequential jobs (lint, test, build, deploy, smoke-test), deployment SSH to EC2, and smoke test verification.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>CI/CD Deployment Workflow</section>
+        <snippet>Lines 373-392 detail deployment workflow: git push to main triggers lint, test, build, deploy to EC2 via SSH with docker-compose down/up, smoke test curl to health endpoint, rollback capability keeping last 3 Docker images.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>GitHub Actions Decision Rationale</section>
+        <snippet>Lines 52-53 establish GitHub Actions as CI/CD platform pre-configured in starter template for auto-deploy on push to main.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>DevOps Stack Components</section>
+        <snippet>Lines 251-256 specify Docker + Docker Compose for containerization/orchestration, GitHub Actions for CI/CD pipeline, AWS EC2 t2.micro for free tier deployment, and Traefik for reverse proxy with automatic HTTPS.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>GamePulse Epic Breakdown</title>
+        <section>Epic 1: Project Foundation &amp; Infrastructure</section>
+        <snippet>Lines 39-46 define Epic 1 goals: production-ready foundation using FastAPI full-stack template with Docker Compose, PostgreSQL 16 + TimescaleDB, GitHub Actions CI/CD, and AWS EC2 deployment with Traefik, establishing deployable infrastructure before business logic implementation.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/1-5-setup-github-actions.md</path>
+        <title>Story 1.5: Set Up GitHub Actions CI/CD Pipeline</title>
+        <section>Full Story Context</section>
+        <snippet>Story 1-5 established initial GitHub Actions workflow with SSH deployment using appleboy/ssh-action. Created .github/workflows/deploy.yml with lint, test, build, deploy, smoke-test jobs. Used AWS_EC2_HOST and AWS_SSH_KEY secrets. Story 1-6 upgrades this approach to OIDC + SSM Session Manager.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/1-1b-provision-aws-infrastructure.md</path>
+        <title>Story 1.1b: Provision AWS Infrastructure via Terraform</title>
+        <section>Terraform Infrastructure</section>
+        <snippet>Story 1-1b provisioned AWS infrastructure including VPC, EC2 t2.micro, security groups, Elastic IP, and CloudWatch via Terraform IaC. Established terraform/modules/compute and terraform/modules/vpc structure.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/1-4-create-database-schema.md</path>
+        <title>Story 1.4: Create Database Schema</title>
+        <section>Database Foundation</section>
+        <snippet>Story 1-4 created multi-sport database schema using SQLModel and Alembic migrations. Established data foundation for GamePulse with teams, team_groups, team_rivalries, and games tables.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>terraform/main.tf</path>
+        <kind>terraform-root</kind>
+        <symbol>module.compute</symbol>
+        <lines>36-48</lines>
+        <reason>Root terraform configuration orchestrating VPC and Compute modules. Story 1-6 needs to instantiate github-oidc module here.</reason>
+      </artifact>
+      <artifact>
+        <path>terraform/modules/compute/main.tf</path>
+        <kind>terraform-module</kind>
+        <symbol>aws_iam_role.ec2_role</symbol>
+        <lines>29-51</lines>
+        <reason>EC2 IAM role definition. Story 1-6 must attach AmazonSSMManagedInstanceCore policy for SSM Session Manager access.</reason>
+      </artifact>
+      <artifact>
+        <path>terraform/modules/compute/main.tf</path>
+        <kind>terraform-module</kind>
+        <symbol>aws_security_group.ec2_sg</symbol>
+        <lines>76-80</lines>
+        <reason>Security group configuration. Story 1-6 must restrict SSH to admin IPs only, removing 0.0.0.0/0 SSH rules.</reason>
+      </artifact>
+      <artifact>
+        <path>.github/workflows/deploy.yml</path>
+        <kind>github-actions-workflow</kind>
+        <symbol>deploy job</symbol>
+        <lines>1-100</lines>
+        <reason>Existing GitHub Actions workflow with SSH deployment. Story 1-6 replaces SSH with OIDC authentication and SSM Session Manager commands.</reason>
+      </artifact>
+      <artifact>
+        <path>docker-compose.prod.yml</path>
+        <kind>docker-compose</kind>
+        <symbol>proxy service</symbol>
+        <lines>9-49</lines>
+        <reason>Production Docker Compose with Traefik proxy and Let's Encrypt SSL already configured. Story 1-6 references this for deployment.</reason>
+      </artifact>
+      <artifact>
+        <path>terraform/providers.tf</path>
+        <kind>terraform-providers</kind>
+        <symbol>aws provider</symbol>
+        <lines>all</lines>
+        <reason>AWS provider configuration. Story 1-6 uses same provider for github-oidc module.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="fastapi[standard]" version=">=0.115.0,&lt;1.0.0" />
+        <package name="sqlmodel" version=">=0.0.22,&lt;1.0.0" />
+        <package name="alembic" version=">=1.13.0,&lt;2.0.0" />
+        <package name="psycopg[binary]" version=">=3.2.0,&lt;4.0.0" />
+        <package name="httpx" version=">=0.27.0,&lt;1.0.0" />
+        <package name="tenacity" version=">=9.0.0,&lt;10.0.0" />
+        <package name="pydantic" version=">=2.9.0,&lt;3.0.0" />
+        <package name="sentry-sdk[fastapi]" version=">=2.0.0,&lt;3.0.0" />
+      </python>
+      <node>
+        <package name="react" version="^18.2.0" />
+        <package name="@chakra-ui/react" version="^3.8.0" />
+        <package name="@tanstack/react-query" version="^5.28.14" />
+        <package name="@tanstack/react-router" version="1.19.1" />
+        <package name="vite" version="^5.4.14" />
+        <package name="typescript" version="^5.2.2" />
+        <package name="axios" version="1.7.4" />
+      </node>
+      <infrastructure>
+        <tool name="Terraform" usage="Infrastructure as Code for AWS provisioning" />
+        <tool name="Docker" usage="Application containerization" />
+        <tool name="Docker Compose" usage="Multi-container orchestration" />
+        <tool name="Traefik" version="3.0" usage="Reverse proxy with automatic Let's Encrypt SSL" />
+        <cloud name="AWS" services="EC2, IAM, SSM, CloudTrail, CloudWatch" />
+      </infrastructure>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <category>Security</category>
+      <rule>GitHub OIDC trust policy MUST restrict token acceptance to specific GitHub repository (org/gamepulse) and branch patterns (main, staging) to prevent unauthorized role assumption.</rule>
+    </constraint>
+    <constraint>
+      <category>Security</category>
+      <rule>GitHub Actions IAM role MUST follow least privilege principle with only SSM Session Manager actions, EC2 describe permissions, and CloudWatch Logs write access. NO administrative access or broad permissions.</rule>
+    </constraint>
+    <constraint>
+      <category>Security</category>
+      <rule>Security group MUST restrict SSH access to admin IPs only. Remove all 0.0.0.0/0 SSH rules as GitHub Actions will use SSM Session Manager which requires only outbound HTTPS (443) to AWS endpoints.</rule>
+    </constraint>
+    <constraint>
+      <category>Infrastructure</category>
+      <rule>All AWS resources (OIDC provider, IAM roles, security groups) MUST be defined in Terraform modules to ensure reproducible deployments and version-controlled infrastructure changes.</rule>
+    </constraint>
+    <constraint>
+      <category>Infrastructure</category>
+      <rule>EC2 instance MUST have SSM Agent installed and running. For Ubuntu 24.04 LTS, use snap package manager in user_data script. Instance must have IAM instance profile with AmazonSSMManagedInstanceCore managed policy attached.</rule>
+    </constraint>
+    <constraint>
+      <category>Architecture</category>
+      <rule>Create separate terraform/modules/github-oidc/ module to encapsulate OIDC provider and role configuration. This promotes reusability if additional projects need similar OIDC integration.</rule>
+    </constraint>
+    <constraint>
+      <category>Deployment</category>
+      <rule>Emergency SSH access MUST remain available from admin IPs as safety mechanism during OIDC transition. This provides fallback access if OIDC authentication fails.</rule>
+    </constraint>
+    <constraint>
+      <category>Deployment</category>
+      <rule>Deployment commands from story 1-5 (git pull, docker-compose rebuild, alembic migrate) MUST be preserved but executed via SSM Session Manager instead of SSH.</rule>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GitHub OIDC Token Exchange</name>
+      <kind>AWS STS API</kind>
+      <signature>AssumeRoleWithWebIdentity(RoleArn, WebIdentityToken, RoleSessionName) → Temporary Credentials (AccessKeyId, SecretAccessKey, SessionToken, Expiration: 15 minutes)</signature>
+      <path>AWS Security Token Service (STS)</path>
+    </interface>
+    <interface>
+      <name>SSM Session Manager</name>
+      <kind>AWS Systems Manager API</kind>
+      <signature>aws ssm start-session --target INSTANCE_ID --document-name AWS-RunShellScript --parameters 'commands=[...]'</signature>
+      <path>AWS SSM CLI</path>
+    </interface>
+    <interface>
+      <name>GitHub Actions Workflow Permissions</name>
+      <kind>GitHub Actions YAML Config</kind>
+      <signature>permissions: id-token: write (enables OIDC token generation for AWS authentication)</signature>
+      <path>.github/workflows/deploy.yml</path>
+    </interface>
+    <interface>
+      <name>Terraform AWS Provider</name>
+      <kind>Terraform Provider</kind>
+      <signature>provider "aws" { region = var.region }</signature>
+      <path>terraform/providers.tf</path>
+    </interface>
+    <interface>
+      <name>Docker Compose Production Config</name>
+      <kind>Docker Compose Override</kind>
+      <signature>docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d</signature>
+      <path>docker-compose.prod.yml</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+Story 1-6 focuses on infrastructure configuration and requires extensive manual testing rather than unit tests. Infrastructure validation includes: (1) Terraform validation via 'terraform plan' to verify OIDC provider thumbprint matches GitHub's current value and trust policy restricts to correct repository, (2) SSM connectivity testing to verify EC2 instance appears "online" in AWS Systems Manager Fleet Manager, (3) OIDC authentication testing by triggering GitHub Actions workflow and monitoring configure-aws-credentials step, (4) Security group testing to verify SSH blocked from non-admin IPs using 'nc -zv' tool, (5) Deployment end-to-end testing to verify application updated after workflow completion. CloudTrail logging must be enabled to capture SSM session events for audit trail completeness. No unit tests required for infrastructure story.</standards>
+    <locations>
+      <location>backend/app/tests/ - Existing pytest test suite</location>
+      <location>frontend/src/**/*.test.tsx - Frontend unit tests (when they exist)</location>
+      <location>.github/workflows/ - GitHub Actions workflow integration tests</location>
+    </locations>
+    <ideas>
+      <idea acId="AC1">
+        <description>Terraform Validation Test: Run 'terraform plan' and verify OIDC provider resource created with correct thumbprint, IAM role has trust policy restricting to gamepulse repo, and IAM policies attached include SSM permissions.</description>
+      </idea>
+      <idea acId="AC2">
+        <description>SSM Agent Installation Test: SSH to EC2 instance after terraform apply, run 'sudo systemctl status snap.amazon-ssm-agent.amazon-ssm-agent.service' and verify active/running status.</description>
+      </idea>
+      <idea acId="AC2">
+        <description>Fleet Manager Test: Check AWS Systems Manager Fleet Manager console and verify EC2 instance appears with "online" status and correct instance ID.</description>
+      </idea>
+      <idea acId="AC3">
+        <description>Security Group Test: From non-admin IP, attempt 'nc -zv &lt;elastic-ip&gt; 22' and verify connection refused. From admin IP, verify SSH succeeds.</description>
+      </idea>
+      <idea acId="AC4">
+        <description>Docker Compose Validation Test: Run 'docker-compose -f docker-compose.yml -f docker-compose.prod.yml config' locally and verify YAML is valid with no errors.</description>
+      </idea>
+      <idea acId="AC5">
+        <description>OIDC Authentication Test: Trigger workflow manually, monitor GitHub Actions logs for 'configure-aws-credentials' step, verify temporary credentials obtained successfully (look for "AssumeRoleWithWebIdentity succeeded" message).</description>
+      </idea>
+      <idea acId="AC5">
+        <description>CloudTrail Audit Test: After workflow runs, query CloudTrail for 'StartSession' events and verify SSM session activity logged with correct role ARN and instance ID.</description>
+      </idea>
+      <idea acId="AC6">
+        <description>Manual Deployment Test: Follow deployment steps 1-6 from AC6, document any deviations or issues encountered. Verify health endpoint returns HTTP 200 with valid JSON response.</description>
+      </idea>
+      <idea acId="AC7">
+        <description>End-to-End Deployment Test: Make trivial code change (update README), push to main, monitor full workflow execution. Verify application updated by checking commit SHA in response headers or deployment logs.</description>
+      </idea>
+      <idea acId="AC7">
+        <description>Zero Downtime Test: While application is serving traffic (simulate with curl loop), trigger deployment and verify no HTTP 502/503 errors during docker-compose restart.</description>
+      </idea>
+    </ideas>
+  </tests>
+</story-context>

@@ -35,3 +35,13 @@ output "cloudwatch_log_groups" {
     frontend = aws_cloudwatch_log_group.frontend.name
   }
 }
+
+output "cloudtrail_name" {
+  description = "CloudTrail name for SSM session auditing"
+  value       = aws_cloudtrail.main.name
+}
+
+output "cloudtrail_s3_bucket" {
+  description = "S3 bucket for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail.id
+}

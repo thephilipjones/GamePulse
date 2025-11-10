@@ -56,6 +56,12 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_policy" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
+# Attach SSM Managed Instance Core Policy for Session Manager access
+resource "aws_iam_role_policy_attachment" "ssm_policy" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # IAM instance profile to attach role to EC2 instance
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.project_name}-instance-profile"
@@ -241,4 +247,103 @@ resource "aws_eip" "app" {
 resource "aws_eip_association" "app" {
   instance_id   = aws_instance.app.id
   allocation_id = aws_eip.app.id
+}
+
+# ============================================================================
+# CloudTrail for SSM Session Auditing
+# ============================================================================
+
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket = "${var.project_name}-cloudtrail-logs-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(
+    var.tags,
+    {
+      Name        = "${var.project_name}-cloudtrail-logs"
+      Description = "CloudTrail logs for SSM session auditing"
+    }
+  )
+}
+
+# Block public access to CloudTrail S3 bucket
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable versioning for CloudTrail bucket
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket policy for CloudTrail
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Get current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# CloudTrail for SSM session logging
+# Note: SSM StartSession, ResumeSession, TerminateSession events are logged as management events
+resource "aws_cloudtrail" "main" {
+  name                          = "${var.project_name}-trail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  include_global_service_events = true
+  is_multi_region_trail         = false
+  enable_log_file_validation    = true
+
+  # Management events include SSM session events (StartSession, etc.)
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+  }
+
+  tags = merge(
+    var.tags,
+    {
+      Name        = "${var.project_name}-cloudtrail"
+      Description = "CloudTrail for SSM session auditing"
+    }
+  )
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
