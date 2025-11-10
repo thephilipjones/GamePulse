@@ -50,15 +50,9 @@ services:
       - default
 
   # Disable dev-only services in production
+  # Note: mailcatcher and playwright are only in docker-compose.override.yml,
+  # so they won't be loaded when we explicitly use -f flags
   adminer:
-    deploy:
-      replicas: 0
-
-  mailcatcher:
-    deploy:
-      replicas: 0
-
-  playwright:
     deploy:
       replicas: 0
 
