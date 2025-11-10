@@ -66,15 +66,24 @@ interface ErrorDetail {
   msg: string;
 }
 
+interface ErrorBody {
+  detail?: string | ErrorDetail[];
+}
+
 export const handleError = (err: ApiError) => {
   const { showErrorToast } = useCustomToast();
-  const errDetail = err.body?.detail as string | ErrorDetail[] | undefined;
+
   let errorMessage = "Something went wrong.";
 
-  if (typeof errDetail === "string") {
-    errorMessage = errDetail;
-  } else if (Array.isArray(errDetail) && errDetail.length > 0) {
-    errorMessage = errDetail[0].msg;
+  if (err.body && typeof err.body === "object") {
+    const body = err.body as ErrorBody;
+    const errDetail = body.detail;
+
+    if (typeof errDetail === "string") {
+      errorMessage = errDetail;
+    } else if (Array.isArray(errDetail) && errDetail.length > 0) {
+      errorMessage = errDetail[0].msg;
+    }
   }
 
   showErrorToast(errorMessage);
