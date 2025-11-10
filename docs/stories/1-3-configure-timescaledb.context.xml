@@ -1,0 +1,202 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>3</storyId>
+    <title>Configure PostgreSQL with TimescaleDB Extension</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-09</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-3-configure-timescaledb.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>to add TimescaleDB extension to PostgreSQL</iWant>
+    <soThat>I can optimize time-series queries for excitement_scores and betting_odds tables in future epics</soThat>
+    <tasks>
+      - Task 1.3.1: Update Docker Compose Configuration (AC: #1)
+      - Task 1.3.2: Restart Database Container (AC: #1)
+      - Task 1.3.3: Verify TimescaleDB Extension (AC: #2)
+      - Task 1.3.4: Test Hypertable Creation (AC: #3)
+      - Task 1.3.5: Documentation (AC: #1, #2, #3)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. PostgreSQL 16 Docker container starts successfully
+       - docker-compose.yml updated with timescale/timescaledb:latest-pg16 image
+       - Container starts without errors
+       - Database accessible from backend container
+
+    2. TimescaleDB extension installed and verified
+       - Extension version 2.23.0 available
+       - Query `SELECT * FROM pg_extension WHERE extname = 'timescaledb';` returns row
+       - Extension enabled automatically on database creation
+
+    3. Hypertable creation capability validated
+       - Test hypertable creation succeeds: `SELECT create_hypertable('test_table', 'time');`
+       - Verification only - actual hypertables for excitement_scores/betting_odds deferred to Epic 5
+       - Test hypertable can be dropped after validation
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>AC-4: TimescaleDB Configuration (lines 571-576)</section>
+        <snippet>PostgreSQL 16 Docker container starts successfully. TimescaleDB extension (2.23.0) installed and verified. Can connect to database and verify extension exists.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Database Structure Setup (lines 106-112)</section>
+        <snippet>PostgreSQL 16 Base + TimescaleDB Extension for time-series optimization. CREATE EXTENSION IF NOT EXISTS timescaledb; in init script. SQLModel async engine with pool size 5-10. Alembic migrations with auto-generation from SQLModel models.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>TimescaleDB Hypertable Setup (lines 269-279)</section>
+        <snippet>Execute AFTER creating excitement_scores table (Epic 4/5): SELECT create_hypertable('excitement_scores', 'timestamp', chunk_time_interval => INTERVAL '1 day'); Execute AFTER creating betting_odds table (Epic 5): SELECT create_hypertable('betting_odds', 'timestamp', chunk_time_interval => INTERVAL '1 day');</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Technology Decision: PostgreSQL + TimescaleDB (line 42)</section>
+        <snippet>PostgreSQL 16 + TimescaleDB 2.23.0 for time-series optimization. PostgreSQL for learning transferability (highly marketable skill). TimescaleDB extension adds time-series optimization. Trade-off: Slightly slower than QuestDB but negligible at GamePulse scale (60MB data).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>TimescaleDB Extension Details (lines 223-227)</section>
+        <snippet>TimescaleDB creates hypertables for excitement_scores and betting_odds. Automatic data partitioning by time. Optimized aggregation queries (e.g., sparkline data).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/epics.md</path>
+        <title>gamepulse - Epic Breakdown</title>
+        <section>Epic 1: Project Foundation &amp; Infrastructure</section>
+        <snippet>Establish production-ready foundation using FastAPI full-stack template with deployment to AWS EC2. PostgreSQL 16 + TimescaleDB extension for time-series data. Docker Compose orchestration. SQLModel ORM with Alembic migrations.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>docker-compose.yml</path>
+        <kind>infrastructure-config</kind>
+        <symbol>db service</symbol>
+        <lines>3-20</lines>
+        <reason>Database service configuration. Currently uses postgres:12 image (line 4). Must be changed to timescale/timescaledb:latest-pg16. Environment variables and volume mounts must remain unchanged for backward compatibility.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/db.py</path>
+        <kind>database-connection</kind>
+        <symbol>engine</symbol>
+        <lines>1-5</lines>
+        <reason>SQLModel database engine initialization. Uses settings.SQLALCHEMY_DATABASE_URI to connect. No changes required - TimescaleDB is PostgreSQL-compatible.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models.py</path>
+        <kind>database-models</kind>
+        <symbol>Item</symbol>
+        <lines>33-35</lines>
+        <reason>Existing SQLModel table (template demo). Validates that TimescaleDB maintains backward compatibility with standard PostgreSQL tables and SQLModel ORM.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/001_initialize_item_model.py</path>
+        <kind>database-migration</kind>
+        <symbol>upgrade</symbol>
+        <lines>N/A</lines>
+        <reason>Existing Alembic migration from Story 1.2. Must continue to work with TimescaleDB extension (validates backward compatibility).</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="sqlmodel" version=">=0.0.22,&lt;1.0.0" />
+        <package name="alembic" version=">=1.13.0,&lt;2.0.0" />
+        <package name="psycopg" version=">=3.2.0,&lt;4.0.0" extras="[binary]" />
+        <package name="fastapi" version=">=0.115.0,&lt;1.0.0" extras="[standard]" />
+      </python>
+      <docker>
+        <image name="postgres" version="12" current="true" />
+        <image name="timescale/timescaledb" version="latest-pg16" target="true" />
+      </docker>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Pure infrastructure configuration - NO code changes required
+    - Must maintain backward compatibility with existing SQLModel ORM
+    - Volume mounts must persist across container replacement (data continuity)
+    - Environment variables unchanged (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB)
+    - TimescaleDB extension automatically enabled on database creation
+    - Defer hypertable creation to Epic 5 (story scope discipline)
+    - Existing Item table migration must continue to work
+    - Backend database connection must remain functional
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>PostgreSQL Connection String</name>
+      <kind>database-uri</kind>
+      <signature>postgresql+psycopg://user:password@db:5432/dbname</signature>
+      <path>backend/app/core/config.py</path>
+      <notes>Unchanged. TimescaleDB is PostgreSQL-compatible.</notes>
+    </interface>
+    <interface>
+      <name>Docker Compose db service</name>
+      <kind>infrastructure-service</kind>
+      <signature>
+        services:
+          db:
+            image: timescale/timescaledb:latest-pg16  # Changed from postgres:12
+            restart: always
+            healthcheck: ...
+            volumes: ...
+            environment: ...
+      </signature>
+      <path>docker-compose.yml</path>
+      <notes>Only image line changes. All other configuration remains identical.</notes>
+    </interface>
+    <interface>
+      <name>TimescaleDB Extension Query</name>
+      <kind>sql-extension</kind>
+      <signature>SELECT * FROM pg_extension WHERE extname = 'timescaledb';</signature>
+      <path>N/A</path>
+      <notes>Verification query to confirm TimescaleDB extension is installed and enabled.</notes>
+    </interface>
+    <interface>
+      <name>Hypertable Creation Function</name>
+      <kind>sql-function</kind>
+      <signature>SELECT create_hypertable('table_name', 'time_column', chunk_time_interval => INTERVAL '1 day');</signature>
+      <path>N/A</path>
+      <notes>Test in this story, actual use deferred to Epic 5. Validates TimescaleDB functionality.</notes>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Infrastructure configuration story - testing via manual verification and integration tests. Use docker-compose commands to verify container startup. Use psql commands for extension verification. No unit tests required (no application logic). Integration test: backend can connect to database after change. Validation pattern from Story 1.2: use verification commands (grep, psql queries) to confirm changes.
+    </standards>
+    <locations>
+      - backend/app/tests/ (pytest test suite, if integration tests added)
+      - Manual verification via CLI (docker-compose, psql commands)
+    </locations>
+    <ideas>
+      <test ac="1">
+        <description>Verify PostgreSQL 16 container starts successfully</description>
+        <approach>Run `docker-compose up -d db` and check `docker-compose logs db` for "database system is ready to accept connections" message. Verify container is healthy via `docker-compose ps db`.</approach>
+      </test>
+      <test ac="2">
+        <description>Verify TimescaleDB extension installed</description>
+        <approach>Execute `docker-compose exec db psql -U gamepulse -d gamepulse -c "SELECT * FROM pg_extension WHERE extname = 'timescaledb';"` and confirm row is returned with version 2.23.0.</approach>
+      </test>
+      <test ac="3">
+        <description>Test hypertable creation capability</description>
+        <approach>Create test table, convert to hypertable, verify success, cleanup. SQL: `CREATE TABLE test_table (time TIMESTAMPTZ NOT NULL, value DOUBLE PRECISION); SELECT create_hypertable('test_table', 'time'); DROP TABLE test_table;`</approach>
+      </test>
+      <test ac="1">
+        <description>Verify backend can connect to database</description>
+        <approach>After TimescaleDB migration, verify backend container health check passes. Check `docker-compose logs backend` for successful database connection.</approach>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
