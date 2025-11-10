@@ -179,7 +179,7 @@ jobs:
           git reset --hard origin/main
 
           echo "Rebuilding Docker images..."
-          docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml build
 
           echo "Restarting services..."
           docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate
@@ -193,11 +193,12 @@ jobs:
 
           # Send deployment script via SSM and execute
           # Note: SSM runs as ssm-user by default, so we use sudo to run as ubuntu user
+          # Note: No --no-cache for faster deployments (cache is safe since we git fetch latest code)
           aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "GitHub Actions deployment via OIDC" \
-            --parameters 'commands=["sudo -u ubuntu bash -c '\''cd /opt/gamepulse && git fetch origin main && git reset --hard origin/main && docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate && docker image prune -f && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps'\''"]' \
+            --parameters 'commands=["sudo -u ubuntu bash -c '\''cd /opt/gamepulse && git fetch origin main && git reset --hard origin/main && docker compose -f docker-compose.yml -f docker-compose.prod.yml build && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate && docker image prune -f && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps'\''"]' \
             --output text \
             --query "Command.CommandId" > /tmp/command_id.txt
 
