@@ -1,0 +1,229 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>5</storyId>
+    <title>Set Up GitHub Actions CI/CD Pipeline</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-10</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-5-setup-github-actions.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>a GitHub Actions workflow that runs tests, builds Docker images, and deploys to AWS EC2</iWant>
+    <soThat>every push to main branch automatically deploys the latest code and validates quality gates</soThat>
+    <tasks>
+      - Task 1.5.1: Create GitHub Actions Workflow File (AC: #1)
+      - Task 1.5.2: Implement Lint Job (AC: #2)
+      - Task 1.5.3: Implement Test Job (AC: #3)
+      - Task 1.5.4: Implement Build Job (AC: #4)
+      - Task 1.5.5: Implement Deploy Job (AC: #5)
+      - Task 1.5.6: Implement Smoke Test Job (AC: #6)
+      - Task 1.5.7: Configure GitHub Secrets (AC: #7)
+      - Task 1.5.8: Add Workflow Badge and Documentation (AC: #8)
+      - Task 1.5.9: End-to-End Workflow Validation
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Workflow file created and configured (.github/workflows/deploy.yml with 5 sequential jobs)
+    2. Lint job validates code quality (backend: ruff, mypy; frontend: eslint; <2 min)
+    3. Test job validates functionality (backend: pytest with PostgreSQL; <3 min)
+    4. Build job creates Docker images (backend and frontend with commit SHA tags)
+    5. Deploy job updates EC2 instance (SSH, git pull, docker-compose rebuild)
+    6. Smoke test validates deployment (curl /api/health with 3 retries)
+    7. GitHub Secrets configured (AWS_EC2_HOST, AWS_SSH_KEY)
+    8. Workflow visibility and documentation (badge in README, clear error messages)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation & Infrastructure</title>
+        <section>AC-6: GitHub Actions CI/CD</section>
+        <snippet>AC-6 defines the complete CI/CD pipeline requirements with 5 sequential jobs (lint, test, build, deploy, smoke-test), deployment to EC2 via SSH, and automated health check validation. Lines 585-591 specify acceptance criteria, lines 373-392 detail the complete workflow sequence.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>GitHub Actions Decision Rationale</section>
+        <snippet>Architecture document (lines 52-53) specifies GitHub Actions as the CI/CD platform, pre-configured in starter template with auto-deploy on push to main. DevOps stack details on lines 251-256 confirm Docker Compose + GitHub Actions + AWS EC2 deployment strategy.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>Success Criteria: Working Demo Within 2-3 Weeks</section>
+        <snippet>PRD lines 89-93 establish "deploy early, iterate fast" principle requiring working demo with live public URL. NFR-5.3 mandates deployment automation for rapid iteration during active development.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>.github/workflows/lint-backend.yml</path>
+        <kind>workflow</kind>
+        <symbol>lint-backend job</symbol>
+        <lines>1-29</lines>
+        <reason>Existing lint workflow pattern using astral-sh/setup-uv@v5 and 'uv run bash scripts/lint.sh' - provides reference implementation for Story 1.5 lint job</reason>
+      </artifact>
+      <artifact>
+        <path>.github/workflows/test-backend.yml</path>
+        <kind>workflow</kind>
+        <symbol>test-backend job</symbol>
+        <lines>1-42</lines>
+        <reason>Existing test workflow pattern with PostgreSQL service container (docker compose up -d db), migration execution (scripts/prestart.sh), and pytest execution with coverage - provides reference for Story 1.5 test job</reason>
+      </artifact>
+      <artifact>
+        <path>.github/workflows/deploy-production.yml</path>
+        <kind>workflow</kind>
+        <symbol>deploy job</symbol>
+        <lines>1-33</lines>
+        <reason>Existing deployment workflow using self-hosted runner, GitHub Secrets for environment variables, and 'docker compose build + up -d' pattern - provides reference for Story 1.5 deployment strategy</reason>
+      </artifact>
+      <artifact>
+        <path>backend/scripts/lint.sh</path>
+        <kind>script</kind>
+        <symbol>Backend lint script</symbol>
+        <lines>1-9</lines>
+        <reason>Executes mypy (type checking), ruff check (linting), and ruff format --check (formatting verification) - exact commands to use in CI/CD lint job</reason>
+      </artifact>
+      <artifact>
+        <path>backend/scripts/tests-start.sh</path>
+        <kind>script</kind>
+        <symbol>Backend test orchestration</symbol>
+        <lines>1-8</lines>
+        <reason>Runs tests_pre_start.py (database connectivity check) before test.sh - ensures database is ready before pytest execution</reason>
+      </artifact>
+      <artifact>
+        <path>backend/scripts/test.sh</path>
+        <kind>script</kind>
+        <symbol>Backend test execution with coverage</symbol>
+        <lines>1-9</lines>
+        <reason>Executes pytest with coverage tracking, generates HTML coverage report - exact test execution pattern for CI/CD</reason>
+      </artifact>
+      <artifact>
+        <path>backend/Dockerfile</path>
+        <kind>dockerfile</kind>
+        <symbol>Backend container build</symbol>
+        <lines>N/A</lines>
+        <reason>Multi-stage Dockerfile for FastAPI application - used by 'docker build -t gamepulse-backend ./backend' in build job</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/Dockerfile</path>
+        <kind>dockerfile</kind>
+        <symbol>Frontend container build</symbol>
+        <lines>N/A</lines>
+        <reason>Multi-stage Dockerfile for React application - used by 'docker build -t gamepulse-frontend ./frontend' in build job</reason>
+      </artifact>
+      <artifact>
+        <path>docker-compose.yml</path>
+        <kind>config</kind>
+        <symbol>Local development orchestration</symbol>
+        <lines>N/A</lines>
+        <reason>Defines services (backend, frontend, db, traefik) - referenced by deploy job for 'docker-compose up -d --build' pattern</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <python>
+        <dependency name="pytest" version=">=8.3.0,<9.0.0" scope="dev" />
+        <dependency name="mypy" version=">=1.11.0,<2.0.0" scope="dev" />
+        <dependency name="ruff" version=">=0.7.0,<1.0.0" scope="dev" />
+        <dependency name="coverage" version=">=7.6.0,<8.0.0" scope="dev" />
+      </python>
+      <node>
+        <dependency name="@biomejs/biome" version="1.6.1" scope="dev" />
+        <dependency name="typescript" version="^5.2.2" scope="dev" />
+        <dependency name="vite" version="^5.4.14" scope="dev" />
+      </node>
+      <github-actions>
+        <action name="actions/checkout" version="v4" />
+        <action name="actions/setup-python" version="v5" />
+        <action name="astral-sh/setup-uv" version="v5" />
+        <action name="actions/upload-artifact" version="v4" />
+        <action name="appleboy/ssh-action" version="master" reason="Required for SSH deployment to EC2" />
+      </github-actions>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    1. Sequential Quality Gates: Each job must depend on previous job's success (lint → test → build → deploy → smoke-test). Prevents broken code from reaching production.
+    2. Fast Feedback Loops: Total pipeline execution must be less than 10 minutes to support rapid iteration during active development (per PRD success criteria).
+    3. Fail-Fast Philosophy: Lint runs first (fastest check, <2 min) to catch syntax errors before expensive test/build jobs.
+    4. Production Parity: Same Docker images built in CI are deployed to production. No environment-specific builds to avoid "works on my machine" issues.
+    5. Idempotent Deployment: Deploy job must be safe to run multiple times. Use 'docker-compose up -d --build' for zero-downtime rolling updates.
+    6. Secrets Management: Never commit secrets to git. Use GitHub Secrets for AWS_EC2_HOST, AWS_SSH_KEY. Secrets injected at runtime only.
+    7. Test Database Isolation: CI test job requires dedicated test database (separate from dev). Configure via environment variables in GitHub Actions.
+    8. Branch Protection: Workflow triggers on push to 'main' branch only. Story 1.5 focuses on main branch deployment (PR workflows already exist from template).
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Health Check Endpoint</name>
+      <kind>REST API</kind>
+      <signature>GET /api/health → JSON response with {status, database, timestamp, version}</signature>
+      <path>backend/app/api/routes/health.py (to be created in future story)</path>
+      <reason>Smoke test job curls this endpoint to verify deployment success. Must return HTTP 200 with valid JSON.</reason>
+    </interface>
+    <interface>
+      <name>GitHub Secrets</name>
+      <kind>Environment Variables</kind>
+      <signature>
+        AWS_EC2_HOST: string (EC2 public IP from Terraform output in Story 1.1b)
+        AWS_SSH_KEY: string (Private SSH key content, entire file with -----BEGIN/END----- markers)
+        Optional: DOCKER_HUB_USERNAME, DOCKER_HUB_TOKEN
+      </signature>
+      <path>GitHub Repository Settings → Secrets and variables → Actions</path>
+      <reason>Deploy job requires SSH credentials to connect to EC2 instance. Secrets injected via ${{ secrets.SECRET_NAME }} syntax.</reason>
+    </interface>
+    <interface>
+      <name>SSH Deployment Script</name>
+      <kind>Shell Script</kind>
+      <signature>
+        cd /home/ubuntu/gamepulse
+        git pull origin main
+        docker-compose -f docker-compose.prod.yml up -d --build
+      </signature>
+      <path>Executed remotely on EC2 via appleboy/ssh-action</path>
+      <reason>Deploy job executes these commands on EC2 to update code and restart services. Must handle errors (exit on failure).</reason>
+    </interface>
+    <interface>
+      <name>Docker Build Commands</name>
+      <kind>CLI Commands</kind>
+      <signature>
+        docker build -t gamepulse-backend:${GITHUB_SHA:0:7} ./backend
+        docker build -t gamepulse-frontend:${GITHUB_SHA:0:7} ./frontend
+      </signature>
+      <path>Build job in .github/workflows/deploy.yml</path>
+      <reason>Build job creates tagged Docker images with commit SHA for traceability. Images used by deploy job.</reason>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      CI/CD pipeline testing focuses on infrastructure validation, not business logic. Backend tests use pytest with PostgreSQL service container via docker-compose. Frontend uses biome linting and TypeScript compilation. Integration testing pattern: docker compose up -d db → uv run bash scripts/prestart.sh (migrations) → uv run bash scripts/tests-start.sh (pytest with coverage). Smoke testing via curl with retry logic (3 attempts, 10-second delays) to allow services to stabilize after deployment.
+    </standards>
+
+    <locations>
+      - .github/workflows/*.yml (workflow definitions)
+      - backend/scripts/lint.sh (lint commands)
+      - backend/scripts/test.sh (test commands with coverage)
+      - backend/scripts/tests-start.sh (test orchestration)
+      - backend/tests/ (pytest test files)
+      - Manual testing: GitHub Actions tab for workflow visualization
+    </locations>
+
+    <ideas>
+      - AC #1: Validate workflow syntax using actionlint CLI tool or GitHub's workflow validator
+      - AC #2: Intentionally introduce linting error (missing import), verify lint job fails with clear error message
+      - AC #3: Intentionally break a test, verify test job fails and blocks deployment (no build/deploy jobs run)
+      - AC #4: Introduce Docker syntax error, verify build job fails with descriptive error message
+      - AC #5: Use invalid SSH key in GitHub Secrets, verify deploy job fails with "SSH connection failed" error
+      - AC #6: Stop backend service on EC2, verify smoke test fails after 3 retry attempts
+      - AC #7: Verify all GitHub Secrets are properly configured by triggering workflow and checking secrets are injected
+      - AC #8: Verify workflow badge displays correctly in README.md (green checkmark after successful run)
+      - End-to-End: Make trivial code change (add comment), push to main, verify entire pipeline executes successfully in <10 minutes
+    </ideas>
+  </tests>
+</story-context>

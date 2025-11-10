@@ -1,7 +1,6 @@
-# Full Stack FastAPI Template
+# GamePulse
 
-<a href="https://github.com/fastapi/full-stack-fastapi-template/actions?query=workflow%3ATest" target="_blank"><img src="https://github.com/fastapi/full-stack-fastapi-template/workflows/Test/badge.svg" alt="Test"></a>
-<a href="https://coverage-badge.samuelcolvin.workers.dev/redirect/fastapi/full-stack-fastapi-template" target="_blank"><img src="https://coverage-badge.samuelcolvin.workers.dev/fastapi/full-stack-fastapi-template.svg" alt="Coverage"></a>
+[![Deploy to AWS EC2](https://github.com/thephilipjones/GamePulse/actions/workflows/deploy.yml/badge.svg)](https://github.com/thephilipjones/GamePulse/actions/workflows/deploy.yml)
 
 ## Technology Stack and Features
 

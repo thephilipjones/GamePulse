@@ -1,0 +1,53 @@
+# Production overrides for docker-compose.yml
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  proxy:
+    image: traefik:3.0
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certificates:/certificates
+    ports:
+      - "80:80"
+      - "443:443"
+    command:
+      # Enable Docker provider
+      - --providers.docker=true
+      - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
+      - --providers.docker.exposedbydefault=false
+
+      # Entrypoints
+      - --entrypoints.http.address=:80
+      - --entrypoints.https.address=:443
+
+      # Let's Encrypt / ACME configuration
+      - --certificatesresolvers.le.acme.email=heyitsphilip@gmail.com
+      - --certificatesresolvers.le.acme.storage=/certificates/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=http
+
+      # Logging
+      - --accesslog=true
+      - --log=true
+      - --log.level=INFO
+
+      # API (disabled for security in production)
+      - --api=false
+    labels:
+      - traefik.enable=true
+      - traefik.constraint-label=traefik-public
+
+      # Global HTTP to HTTPS redirect middleware
+      - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
+    networks:
+      - traefik-public
+      - default
+
+volumes:
+  traefik-certificates:
+
+networks:
+  traefik-public:
+    external: true
