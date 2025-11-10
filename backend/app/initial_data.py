@@ -1,7 +1,5 @@
 import logging
 
-from app.core.db import engine
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 

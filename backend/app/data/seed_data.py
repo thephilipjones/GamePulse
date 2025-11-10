@@ -11,11 +11,11 @@ This script is idempotent - running multiple times won't create duplicates.
 Uses INSERT ... ON CONFLICT for PostgreSQL upsert behavior.
 """
 from datetime import datetime
-from sqlalchemy import text
+
 from sqlmodel import Session, select
 
 from app.core.db import engine
-from app.models import Team, TeamGroup, TeamRivalry, Game
+from app.models import Game, Team, TeamGroup, TeamRivalry
 
 
 def seed_team_groups(session: Session) -> None:
