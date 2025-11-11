@@ -17,6 +17,8 @@
     // Other useful extensions
     "editorconfig.editorconfig",
     "esbenp.prettier-vscode",
-    "dbaeumer.vscode-eslint"
+    "dbaeumer.vscode-eslint",
+    "anthropic.claude-code",
+    "hashicorp.terraform"
   ]
 }
