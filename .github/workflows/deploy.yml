@@ -242,6 +242,8 @@ jobs:
           TAG: latest
         run: |
           echo "Validating docker-compose files..."
+          # Create dummy .env file (docker-compose expects it via env_file directive)
+          touch .env
           docker compose -f docker-compose.yml config > /dev/null
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
           echo "✅ Docker Compose configuration is valid"

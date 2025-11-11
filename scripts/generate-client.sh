@@ -9,4 +9,5 @@ cd ..
 mv openapi.json frontend/
 cd frontend
 npm run generate-client
-npx biome format --write ./src/client
+# Note: src/client is intentionally excluded from biome.json and pre-commit
+# Auto-generated files don't need formatting
