@@ -10,6 +10,7 @@ GamePulse API endpoints (games, teams, etc.) will be implemented in Epic 2-3.
 SECURITY WARNING: These endpoints have public write access (POST/PUT/DELETE).
 Do NOT expose to public internet. Only expose read-only game data endpoints.
 """
+
 import uuid
 from typing import Any
 
@@ -59,9 +60,7 @@ def create_item(*, session: SessionDep, item_in: ItemCreate) -> Any:
 
 
 @router.put("/{id}", response_model=ItemPublic)
-def update_item(
-    *, session: SessionDep, id: uuid.UUID, item_in: ItemUpdate
-) -> Any:
+def update_item(*, session: SessionDep, id: uuid.UUID, item_in: ItemUpdate) -> Any:
     """
     Update an item.
     """

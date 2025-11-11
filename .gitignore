@@ -1,4 +1,7 @@
-.vscode
+# VSCode - commit shared settings, ignore personal workspace state
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 node_modules/
 /test-results/
 /playwright-report/

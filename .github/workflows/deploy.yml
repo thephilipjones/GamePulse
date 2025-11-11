@@ -223,6 +223,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate Docker Compose configuration
+        env:
+          DOMAIN: localhost
+          FRONTEND_HOST: http://localhost:5173
+          STACK_NAME: gamepulse
+          ENVIRONMENT: local
+          POSTGRES_SERVER: db
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: gamepulse
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test-password
+          SECRET_KEY: test-secret-key
+          FIRST_SUPERUSER: test@example.com
+          FIRST_SUPERUSER_PASSWORD: test-password
         run: |
           echo "Validating docker-compose files..."
           docker compose -f docker-compose.yml config > /dev/null

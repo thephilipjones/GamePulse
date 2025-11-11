@@ -130,14 +130,57 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker compose exec backend bash
 ```
 
-### Pre-commit Hooks
+### Linting & Formatting
 
+**Backend (Python):**
+- **Linter:** Ruff (replaces flake8, isort, pyupgrade)
+- **Type Checker:** Mypy
+- **Config:** `backend/pyproject.toml`
+
+**Frontend (JavaScript/TypeScript):**
+- **Linter & Formatter:** Biome
+- **Config:** `frontend/biome.json`
+
+**Pre-commit Hooks:**
 ```bash
 # Install pre-commit hooks (one-time setup)
 uv run pre-commit install
 
 # Run manually on all files
 uv run pre-commit run --all-files
+```
+
+Pre-commit automatically runs on every commit:
+- Check for large files, valid TOML/YAML
+- Fix end-of-file and trailing whitespace
+- Backend: Ruff lint (`--fix`) + Ruff format
+- Frontend: Handled by npm scripts and VSCode (see below)
+
+**VSCode Setup (Recommended):**
+
+Install recommended extensions:
+- Python: `ms-python.python`, `charliermarsh.ruff`
+- JavaScript/TypeScript: `biomejs.biome`
+- Docker: `ms-azuretools.vscode-docker`
+
+VSCode settings (`.vscode/settings.json`) are pre-configured for:
+- **Format on save** for all file types
+- **Backend:** Ruff as default Python formatter
+- **Frontend:** Biome as default JS/TS formatter
+- **Auto-organize imports** on save
+- **Consistent with CI/CD** linting rules
+
+Manual formatting commands:
+```bash
+# Backend
+cd backend
+uv run ruff check . --fix  # Auto-fix lint issues
+uv run ruff format .       # Format code
+uv run mypy .              # Type check
+
+# Frontend
+cd frontend
+npm run lint               # Lint and auto-fix
 ```
 
 ### Infrastructure & Deployment

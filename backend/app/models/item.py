@@ -7,6 +7,7 @@ This is NOT part of GamePulse domain models.
 TODO: Remove Item model before production.
 GamePulse domain models (Game, Team, etc.) will be added in Epic 2.
 """
+
 import uuid
 
 from sqlmodel import Field, SQLModel

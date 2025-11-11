@@ -53,7 +53,7 @@ development_status:
 
   # Epic 2: Game Data Ingestion (Batch) (5 stories)
   epic-2: contexted
-  2-1-create-dimensional-data: ready-for-dev
+  2-1-create-dimensional-data: done
   2-2-build-ncaa-client: drafted
   2-3-create-game-model: drafted
   2-4-implement-polling-worker: drafted

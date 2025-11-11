@@ -4,6 +4,7 @@ Team domain models for GamePulse multi-sport data schema.
 Supports NCAAM basketball initially, with expansion to NFL and NBA.
 Uses SQLModel for type-safe ORM with Pydantic validation.
 """
+
 from datetime import datetime
 
 from sqlalchemy import ARRAY, Column, String
@@ -17,16 +18,21 @@ class Team(SQLModel, table=True):
     Supports multi-sport expansion via sport-namespaced team IDs.
     Format: "{sport}_{slug}" (e.g., "ncaam_duke", "nfl_chiefs")
     """
+
     __tablename__ = "teams"
 
     team_id: str = Field(primary_key=True)  # Format: "{sport}_{slug}"
     sport: str = Field(index=True)  # Enables sport-level filtering
     team_name: str
     team_abbr: str | None = None
-    team_group_id: str | None = Field(default=None, foreign_key="team_groups.team_group_id")
+    team_group_id: str | None = Field(
+        default=None, foreign_key="team_groups.team_group_id"
+    )
     primary_color: str | None = None
     secondary_color: str | None = None
-    aliases: list[str] = Field(sa_column=Column(ARRAY(String)))  # PostgreSQL array for fuzzy matching
+    aliases: list[str] = Field(
+        sa_column=Column(ARRAY(String))
+    )  # PostgreSQL array for fuzzy matching
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -38,13 +44,16 @@ class TeamGroup(SQLModel, table=True):
     Supports both flat structure (NCAAM conferences) and nested hierarchies
     (NFL conference→division) via parent_group_id self-reference.
     """
+
     __tablename__ = "team_groups"
 
     team_group_id: str = Field(primary_key=True)
     team_group_name: str
     sport: str = Field(index=True)
     group_type: str  # "conference", "division", "league"
-    parent_group_id: str | None = Field(default=None, foreign_key="team_groups.team_group_id")
+    parent_group_id: str | None = Field(
+        default=None, foreign_key="team_groups.team_group_id"
+    )
     level: int = Field(default=1)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -57,6 +66,7 @@ class TeamRivalry(SQLModel, table=True):
     for historical analysis. Enforces ordering via CHECK constraint
     (team_a_id < team_b_id) to prevent duplicate rivalries.
     """
+
     __tablename__ = "team_rivalries"
 
     rivalry_id: int | None = Field(default=None, primary_key=True)

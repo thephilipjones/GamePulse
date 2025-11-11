@@ -10,6 +10,7 @@ Seeds:
 This script is idempotent - running multiple times won't create duplicates.
 Uses INSERT ... ON CONFLICT for PostgreSQL upsert behavior.
 """
+
 from datetime import datetime
 
 from sqlmodel import Session, select
@@ -132,8 +133,14 @@ def seed_rivalries(session: Session) -> None:
     # Check if rivalry exists (in either direction)
     existing = session.exec(
         select(TeamRivalry).where(
-            ((TeamRivalry.team_a_id == "ncaam_duke") & (TeamRivalry.team_b_id == "ncaam_unc"))
-            | ((TeamRivalry.team_a_id == "ncaam_unc") & (TeamRivalry.team_b_id == "ncaam_duke"))
+            (
+                (TeamRivalry.team_a_id == "ncaam_duke")
+                & (TeamRivalry.team_b_id == "ncaam_unc")
+            )
+            | (
+                (TeamRivalry.team_a_id == "ncaam_unc")
+                & (TeamRivalry.team_b_id == "ncaam_duke")
+            )
         )
     ).first()
 
@@ -158,9 +165,7 @@ def seed_sample_game(session: Session) -> None:
     game_id = "ncaam_sample_duke_unc_2024"
 
     # Check if exists
-    existing = session.exec(
-        select(Game).where(Game.game_id == game_id)
-    ).first()
+    existing = session.exec(select(Game).where(Game.game_id == game_id)).first()
 
     if not existing:
         game = Game(
