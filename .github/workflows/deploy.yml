@@ -191,6 +191,7 @@ jobs:
         env:
           VIRTUAL_ENV: backend/.venv
           ENVIRONMENT: production
+          PROJECT_NAME: gamepulse
           SECRET_KEY: just-for-generating-client
           POSTGRES_SERVER: localhost
           POSTGRES_PORT: 5432
