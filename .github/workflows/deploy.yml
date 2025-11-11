@@ -28,7 +28,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-path: "backend/pyproject.toml"
+          cache-dependency-glob: "backend/pyproject.toml"
           version: "0.4.15"
 
       - name: Lint backend (ruff + mypy)
@@ -71,7 +71,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-path: "backend/pyproject.toml"
+          cache-dependency-glob: "backend/pyproject.toml"
           version: "0.4.15"
 
       - name: Run backend tests
@@ -175,7 +175,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-          cache-dependency-path: "backend/pyproject.toml"
+          cache-dependency-glob: "backend/pyproject.toml"
           version: "0.4.15"
 
       - name: Install backend dependencies
