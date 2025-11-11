@@ -405,6 +405,108 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --
 - SSM Session Manager provides additional access path
 - CloudTrail logs all access for audit purposes
 
+#### ECR Public Lifecycle Policy Configuration (Optional)
+
+ECR Public does not support lifecycle policies via Terraform. To configure lifecycle management for cost optimization:
+
+**Manual Setup via AWS Console:**
+
+1. Navigate to [Amazon ECR Public Gallery Console](https://console.aws.amazon.com/ecr/repositories?region=us-east-1)
+2. Select repository: `gamepulse/backend` or `gamepulse/frontend`
+3. Go to **Lifecycle policy** tab
+4. Click **Create lifecycle policy**
+5. Configure policy rules:
+
+**Recommended Policy Rules:**
+
+```json
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Keep last 3 tagged images for rollback capability",
+      "selection": {
+        "tagStatus": "tagged",
+        "countType": "imageCountMoreThan",
+        "countNumber": 3
+      },
+      "action": {
+        "type": "expire"
+      }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Delete untagged images after 1 day to save storage",
+      "selection": {
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 1
+      },
+      "action": {
+        "type": "expire"
+      }
+    }
+  ]
+}
+```
+
+**Alternative: AWS CLI Setup:**
+
+```bash
+# Create lifecycle policy file
+cat > lifecycle-policy.json <<'EOF'
+{
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Keep last 3 tagged images",
+      "selection": {
+        "tagStatus": "tagged",
+        "countType": "imageCountMoreThan",
+        "countNumber": 3
+      },
+      "action": {
+        "type": "expire"
+      }
+    },
+    {
+      "rulePriority": 2,
+      "description": "Delete untagged images after 1 day",
+      "selection": {
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 1
+      },
+      "action": {
+        "type": "expire"
+      }
+    }
+  ]
+}
+EOF
+
+# Apply to backend repository
+aws ecr-public put-lifecycle-policy \
+  --repository-name gamepulse/backend \
+  --lifecycle-policy-text file://lifecycle-policy.json \
+  --region us-east-1
+
+# Apply to frontend repository
+aws ecr-public put-lifecycle-policy \
+  --repository-name gamepulse/frontend \
+  --lifecycle-policy-text file://lifecycle-policy.json \
+  --region us-east-1
+```
+
+**Benefits:**
+- Automatic cleanup of old images (saves storage costs)
+- Maintains rollback capability (keeps last 3 tagged versions)
+- Removes build artifacts (untagged images from failed builds)
+
+**Note:** ECR Public provides 50GB free storage, so lifecycle policies are optional for this project. Recommended for long-term production use.
+
 #### Monitoring and Logs
 
 ```bash
