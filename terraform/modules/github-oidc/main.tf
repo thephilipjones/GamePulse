@@ -161,7 +161,8 @@ resource "aws_iam_policy" "github_actions_deployment" {
       {
         Effect = "Allow"
         Action = [
-          "ecr-public:GetAuthorizationToken"
+          "ecr-public:GetAuthorizationToken",
+          "sts:GetServiceBearerToken"
         ]
         Resource = "*"
       },
