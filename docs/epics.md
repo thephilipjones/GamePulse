@@ -37,12 +37,14 @@ GamePulse is a real-time sports analytics platform demonstrating modern data eng
 **Milestone:** Live public URL infrastructure ready
 
 **Stories:**
-1. [Story 1.1: Initialize FastAPI Full-Stack Template](./stories/story-1.1-initialize-fastapi-template.md) - Includes .env configuration
-2. [Story 1.2: Configure PostgreSQL with TimescaleDB Extension](./stories/story-1.2-configure-timescaledb.md)
-3. [Story 1.3: Create Initial Database Schema](./stories/story-1.3-create-database-schema.md) - Includes TimescaleDB hypertables
-4. [Story 1.4: Set Up GitHub Actions CI/CD Pipeline](./stories/story-1.4-setup-github-actions.md)
-5. [Story 1.5: Deploy to AWS EC2 with Docker Compose](./stories/story-1.5-deploy-to-aws-ec2.md)
-6. [Story 1.6: Remove Authentication Boilerplate](./stories/story-1.6-remove-authentication.md)
+1. [Story 1.1: Initialize FastAPI Full-Stack Template](./stories/1-1-initialize-fastapi-template.md)
+2. [Story 1.1b: Provision AWS Infrastructure](./stories/1-1b-provision-aws-infrastructure.md)
+3. [Story 1.2: Remove Authentication Boilerplate](./stories/1-2-remove-authentication.md)
+4. [Story 1.3: Configure TimescaleDB](./stories/1-3-configure-timescaledb.md)
+5. [Story 1.4: Create Database Schema](./stories/1-4-create-database-schema.md)
+6. [Story 1.5: Setup GitHub Actions](./stories/1-5-setup-github-actions.md)
+7. [Story 1.6: Deploy to AWS EC2](./stories/1-6-deploy-to-aws-ec2.md)
+8. [Story 1.7: Implement ECR-Based Docker Builds](./stories/1-7-ecr-remote-builds.md)
 
 ---
 

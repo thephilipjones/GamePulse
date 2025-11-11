@@ -1,0 +1,279 @@
+<story-context id="1-7-ecr-remote-builds" v="1.0">
+  <metadata>
+    <epicId>1</epicId>
+    <storyId>7</storyId>
+    <title>Implement ECR-Based Docker Builds for Cost-Effective t2.micro Deployment</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-10</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/1-7-ecr-remote-builds.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>developer</asA>
+    <iWant>to build Docker images in GitHub Actions and push them to AWS ECR instead of building on the EC2 instance</iWant>
+    <soThat>I can use a cost-effective t2.micro instance (~$0-8.50/month) instead of requiring larger instances (t3.small $15/month or t3.medium $30/month) just to handle memory-intensive Docker builds</soThat>
+    <tasks>
+      <task id="1.7.1">Create Terraform ECR Module (AC: #1)</task>
+      <task id="1.7.2">Integrate ECR Module in Root Terraform (AC: #1)</task>
+      <task id="1.7.3">Update IAM Policies for ECR Access (AC: #2, #3)</task>
+      <task id="1.7.4">Update GitHub Actions Workflow - Build &amp; Push (AC: #4)</task>
+      <task id="1.7.5">Update Deployment to Pull from ECR (AC: #5)</task>
+      <task id="1.7.6">End-to-End Deployment Testing (AC: #6)</task>
+      <task id="1.7.7">(Optional) Downgrade to t2.micro (AC: #7)</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <title>ECR Public Infrastructure via Terraform</title>
+      <description>Create ECR Public repositories (backend, frontend) with lifecycle policies, image scanning, KMS encryption, and Gallery metadata</description>
+      <verification>ECR Public repositories visible in AWS Console, terraform outputs provide repository URLs</verification>
+    </criterion>
+    <criterion id="AC2">
+      <title>IAM Permissions for GitHub Actions (ECR Public Push)</title>
+      <description>Update GitHub Actions OIDC role with ECR Public authentication and push permissions scoped to gamepulse repositories using ecr-public:* actions</description>
+      <verification>terraform plan shows policy updates, GitHub Actions can authenticate to ECR Public</verification>
+    </criterion>
+    <criterion id="AC3">
+      <title>EC2 Anonymous Pull from Public ECR (No IAM Changes Required)</title>
+      <description>Verify EC2 can pull public ECR images without authentication. No ECR IAM permissions needed on EC2 role</description>
+      <verification>EC2 instance can pull images from public.ecr.aws without docker login or IAM permissions</verification>
+    </criterion>
+    <criterion id="AC4">
+      <title>GitHub Actions Workflow - Build and Push to ECR</title>
+      <description>Update workflow to build Docker images and push to ECR with SHA + latest tags</description>
+      <verification>Workflow succeeds, images appear in ECR with correct tags</verification>
+    </criterion>
+    <criterion id="AC5">
+      <title>Update Deployment to Pull from ECR</title>
+      <description>Update docker-compose and deployment workflow to pull pre-built images from ECR instead of building on EC2</description>
+      <verification>Deployment pulls images from ECR, containers restart successfully</verification>
+    </criterion>
+    <criterion id="AC6">
+      <title>End-to-End Deployment Validation</title>
+      <description>Complete CI/CD pipeline works with ECR-based builds, deployment time reduced to &lt;5 minutes</description>
+      <verification>Push to main triggers build/push/deploy, health check passes, deployment time &lt;5 min</verification>
+    </criterion>
+    <criterion id="AC7">
+      <title>Cost Optimization - Downgrade to t2.micro (Optional)</title>
+      <description>Verify ECR-based deployments work on t2.micro instance</description>
+      <verification>t2.micro deployment succeeds without timeout, memory usage within limits</verification>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>AWS Infrastructure (Terraform IaC)</section>
+        <snippet>Epic 1 establishes the production-ready infrastructure foundation using AWS EC2 t2.micro (1 vCPU, 1GB RAM) within free tier, aligning with NFR-6.1 budget constraint (&lt;$10/month). Terraform modules manage EC2, security groups, IAM roles, and CloudWatch.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-1.md</path>
+        <title>Epic Technical Specification: Project Foundation &amp; Infrastructure</title>
+        <section>Docker Compose orchestration</section>
+        <snippet>Docker Compose orchestration supports both local development and production deployment with Traefik reverse proxy for automatic HTTPS.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>AWS Infrastructure and Cost Constraints</section>
+        <snippet>Architecture specifies cost-optimized deployment on AWS EC2 t2.micro instance within free tier to meet NFR-6.1 budget constraint of &lt;$10/month.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/1-6-deploy-to-aws-ec2.md</path>
+        <title>Story 1.6: Deploy to AWS EC2 with GitHub OIDC and SSM Session Manager</title>
+        <section>GitHub Actions OIDC Role and SSM Deployment</section>
+        <snippet>Story 1-6 established GitHub OIDC authentication (terraform/modules/github-oidc/) with IAM role for GitHub Actions. Deployment uses SSM Session Manager. Deployment path standardized to /opt/gamepulse. Memory constraint discovered: Docker builds require 1.5-2.2 GB peak, exceeding t2.micro capacity.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>GamePulse Epic Breakdown</title>
+        <section>Epic 1: Project Foundation &amp; Infrastructure</section>
+        <snippet>Epic 1 establishes production-ready foundation with FastAPI template, PostgreSQL + TimescaleDB, GitHub Actions CI/CD, and AWS EC2 deployment. Infrastructure as Code with Terraform. Live public URL ready for iterative deployment.</snippet>
+      </doc>
+      <doc>
+        <path>.env.example</path>
+        <title>Environment Variables Documentation</title>
+        <section>Docker Images</section>
+        <snippet>Documents DOCKER_IMAGE_BACKEND, DOCKER_IMAGE_FRONTEND, TAG environment variables for ECR image URLs.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>terraform/modules/github-oidc/main.tf</path>
+        <kind>terraform-module</kind>
+        <symbol>github_actions_role</symbol>
+        <lines>44-170</lines>
+        <reason>Existing GitHub Actions IAM role - needs ECR Public push permissions added (ecr-public:* actions)</reason>
+      </artifact>
+      <artifact>
+        <path>terraform/main.tf</path>
+        <kind>terraform-config</kind>
+        <symbol>root_configuration</symbol>
+        <lines>1-50</lines>
+        <reason>Root Terraform config - needs ECR module instantiation</reason>
+      </artifact>
+      <artifact>
+        <path>terraform/outputs.tf</path>
+        <kind>terraform-config</kind>
+        <symbol>terraform_outputs</symbol>
+        <lines>all</lines>
+        <reason>Terraform outputs - needs ECR repository URLs exposed</reason>
+      </artifact>
+      <artifact>
+        <path>.github/workflows/deploy.yml</path>
+        <kind>github-actions</kind>
+        <symbol>deploy_workflow</symbol>
+        <lines>all</lines>
+        <reason>Existing deployment workflow - needs ECR build/push job added, docker compose build replaced with pull</reason>
+      </artifact>
+      <artifact>
+        <path>docker-compose.yml</path>
+        <kind>docker-compose</kind>
+        <symbol>service_configuration</symbol>
+        <lines>all</lines>
+        <reason>Docker Compose base configuration - already uses environment variables for image URLs</reason>
+      </artifact>
+      <artifact>
+        <path>docker-compose.prod.yml</path>
+        <kind>docker-compose</kind>
+        <symbol>production_overrides</symbol>
+        <lines>all</lines>
+        <reason>Production Docker Compose overrides - verify image configuration</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <backend>
+        <package>fastapi</package>
+        <package>sqlmodel</package>
+        <package>alembic</package>
+        <package>psycopg</package>
+        <package>pydantic-settings</package>
+      </backend>
+      <frontend>
+        <package>react</package>
+        <package>typescript</package>
+        <package>vite</package>
+        <package>@chakra-ui/react</package>
+        <package>@tanstack/react-query</package>
+        <package>@tanstack/react-router</package>
+      </frontend>
+      <infrastructure>
+        <tool>terraform</tool>
+        <tool>docker</tool>
+        <tool>docker-compose</tool>
+        <tool>aws-cli</tool>
+      </infrastructure>
+      <ci-cd>
+        <action>aws-actions/configure-aws-credentials@v4</action>
+        <action>aws-actions/amazon-ecr-login@v2</action>
+      </ci-cd>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint id="terraform-module-structure">Create ECR Public resources in separate terraform/modules/ecr/ module using aws_ecrpublic_repository (not aws_ecr_repository)</constraint>
+    <constraint id="iam-least-privilege">ECR Public authentication (ecr-public:GetAuthorizationToken) requires Resource: "*" per AWS IAM limitations. Use ecr-public:* actions (not ecr:*). ARN format: arn:aws:ecr-public::ACCOUNT_ID:repository/gamepulse/*</constraint>
+    <constraint id="ec2-no-iam">EC2 instance requires NO ECR permissions (public images can be pulled anonymously). This simplifies IAM configuration vs private ECR</constraint>
+    <constraint id="deployment-path">Maintain /opt/gamepulse deployment path standardized in Story 1-6</constraint>
+    <constraint id="github-workflow-modification">Build job adds ECR Public login (registry-type: public) + push steps. Deploy job removes docker compose build, removes ECR authentication, adds docker compose pull. Smoke tests remain unchanged</constraint>
+    <constraint id="backward-compatibility">ECR Public integration must not break existing OIDC + SSM deployment mechanism from Story 1-6</constraint>
+    <constraint id="lifecycle-policies">ECR lifecycle policies must keep last 3 tagged images (rollback capability) and delete untagged after 1 day (cost management)</constraint>
+    <constraint id="image-tagging">Images must be tagged with both git SHA (immutable traceability) and latest (mutable convenience)</constraint>
+    <constraint id="cost-optimization">Public ECR cost: $0.00/month (50GB free storage, 5TB free bandwidth). Enables t2.micro deployment saving $6-15/month vs larger instances</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>ECR Public Repository URLs</name>
+      <kind>terraform-output</kind>
+      <signature>
+        output "ecr_backend_repository_url" {
+          value = module.ecr.backend_repository_url
+          # Format: public.ecr.aws/ALIAS/gamepulse/backend
+        }
+        output "ecr_frontend_repository_url" {
+          value = module.ecr.frontend_repository_url
+          # Format: public.ecr.aws/ALIAS/gamepulse/frontend
+        }
+      </signature>
+      <path>terraform/outputs.tf</path>
+    </interface>
+    <interface>
+      <name>ECR Public Authentication (GitHub Actions Only)</name>
+      <kind>IAM-policy</kind>
+      <signature>
+        Action: "ecr-public:GetAuthorizationToken"
+        Resource: "*"
+      </signature>
+      <path>terraform/modules/github-oidc/main.tf</path>
+    </interface>
+    <interface>
+      <name>ECR Public Push Permissions (GitHub Actions)</name>
+      <kind>IAM-policy</kind>
+      <signature>
+        Actions: ["ecr-public:BatchCheckLayerAvailability", "ecr-public:PutImage", "ecr-public:InitiateLayerUpload", "ecr-public:UploadLayerPart", "ecr-public:CompleteLayerUpload", "ecr-public:DescribeRepositories"]
+        Resource: "arn:aws:ecr-public::ACCOUNT_ID:repository/gamepulse/*"
+      </signature>
+      <path>terraform/modules/github-oidc/main.tf</path>
+    </interface>
+    <interface>
+      <name>Docker Image Environment Variables</name>
+      <kind>environment-variable</kind>
+      <signature>
+        DOCKER_IMAGE_BACKEND=public.ecr.aws/ALIAS/gamepulse/backend
+        DOCKER_IMAGE_FRONTEND=public.ecr.aws/ALIAS/gamepulse/frontend
+        TAG=latest
+      </signature>
+      <path>.env, docker-compose.yml</path>
+    </interface>
+    <interface>
+      <name>GitHub Actions ECR Public Login</name>
+      <kind>github-action</kind>
+      <signature>
+        - name: Login to Amazon ECR Public
+          id: login-ecr
+          uses: aws-actions/amazon-ecr-login@v2
+          with:
+            registry-type: public
+      </signature>
+      <path>.github/workflows/deploy.yml</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Infrastructure testing for Story 1-7 focuses on Terraform validation and end-to-end deployment verification. Terraform modules require validation (terraform fmt, validate, plan) before applying. IAM policies must follow least-privilege principles with resource-level scoping where supported. GitHub Actions workflow requires manual triggering to test ECR build/push/pull cycle. CloudTrail logs should confirm SSM deployment activity. Smoke tests verify health endpoint responds after ECR-based deployment.
+    </standards>
+    <locations>
+      <location>terraform/ (infrastructure code validation via terraform commands)</location>
+      <location>.github/workflows/ (workflow execution logs and GitHub Actions UI)</location>
+      <location>AWS Console → ECR → Repositories (image verification)</location>
+      <location>AWS Console → CloudTrail (SSM session audit logs)</location>
+    </locations>
+    <ideas>
+      <idea ac="AC1">Terraform plan shows ECR repositories will be created with lifecycle policies and image scanning enabled</idea>
+      <idea ac="AC1">After terraform apply, verify ECR repositories visible in AWS Console with correct configuration</idea>
+      <idea ac="AC1">Terraform outputs ecr_backend_repository_url and ecr_frontend_repository_url are non-empty and well-formed</idea>
+      <idea ac="AC2">Terraform plan shows updated IAM policy for GitHub Actions role with ECR push permissions</idea>
+      <idea ac="AC2">GitHub Actions workflow can successfully authenticate to ECR (check logs for "Login Succeeded")</idea>
+      <idea ac="AC3">Verify EC2 IAM role does NOT have ECR permissions (public images don't need authentication)</idea>
+      <idea ac="AC3">SSH to EC2 and verify: docker pull public.ecr.aws/ALIAS/gamepulse/backend:latest succeeds without authentication</idea>
+      <idea ac="AC4">Trigger workflow manually, verify build job completes and images pushed to ECR</idea>
+      <idea ac="AC4">Check AWS Console → ECR → Images tab shows new images with SHA and latest tags</idea>
+      <idea ac="AC5">Verify .env.example documents ECR URL format correctly</idea>
+      <idea ac="AC5">Verify /opt/gamepulse/.env on EC2 contains actual ECR URLs</idea>
+      <idea ac="AC5">Monitor deployment job logs to confirm docker compose pull executes (not build)</idea>
+      <idea ac="AC6">Push test commit to main, monitor complete workflow execution</idea>
+      <idea ac="AC6">Verify deployment completes in under 5 minutes</idea>
+      <idea ac="AC6">Smoke test: curl https://gamepulse.top/api/v1/utils/health-check/ returns 200</idea>
+      <idea ac="AC6">Verify application updated with latest changes (check commit SHA or response content)</idea>
+      <idea ac="AC7">Update terraform.tfvars to instance_type = "t2.micro" and apply</idea>
+      <idea ac="AC7">Trigger deployment after instance replacement, monitor for OOM errors or timeouts</idea>
+      <idea ac="AC7">Verify memory usage during deployment stays under 800MB: ssh to EC2, run free -h</idea>
+    </ideas>
+  </tests>
+</story-context>
