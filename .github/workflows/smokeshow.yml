@@ -2,7 +2,7 @@ name: Smokeshow
 
 on:
   workflow_run:
-    workflows: [Test Backend]
+    workflows: [Deploy to AWS EC2]
     types: [completed]
 
 jobs:
@@ -17,14 +17,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.12"
       - run: pip install smokeshow
       - uses: actions/download-artifact@v4
         with:
-          name: coverage-html
-          path: backend/htmlcov
+          name: coverage-xml
+          path: backend
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
+      - run: pip install coverage && coverage html
+        working-directory: backend
       - run: smokeshow upload backend/htmlcov
         env:
           SMOKESHOW_GITHUB_STATUS_DESCRIPTION: Coverage {coverage-percentage}
