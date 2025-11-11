@@ -605,6 +605,55 @@ The PostgreSQL database includes the TimescaleDB extension for time-series data 
 - Manually modify the database schema
 - Skip migrations for schema changes
 
+**Dimensional Data Seeding:**
+
+GamePulse uses JSON seed files for dimensional data (teams, conferences) that rarely change:
+
+- Seed files location: `backend/app/data/`
+  - `conferences.json`: NCAA conferences with group metadata
+  - `teams.json`: Team details with colors, aliases for Reddit matching
+- Migration: `7a8f23177a57_seed_dimensional_data.py` loads seed files on upgrade
+- Upsert logic: Migration uses `ON CONFLICT DO UPDATE` for idempotency (can run multiple times safely)
+
+**Re-seeding Data:**
+
+If you need to update dimensional data after initial deployment:
+
+```bash
+# Option 1: Edit JSON files and re-run migration (idempotent)
+# 1. Edit backend/app/data/teams.json or conferences.json
+# 2. Migration automatically updates on container restart (if not yet applied)
+
+# Option 2: Manually re-apply data changes
+docker compose exec backend python
+>>> from pathlib import Path
+>>> import json
+>>> from sqlmodel import Session, create_engine, select
+>>> from app.core.config import settings
+>>> from app.models.team import Team, TeamGroup
+>>> engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
+>>> # Load and upsert data manually using session.merge() or raw SQL
+```
+
+**Validation Queries:**
+
+```bash
+# Check seeded data
+docker compose exec backend python -c "
+from sqlmodel import Session, create_engine, select
+from app.core.config import settings
+from app.models.team import Team, TeamGroup
+
+engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
+with Session(engine) as session:
+    conferences = session.exec(select(TeamGroup).where(TeamGroup.sport == 'ncaam')).all()
+    teams = session.exec(select(Team).where(Team.sport == 'ncaam')).all()
+    print(f'Conferences: {len(conferences)}, Teams: {len(teams)}')
+    for conf in conferences:
+        print(f'  - {conf.team_group_name} ({conf.team_group_id})')
+"
+```
+
 ### AWS Deployment Architecture
 
 **Infrastructure (Terraform):**

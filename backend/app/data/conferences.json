@@ -1,0 +1,46 @@
+{
+  "conferences": [
+    {
+      "team_group_id": "ncaam_acc",
+      "team_group_name": "Atlantic Coast Conference",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "level": 1
+    },
+    {
+      "team_group_id": "ncaam_b10",
+      "team_group_name": "Big Ten",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "level": 1
+    },
+    {
+      "team_group_id": "ncaam_b12",
+      "team_group_name": "Big 12",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "level": 1
+    },
+    {
+      "team_group_id": "ncaam_sec",
+      "team_group_name": "Southeastern Conference",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "level": 1
+    },
+    {
+      "team_group_id": "ncaam_p12",
+      "team_group_name": "Pac-12",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "level": 1
+    },
+    {
+      "team_group_id": "ncaam_be",
+      "team_group_name": "Big East",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "level": 1
+    }
+  ]
+}

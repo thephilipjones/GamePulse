@@ -1,0 +1,204 @@
+{
+  "teams": [
+    {
+      "team_id": "ncaam_150",
+      "sport": "ncaam",
+      "team_name": "Duke",
+      "team_abbr": "DUKE",
+      "team_group_id": "ncaam_acc",
+      "primary_color": "#003087",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Duke", "Blue Devils", "Duke Blue Devils", "Blue Devil"]
+    },
+    {
+      "team_id": "ncaam_153",
+      "sport": "ncaam",
+      "team_name": "North Carolina",
+      "team_abbr": "UNC",
+      "team_group_id": "ncaam_acc",
+      "primary_color": "#7BAFD4",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["UNC", "North Carolina", "Tar Heels", "Carolina", "UNC Tar Heels"]
+    },
+    {
+      "team_id": "ncaam_127",
+      "sport": "ncaam",
+      "team_name": "Michigan State",
+      "team_abbr": "MSU",
+      "team_group_id": "ncaam_b10",
+      "primary_color": "#18453B",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Michigan State", "MSU", "Spartans", "Michigan State Spartans", "State"]
+    },
+    {
+      "team_id": "ncaam_2509",
+      "sport": "ncaam",
+      "team_name": "Purdue",
+      "team_abbr": "PUR",
+      "team_group_id": "ncaam_b10",
+      "primary_color": "#CFB991",
+      "secondary_color": "#000000",
+      "aliases": ["Purdue", "Boilermakers", "Purdue Boilermakers", "Boilers"]
+    },
+    {
+      "team_id": "ncaam_275",
+      "sport": "ncaam",
+      "team_name": "Wisconsin",
+      "team_abbr": "WIS",
+      "team_group_id": "ncaam_b10",
+      "primary_color": "#C5050C",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Wisconsin", "Badgers", "Wisconsin Badgers", "Wisc"]
+    },
+    {
+      "team_id": "ncaam_356",
+      "sport": "ncaam",
+      "team_name": "Illinois",
+      "team_abbr": "ILL",
+      "team_group_id": "ncaam_b10",
+      "primary_color": "#E84A27",
+      "secondary_color": "#13294B",
+      "aliases": ["Illinois", "Fighting Illini", "Illini", "Illinois Fighting Illini"]
+    },
+    {
+      "team_id": "ncaam_2305",
+      "sport": "ncaam",
+      "team_name": "Kansas",
+      "team_abbr": "KU",
+      "team_group_id": "ncaam_b12",
+      "primary_color": "#0051BA",
+      "secondary_color": "#E8000D",
+      "aliases": ["Kansas", "Jayhawks", "KU", "Kansas Jayhawks", "Jayhawk"]
+    },
+    {
+      "team_id": "ncaam_239",
+      "sport": "ncaam",
+      "team_name": "Baylor",
+      "team_abbr": "BAY",
+      "team_group_id": "ncaam_b12",
+      "primary_color": "#003015",
+      "secondary_color": "#FFCE1F",
+      "aliases": ["Baylor", "Bears", "Baylor Bears", "BU"]
+    },
+    {
+      "team_id": "ncaam_2641",
+      "sport": "ncaam",
+      "team_name": "Texas Tech",
+      "team_abbr": "TTU",
+      "team_group_id": "ncaam_b12",
+      "primary_color": "#CC0000",
+      "secondary_color": "#000000",
+      "aliases": ["Texas Tech", "Red Raiders", "Texas Tech Red Raiders", "TTU"]
+    },
+    {
+      "team_id": "ncaam_248",
+      "sport": "ncaam",
+      "team_name": "Houston",
+      "team_abbr": "HOU",
+      "team_group_id": "ncaam_b12",
+      "primary_color": "#C8102E",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Houston", "Cougars", "Houston Cougars", "UH"]
+    },
+    {
+      "team_id": "ncaam_96",
+      "sport": "ncaam",
+      "team_name": "Kentucky",
+      "team_abbr": "UK",
+      "team_group_id": "ncaam_sec",
+      "primary_color": "#0033A0",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Kentucky", "Wildcats", "UK", "Kentucky Wildcats", "Cats"]
+    },
+    {
+      "team_id": "ncaam_2",
+      "sport": "ncaam",
+      "team_name": "Auburn",
+      "team_abbr": "AUB",
+      "team_group_id": "ncaam_sec",
+      "primary_color": "#03244D",
+      "secondary_color": "#F26522",
+      "aliases": ["Auburn", "Tigers", "Auburn Tigers", "War Eagle"]
+    },
+    {
+      "team_id": "ncaam_2633",
+      "sport": "ncaam",
+      "team_name": "Tennessee",
+      "team_abbr": "TENN",
+      "team_group_id": "ncaam_sec",
+      "primary_color": "#FF8200",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Tennessee", "Volunteers", "Vols", "Tennessee Volunteers", "UT"]
+    },
+    {
+      "team_id": "ncaam_57",
+      "sport": "ncaam",
+      "team_name": "Florida",
+      "team_abbr": "FLA",
+      "team_group_id": "ncaam_sec",
+      "primary_color": "#003087",
+      "secondary_color": "#FA4616",
+      "aliases": ["Florida", "Gators", "Florida Gators", "UF"]
+    },
+    {
+      "team_id": "ncaam_26",
+      "sport": "ncaam",
+      "team_name": "UCLA",
+      "team_abbr": "UCLA",
+      "team_group_id": "ncaam_p12",
+      "primary_color": "#2D68C4",
+      "secondary_color": "#FFE800",
+      "aliases": ["UCLA", "Bruins", "UCLA Bruins", "Bruin"]
+    },
+    {
+      "team_id": "ncaam_12",
+      "sport": "ncaam",
+      "team_name": "Arizona",
+      "team_abbr": "ARIZ",
+      "team_group_id": "ncaam_p12",
+      "primary_color": "#CC0033",
+      "secondary_color": "#003366",
+      "aliases": ["Arizona", "Wildcats", "Arizona Wildcats", "U of A"]
+    },
+    {
+      "team_id": "ncaam_222",
+      "sport": "ncaam",
+      "team_name": "Villanova",
+      "team_abbr": "NOVA",
+      "team_group_id": "ncaam_be",
+      "primary_color": "#002F5F",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Villanova", "Wildcats", "Villanova Wildcats", "Nova"]
+    },
+    {
+      "team_id": "ncaam_41",
+      "sport": "ncaam",
+      "team_name": "UConn",
+      "team_abbr": "CONN",
+      "team_group_id": "ncaam_be",
+      "primary_color": "#000E2F",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["UConn", "Huskies", "Connecticut", "UConn Huskies"]
+    },
+    {
+      "team_id": "ncaam_156",
+      "sport": "ncaam",
+      "team_name": "Creighton",
+      "team_abbr": "CREI",
+      "team_group_id": "ncaam_be",
+      "primary_color": "#00539F",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Creighton", "Bluejays", "Creighton Bluejays", "Jays"]
+    },
+    {
+      "team_id": "ncaam_269",
+      "sport": "ncaam",
+      "team_name": "Marquette",
+      "team_abbr": "MARQ",
+      "team_group_id": "ncaam_be",
+      "primary_color": "#003F87",
+      "secondary_color": "#FFCE1F",
+      "aliases": ["Marquette", "Golden Eagles", "Marquette Golden Eagles", "MU"]
+    }
+  ]
+}
