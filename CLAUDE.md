@@ -90,10 +90,12 @@ npm run build
 npm run lint
 
 # Generate API client (after backend OpenAPI schema changes)
-# Option 1 (automatic - requires backend venv):
+# Note: Automatically regenerated on push to main via GitHub Actions
+
+# Manual generation (for local development):
 ./scripts/generate-client.sh
 
-# Option 2 (manual):
+# Alternative manual method:
 # 1. Download http://localhost:8000/api/v1/openapi.json
 # 2. Save to frontend/openapi.json
 # 3. Run: npm run generate-client
@@ -287,13 +289,19 @@ curl https://api.gamepulse.top/api/v1/utils/health-check/
 
 **Automated GitHub Actions Deployment:**
 
-Every push to `main` branch triggers automated deployment:
+Every push to `main` branch triggers automated deployment (`.github/workflows/deploy.yml`):
 
-1. **Lint** → Backend (ruff, mypy) + Frontend (biome)
-2. **Test** → Backend tests with PostgreSQL service
-3. **Build** → Docker images for backend and frontend
-4. **Deploy** → Connect via SSM, pull latest code, rebuild images, restart services
-5. **Smoke Test** → Health check with retry logic
+1. **Lint** → Backend (ruff, mypy) + Frontend (biome) - runs in parallel
+2. **Test** → Backend tests with PostgreSQL service + Frontend tests - runs in parallel
+3. **Generate Client** → Auto-regenerate TypeScript client from OpenAPI schema (auto-commits if changed)
+4. **Build** → Docker images for backend and frontend, push to ECR Public
+5. **Deploy** → Connect via SSM, pull latest code, pull images from ECR, restart services
+6. **Smoke Test** → Health check with retry logic
+
+**Coverage Visualization** (`.github/workflows/smokeshow.yml`):
+- Runs after deploy.yml completes successfully
+- Uploads coverage reports to Smokeshow service
+- Requires `SMOKESHOW_AUTH_KEY` secret (optional)
 
 The deploy job:
 - Authenticates via OIDC (no stored credentials)
