@@ -1,11 +1,17 @@
-import { Flex, Image, useBreakpointValue } from "@chakra-ui/react";
+import { Flex, IconButton, Image, useBreakpointValue } from "@chakra-ui/react";
 import { Link } from "@tanstack/react-router";
+import { useTheme } from "next-themes";
+import { FiMoon, FiSun } from "react-icons/fi";
 
 import Logo from "/assets/images/fastapi-logo.svg";
-import UserMenu from "./UserMenu";
 
 function Navbar() {
   const display = useBreakpointValue({ base: "none", md: "flex" });
+  const { theme, setTheme } = useTheme();
+
+  const toggleTheme = () => {
+    setTheme(theme === "light" ? "dark" : "light");
+  };
 
   return (
     <Flex
@@ -23,7 +29,13 @@ function Navbar() {
         <Image src={Logo} alt="Logo" w="180px" maxW="2xs" px={2} />
       </Link>
       <Flex gap={2} alignItems="center">
-        <UserMenu />
+        <IconButton
+          aria-label="Toggle theme"
+          onClick={toggleTheme}
+          variant="ghost"
+        >
+          {theme === "light" ? <FiMoon /> : <FiSun />}
+        </IconButton>
       </Flex>
     </Flex>
   );

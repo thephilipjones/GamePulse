@@ -3,7 +3,7 @@ import { useTheme } from "next-themes";
 
 import { Radio, RadioGroup } from "@/components/ui/radio";
 
-const Appearance = () => {
+const ThemeToggle = () => {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -28,4 +28,4 @@ const Appearance = () => {
     </>
   );
 };
-export default Appearance;
+export default ThemeToggle;
