@@ -580,6 +580,45 @@ aws cloudtrail lookup-events \
 
 ## Architecture & Code Structure
 
+### CI/CD Architecture
+
+**GitHub Actions Workflow:**
+
+Single consolidated workflow (`.github/workflows/deploy.yml`) replaces 11 legacy FastAPI template workflows.
+
+**Workflow Optimization:**
+- **Parallel execution:** Lint and test jobs run concurrently for speed
+- **Dependency caching:** uv (Python) and npm dependencies cached via GitHub Actions
+- **Minimal secrets:** OIDC authentication eliminates long-lived AWS credentials
+- **Auto-generation:** TypeScript client regenerates automatically on OpenAPI changes
+
+**Workflow Phases:**
+```
+Phase 1 (Parallel)
+├─ lint-backend (ruff, mypy)
+├─ lint-frontend (biome)
+└─ validate-docker (compose config)
+
+Phase 2 (Parallel, after Phase 1)
+├─ test-backend (pytest + coverage)
+└─ test-frontend (if configured)
+
+Phase 3 (Sequential, after Phase 2)
+└─ generate-client (TypeScript from OpenAPI)
+   └─ Auto-commit if changed
+
+Phase 4 (Sequential, after Phase 3)
+└─ build (Docker images)
+   └─ deploy (to EC2 via SSM)
+      └─ smoke-test (health check)
+```
+
+**Key Design Decisions:**
+- **Single workflow:** Easier to maintain than multiple independent workflows
+- **Client generation after tests:** Ensures OpenAPI schema is validated before generation
+- **Build after client generation:** Ensures latest client is included in Docker images
+- **Coverage in logs only:** No external service required (smokeshow removed)
+
 ### Backend Architecture
 
 **Directory Structure:**
@@ -774,12 +813,35 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ### Git Workflow
 
 **Branches:**
-- `main`: Production branch (deploys to EC2 on push)
+- `main`: Production branch (auto-deploys to EC2 on every push)
 
-**Secrets (GitHub Actions):**
-- `AWS_GITHUB_ACTIONS_ROLE_ARN`: IAM role for OIDC
-- `AWS_EC2_INSTANCE_ID`: Target EC2 instance
-- Other secrets: `DOMAIN_PRODUCTION`, `SECRET_KEY`, `POSTGRES_PASSWORD`, etc.
+**GitHub Actions Workflow:**
+
+Single workflow file: `.github/workflows/deploy.yml`
+
+Every push to `main` triggers:
+1. **Parallel Phase 1:**
+   - Lint backend (ruff, mypy)
+   - Lint frontend (biome)
+   - Validate Docker Compose config
+2. **Parallel Phase 2:**
+   - Test backend (pytest + coverage)
+   - Test frontend (if configured)
+3. **Sequential Phase 3:**
+   - Generate TypeScript client from OpenAPI
+   - Auto-commit if schema changed
+4. **Sequential Phase 4:**
+   - Build Docker images
+   - Push to ECR Public
+   - Deploy to EC2 via SSM
+   - Smoke test health endpoint
+
+**GitHub Secrets Required:**
+- `AWS_GITHUB_ACTIONS_ROLE_ARN`: IAM role for OIDC authentication
+- `AWS_EC2_INSTANCE_ID`: Target EC2 instance ID
+- `ECR_BACKEND_URL`: ECR Public URL for backend image
+- `ECR_FRONTEND_URL`: ECR Public URL for frontend image
+- Deployment secrets: `DOMAIN_PRODUCTION`, `SECRET_KEY`, `POSTGRES_PASSWORD`, etc.
 
 ## Common Development Tasks
 
@@ -788,8 +850,14 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 1. Define route in `backend/app/api/routes/<resource>.py`
 2. Add CRUD operation in `backend/app/crud.py` (if needed)
 3. Add tests in `backend/app/tests/api/test_<resource>.py`
-4. Regenerate frontend client: `./scripts/generate-client.sh`
-5. Use generated client in frontend React components
+4. Commit and push to `main`
+5. TypeScript client automatically regenerates via GitHub Actions
+6. Use generated client in frontend React components
+
+**Manual client generation (for local dev):**
+```bash
+./scripts/generate-client.sh
+```
 
 ### Adding a New Database Model
 
@@ -875,10 +943,31 @@ docker compose exec backend python
 - Clear build cache: `docker compose build --no-cache`
 - Remove old containers: `docker compose down -v`
 
-**Issue: GitHub Actions deployment fails**
+**Issue: GitHub Actions workflow fails**
 - Check GitHub Actions logs for specific error
-- Verify AWS EC2 instance is running: `aws ec2 describe-instances --instance-ids <id>`
-- SSH to instance and check Docker logs: `docker compose logs`
+- **Linting failures:** Pre-commit hooks should catch these locally
+  - Backend: `cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy .`
+  - Frontend: `cd frontend && npm run lint`
+- **Test failures:** Run tests locally first
+  - Backend: `cd backend && uv run pytest -v`
+  - Frontend: `cd frontend && npm test` (if configured)
+- **Deployment failures:**
+  - Verify AWS EC2 instance is running: `aws ec2 describe-instances --instance-ids <id>`
+  - SSH to instance and check Docker logs: `docker compose logs`
+
+**Issue: Pre-commit hooks failing**
+- Ensure hooks are installed: `uv run pre-commit install`
+- Run manually to see errors: `uv run pre-commit run --all-files`
+- Common fixes:
+  - Ruff formatting: `cd backend && uv run ruff format .`
+  - Fix end-of-file/trailing whitespace issues (auto-fixed by pre-commit)
+
+**Issue: VSCode not formatting on save**
+- Install recommended extensions (VSCode will prompt)
+  - Python: `charliermarsh.ruff`
+  - JavaScript/TypeScript: `biomejs.biome`
+- Check VSCode settings are loaded: `.vscode/settings.json` should be present
+- Reload VSCode window: Cmd+Shift+P → "Developer: Reload Window"
 
 **Issue: Terraform apply fails**
 - Check AWS credentials: `aws sts get-caller-identity`
