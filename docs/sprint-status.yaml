@@ -48,7 +48,7 @@ development_status:
   1-4-create-database-schema: done
   1-5-setup-github-actions: ready-for-dev
   1-6-deploy-to-aws-ec2: done
-  1-7-ecr-remote-builds: ready-for-dev
+  1-7-ecr-remote-builds: review
   epic-1-retrospective: optional
 
   # Epic 2: Game Data Ingestion (Batch) (5 stories)

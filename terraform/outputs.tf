@@ -81,17 +81,38 @@ output "oidc_provider_arn" {
 }
 
 # ============================================================================
+# ECR Public Outputs
+# ============================================================================
+
+output "ecr_backend_repository_url" {
+  description = "ECR Public URL for backend repository (use in docker-compose.yml)"
+  value       = module.ecr.backend_repository_url
+}
+
+output "ecr_frontend_repository_url" {
+  description = "ECR Public URL for frontend repository (use in docker-compose.yml)"
+  value       = module.ecr.frontend_repository_url
+}
+
+output "ecr_registry_id" {
+  description = "ECR Public registry ID"
+  value       = module.ecr.registry_id
+}
+
+# ============================================================================
 # Connection Information
 # ============================================================================
 
 output "connection_info" {
   description = "All connection information"
   value = {
-    public_ip               = module.compute.public_ip
-    private_ip              = module.compute.private_ip
-    ssh_command             = module.compute.ssh_command
-    instance_id             = module.compute.instance_id
-    vpc_id                  = module.vpc.vpc_id
-    github_actions_role_arn = module.github_oidc.github_actions_role_arn
+    public_ip                   = module.compute.public_ip
+    private_ip                  = module.compute.private_ip
+    ssh_command                 = module.compute.ssh_command
+    instance_id                 = module.compute.instance_id
+    vpc_id                      = module.vpc.vpc_id
+    github_actions_role_arn     = module.github_oidc.github_actions_role_arn
+    ecr_backend_repository_url  = module.ecr.backend_repository_url
+    ecr_frontend_repository_url = module.ecr.frontend_repository_url
   }
 }

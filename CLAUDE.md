@@ -324,9 +324,9 @@ POSTGRES_DB=gamepulse
 POSTGRES_USER=gamepulse
 POSTGRES_PASSWORD=<secure-password>
 
-# Docker Images
-DOCKER_IMAGE_BACKEND=gamepulse-backend
-DOCKER_IMAGE_FRONTEND=gamepulse-frontend
+# Docker Images (ECR Public URLs from terraform output)
+DOCKER_IMAGE_BACKEND=public.ecr.aws/REGISTRY_ALIAS/gamepulse/backend
+DOCKER_IMAGE_FRONTEND=public.ecr.aws/REGISTRY_ALIAS/gamepulse/frontend
 TAG=latest
 
 # Frontend

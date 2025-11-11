@@ -84,7 +84,7 @@ resource "aws_iam_role" "github_actions" {
 
 resource "aws_iam_policy" "github_actions_deployment" {
   name        = "${var.project_name}-github-actions-deployment-policy"
-  description = "Least-privilege policy for GitHub Actions deployments via SSM"
+  description = "Least-privilege policy for GitHub Actions deployments via SSM and ECR Public"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -156,6 +156,28 @@ resource "aws_iam_policy" "github_actions_deployment" {
           "ssm:GetConnectionStatus"
         ]
         Resource = "*"
+      },
+      # ECR Public authentication (required for push/pull operations)
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr-public:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      # ECR Public push permissions (scoped to gamepulse repositories)
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr-public:BatchCheckLayerAvailability",
+          "ecr-public:PutImage",
+          "ecr-public:InitiateLayerUpload",
+          "ecr-public:UploadLayerPart",
+          "ecr-public:CompleteLayerUpload",
+          "ecr-public:DescribeRepositories",
+          "ecr-public:DescribeImages"
+        ]
+        Resource = "arn:aws:ecr-public::${data.aws_caller_identity.current.account_id}:repository/gamepulse/*"
       }
     ]
   })

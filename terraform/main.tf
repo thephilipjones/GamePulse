@@ -61,3 +61,15 @@ module "github_oidc" {
   aws_region              = var.aws_region
   tags                    = local.common_tags
 }
+
+# ============================================================================
+# ECR Public Module - Container Registry
+# ============================================================================
+
+module "ecr" {
+  source = "./modules/ecr"
+
+  project_name     = var.project_name
+  repository_names = ["gamepulse/backend", "gamepulse/frontend"]
+  tags             = local.common_tags
+}
