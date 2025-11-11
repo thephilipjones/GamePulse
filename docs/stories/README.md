@@ -41,7 +41,7 @@ Each story includes:
 - [Story 2.1: Create Team and Conference Dimensional Data](./story-2.1-create-dimensional-data.md)
 - [Story 2.2: Build NCAA API Client with httpx](./story-2.2-build-ncaa-client.md)
 - [Story 2.3: Create Game SQLModel and Database Migration](./story-2.3-create-game-model.md)
-- [Story 2.4: Implement Scheduled Polling Worker with APScheduler](./story-2.4-implement-polling-worker.md)
+- [Story 2.4: Implement Dagster Data Orchestration and NCAA Game Asset](./story-2.4-implement-polling-worker.md)
 - [Story 2.5: Add Retry Logic and Error Handling](./story-2.5-add-retry-logic.md)
 
 ### Epic 3: Basic API + Dashboard MVP (5 stories)

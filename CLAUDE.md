@@ -8,6 +8,7 @@ GamePulse is a full-stack web application built with FastAPI (backend) and React
 
 **Tech Stack:**
 - Backend: FastAPI + SQLModel + PostgreSQL (TimescaleDB extension)
+- Orchestration: Dagster (self-hosted) for data pipeline orchestration
 - Frontend: React + TypeScript + Vite + TanStack Query/Router + Chakra UI
 - Infrastructure: AWS EC2, Terraform modules (VPC, Compute)
 - Deployment: GitHub Actions with OIDC authentication to AWS

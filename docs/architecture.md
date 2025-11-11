@@ -1110,6 +1110,35 @@ docker-compose exec db psql -U gamepulse -d gamepulse
 - Game thread comments not analyzed for sentiment
 - Can add comment tracking in Growth phase without architecture changes
 
+### ADR-007: Dagster for Data Orchestration (Asset-Oriented)
+
+**Context:** GamePulse requires workflow orchestration for batch data ingestion (NCAA API polling every 15 minutes, Reddit sentiment analysis) and needs to demonstrate modern data engineering practices for targeting data solutions architect roles. Initial consideration was APScheduler (simple in-process scheduling), with alternatives including Prefect (flow-oriented) and Airflow (mature but complex).
+
+**Decision:** Use Dagster (self-hosted) for data pipeline orchestration.
+
+**Rationale:**
+- **Asset-oriented paradigm**: Dagster treats data as first-class citizens (assets) rather than tasks, aligning with data platform architecture thinking required for data solutions architect roles
+- **Built-in lineage**: Visual asset catalog shows how excitement_scores depend on ncaa_games + reddit_posts + betting_odds, demonstrating data flow understanding
+- **Portfolio differentiation**: Modern tool gaining traction in data engineering (vs ubiquitous Airflow), shows awareness of industry trends
+- **Interview narrative**: Asset lineage graphs are visually impressive demo material: "excitement scores depend on these three upstream assets..."
+- **Real dependencies**: GamePulse has genuine orchestration complexity (NCAA → Reddit matching → excitement calculation + streaming Betfair integration), not just simple scheduled tasks
+- **Self-hosted deployment**: Dagster Cloud costs $200-600/month for MVP usage (14K-28K credits), self-hosted on existing EC2 costs $0 and demonstrates infrastructure skills
+- **Async support**: Full support for `async def` asset definitions, works seamlessly with FastAPI patterns and httpx client
+- **Migration strategy**: Start with 30-day Dagster Cloud trial for fast learning and branch deployments, then migrate to self-hosted before trial ends
+
+**Alternatives Considered:**
+- **APScheduler**: Simple in-process scheduling, sufficient for MVP scale, but lacks observability UI and doesn't demonstrate modern data platform thinking
+- **Prefect**: Flow-oriented with excellent async support, free cloud tier, but task-paradigm less impressive than asset-paradigm for data architect roles
+- **Airflow**: Industry standard with massive ecosystem, but complex deployment (requires Redis/Celery), Jinja templates less Pythonic than Dagster's pure Python
+
+**Consequences:**
+- **Learning curve**: +1-2 days implementation vs APScheduler (3-4 days vs 2 days), but asset paradigm requires mindset shift
+- **Infrastructure**: Dagster webserver + daemon containers added to Docker Compose, uses existing PostgreSQL for metadata storage
+- **Portfolio value**: Visual asset lineage graph for interview demos, demonstrates understanding of data lineage and asset dependencies
+- **Cost optimization**: Migrating from Cloud trial to self-hosted saves $200-600/month, shows cost-conscious architecture decisions
+- **No dbt needed**: Dagster assets can handle SQL transformations directly for GamePulse's simple aggregation needs (excitement score calculations)
+- **Deployment**: Two additional containers (dagster-webserver on port 3000, dagster-daemon for schedules), Traefik routing for dagster.gamepulse.top subdomain
+
 ---
 
 ## Extended Implementation Patterns (Agent Consistency)

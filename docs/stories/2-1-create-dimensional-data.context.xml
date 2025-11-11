@@ -1,0 +1,313 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>1</storyId>
+    <title>Create Team and Conference Dimensional Data</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-11</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/2-1-create-dimensional-data.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a developer</asA>
+    <iWant>to create static dimensional data for NCAA Men's Basketball teams and conferences</iWant>
+    <soThat>games can be matched to teams and rivalry detection works correctly</soThat>
+    <tasks>
+### Task 2.1.1: Create Data Directory and JSON Structure (AC: #1)
+- Create directory: `backend/app/data/`
+- Create `.gitkeep` to ensure directory is tracked
+- Create `backend/app/data/teams.json` with empty array structure
+- Create `backend/app/data/conferences.json` with empty array structure
+
+### Task 2.1.2: Populate Conferences JSON (AC: #1, #2)
+- Add 6 major conferences to `backend/app/data/conferences.json`
+- ACC, Big Ten, Big 12, SEC (rivalry_factor: 1.2)
+- Pac-12, Big East (rivalry_factor: 1.0)
+- Validate JSON syntax
+
+### Task 2.1.3: Populate Teams JSON with Top 20 NCAA Teams (AC: #1, #2)
+- Research NCAA API team IDs from henrygd/ncaa-api documentation
+- Add 20 NCAAM teams with team_id format: `ncaam_{api_id}`
+- Include: Duke, UNC, Kansas, Kentucky, Gonzaga, UCLA, Villanova, Michigan State, Arizona, Purdue, etc.
+- Find official team colors (hex codes)
+- Add at least 2 aliases per team for Reddit matching
+- Validate JSON syntax
+
+### Task 2.1.4: Create Alembic Migration for Data Seeding (AC: #3)
+- Generate Alembic migration file: `alembic revision -m "seed_dimensional_data"`
+- Migration reads JSON files from `backend/app/data/`
+- Uses upsert logic (INSERT ... ON CONFLICT DO UPDATE) for idempotency
+- Insert conferences first (parent table)
+- Insert teams second (child table with FK)
+- Implement reversible downgrade
+
+### Task 2.1.5: Run Migration and Validate Database (AC: #4)
+- Start database and run migration: `alembic upgrade head`
+- Verify >= 6 conferences and >= 20 teams in database
+- Test queries: team lookup, rivalry pairs (Duke + UNC in ACC)
+- Test foreign key constraints
+- Test idempotency (run twice, no duplicates)
+- Test downgrade and re-upgrade
+
+### Task 2.1.6: Document Data Loading Process (AC: #4)
+- Update CLAUDE.md with data seeding instructions
+- Document re-run process using downgrade/upgrade
+- Commit changes with message: "feat: Add NCAA team and conference dimensional data"
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### AC1: JSON Data Files Created
+- `backend/app/data/teams.json` exists with minimum 20 NCAAM teams
+- Each team has: `team_id`, `team_name`, `team_abbr`, `team_group_id`, `primary_color`, `secondary_color`, `aliases`
+- `backend/app/data/conferences.json` exists with minimum 6 major conferences
+- Each conference has: `team_group_id`, `group_name`, `sport`, `rivalry_factor`
+- Conferences include: ACC, Big 12, SEC, Big Ten, Pac-12, Big East
+- Team IDs follow format: `ncaam_{api_id}` (e.g., `ncaam_150` for Duke)
+- Conference IDs follow format: `ncaam_{abbr}` (e.g., `ncaam_acc`)
+
+### AC2: Data Quality Validation
+- All 20 teams have valid NCAA API team IDs (matching henrygd/ncaa-api format)
+- All team colors are valid hex codes (e.g., `#003087` for Duke blue)
+- Each team has at least 2 aliases for matching (e.g., ["Duke", "Blue Devils"])
+- All teams belong to one of the 6 conferences (valid `team_group_id`)
+- Rivalry pairs exist: Duke + UNC both have `team_group_id='ncaam_acc'`
+- Conference rivalry factors are 1.2 for strong conferences (ACC, Big Ten, Big 12, SEC)
+
+### AC3: Alembic Migration Created
+- Migration file created: `backend/app/alembic/versions/XXXX_seed_dimensional_data.py`
+- Migration reads `backend/app/data/teams.json` and `backend/app/data/conferences.json`
+- Uses upsert logic (INSERT ... ON CONFLICT DO UPDATE) for idempotency
+- Inserts conferences first (parent table)
+- Inserts teams second (child table with foreign key)
+- Migration is reversible (downgrade deletes seeded data)
+
+### AC4: Database Seeded Successfully
+- Query `SELECT COUNT(*) FROM team_groups WHERE sport = 'ncaam'` returns >= 6
+- Query `SELECT COUNT(*) FROM teams WHERE sport = 'ncaam'` returns >= 20
+- Teams have proper foreign key references: `team_group_id` exists in `team_groups`
+- Sample query works: `SELECT * FROM teams WHERE team_id = 'ncaam_150'` returns Duke
+- Rivalry query works: Duke and UNC both have `team_group_id = 'ncaam_acc'`
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Dimensional Data Seed</section>
+        <snippet>Provides comprehensive technical context for Epic 2 Game Data Ingestion, including dimensional data seeding requirements (AC-1), NCAA API integration patterns, database schema design, and Alembic migration strategies.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>Database Schema - Teams and Conferences</section>
+        <snippet>Defines the `teams` and `team_groups` dimensional tables with multi-sport support. Teams use sport-namespaced IDs (ncaam_150), support fuzzy matching via aliases array, and reference team_groups via foreign key for rivalry detection.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>Multi-Sport Data Foundation</section>
+        <snippet>Establishes the product vision for multi-sport support with NCAA Men's Basketball as the initial implementation. Defines team colors, aliases for social media matching, and conference-based rivalry scoring.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Overview</title>
+        <section>Epic 2: Game Data Ingestion (Batch)</section>
+        <snippet>Story 2.1 establishes dimensional data foundation. Creates seed data for 20 NCAAM teams and 6 conferences to enable game matching and rivalry detection in subsequent stories.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/models/team.py</path>
+        <kind>model</kind>
+        <symbol>Team</symbol>
+        <lines>13-31</lines>
+        <reason>SQLModel schema for teams table. Defines team_id format (sport_slug), aliases ARRAY column for fuzzy matching, team_group_id FK, and color fields. This is the target schema for data seeding.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/team.py</path>
+        <kind>model</kind>
+        <symbol>TeamGroup</symbol>
+        <lines>34-50</lines>
+        <reason>SQLModel schema for team_groups table (conferences). Defines team_group_id, team_group_name, sport, group_type, and supports nested hierarchies via parent_group_id. Parent table for teams FK relationship.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/team.py</path>
+        <kind>model</kind>
+        <symbol>TeamRivalry</symbol>
+        <lines>52-69</lines>
+        <reason>Optional many-to-many rivalry mapping. While this story seeds conference-level rivalry_factor in TeamGroup, future enhancements may create explicit rivalry pairs (e.g., Duke-UNC) using this table.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/29a82f0b5d5b_create_multi_sport_schema.py</path>
+        <kind>migration</kind>
+        <symbol>upgrade</symbol>
+        <lines>20-90</lines>
+        <reason>Existing Alembic migration that created the team_groups and teams tables. This story will create a NEW migration to SEED data into these existing tables using INSERT ... ON CONFLICT pattern.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/env.py</path>
+        <kind>configuration</kind>
+        <symbol>run_migrations_online</symbol>
+        <lines>1-50</lines>
+        <reason>Alembic environment configuration. Use this to understand migration execution context and SQLModel metadata registration. New migration will follow same patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/conftest.py</path>
+        <kind>test fixture</kind>
+        <symbol>db</symbol>
+        <lines>12-18</lines>
+        <reason>Pytest database session fixture. While this story doesn't create unit tests (data seeding is integration-level), future tests can use this fixture for database validation.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="alembic" version=">=1.13.0,<2.0.0">Database migration tool - used to create seed data migration</package>
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0">ORM with Pydantic validation - Team and TeamGroup models</package>
+        <package name="psycopg" version=">=3.2.0,<4.0.0">PostgreSQL adapter - database driver</package>
+        <package name="pydantic" version=">=2.9.0,<3.0.0">Data validation - JSON schema validation</package>
+        <package name="pytest" version=">=8.3.0,<9.0.0">Testing framework (dev) - future integration tests</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+- **Alembic Migration Pattern**: Use upsert logic (INSERT ... ON CONFLICT DO UPDATE) for idempotency. Migration must be reversible (downgrade deletes only WHERE sport = 'ncaam')
+- **Data Insertion Order**: Insert team_groups (parent) BEFORE teams (child) due to foreign key constraint
+- **ID Format Conventions**: Team IDs use `ncaam_{api_id}` format, Conference IDs use `ncaam_{abbr}` format
+- **Schema Alignment**: Team model has `team_group_name` field but migration uses `group_name` - verify field mapping during migration creation
+- **No Schema Changes**: This story ONLY seeds data. Do not modify table schemas - tables already exist from migration 29a82f0b5d5b
+- **JSON File Location**: Data files must be in `backend/app/data/` directory, readable by migration code via relative path
+- **SQL Injection Safety**: Use parameterized queries or proper escaping when constructing INSERT statements from JSON data
+- **Hex Color Validation**: Colors must be valid hex codes (e.g., #003087) - validate format before insertion
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Team Model Schema</name>
+      <kind>SQLModel class</kind>
+      <signature>
+class Team(SQLModel, table=True):
+    team_id: str (PK, format: "{sport}_{slug}")
+    sport: str (indexed)
+    team_name: str
+    team_abbr: str | None
+    team_group_id: str | None (FK -> team_groups.team_group_id)
+    primary_color: str | None
+    secondary_color: str | None
+    aliases: list[str] (PostgreSQL ARRAY)
+    created_at: datetime
+    updated_at: datetime
+      </signature>
+      <path>backend/app/models/team.py</path>
+    </interface>
+    <interface>
+      <name>TeamGroup Model Schema</name>
+      <kind>SQLModel class</kind>
+      <signature>
+class TeamGroup(SQLModel, table=True):
+    team_group_id: str (PK)
+    team_group_name: str
+    sport: str (indexed)
+    group_type: str ("conference", "division", "league")
+    parent_group_id: str | None (FK -> team_groups.team_group_id)
+    level: int (default: 1)
+    created_at: datetime
+      </signature>
+      <path>backend/app/models/team.py</path>
+    </interface>
+    <interface>
+      <name>JSON Data Format - Teams</name>
+      <kind>JSON schema</kind>
+      <signature>
+{
+  "teams": [
+    {
+      "team_id": "ncaam_150",
+      "team_name": "Duke",
+      "team_abbr": "DUKE",
+      "sport": "ncaam",
+      "team_group_id": "ncaam_acc",
+      "primary_color": "#003087",
+      "secondary_color": "#FFFFFF",
+      "aliases": ["Duke", "Blue Devils", "Duke Blue Devils"]
+    }
+  ]
+}
+      </signature>
+      <path>backend/app/data/teams.json</path>
+    </interface>
+    <interface>
+      <name>JSON Data Format - Conferences</name>
+      <kind>JSON schema</kind>
+      <signature>
+{
+  "conferences": [
+    {
+      "team_group_id": "ncaam_acc",
+      "group_name": "Atlantic Coast Conference",
+      "sport": "ncaam",
+      "group_type": "conference",
+      "rivalry_factor": 1.2,
+      "level": 1
+    }
+  ]
+}
+      </signature>
+      <path>backend/app/data/conferences.json</path>
+    </interface>
+    <interface>
+      <name>Alembic Migration Commands</name>
+      <kind>CLI commands</kind>
+      <signature>
+# Create new migration
+alembic revision -m "seed_dimensional_data"
+
+# Run migrations
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+
+# View migration history
+alembic history
+      </signature>
+      <path>backend/app/alembic/</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+This story focuses on data seeding via Alembic migration, which is integration-level testing territory. The project uses pytest for backend testing with database session fixtures defined in conftest.py. Testing approach: (1) Manual validation via SQL queries in Task 2.1.5, (2) Migration idempotency testing (run twice, verify no duplicates), (3) Downgrade/upgrade cycle validation. Unit tests are not applicable for data seeding. Future stories may add pytest integration tests that query dimensional data.
+    </standards>
+    <locations>
+- `backend/app/tests/` - pytest test suite
+- `backend/app/tests/conftest.py` - shared fixtures (db session, test client)
+- `backend/scripts/test.sh` - test execution script
+    </locations>
+    <ideas>
+      <idea ac="AC1">
+        <description>Create pytest fixture that validates JSON file structure and schema</description>
+        <test_type>Integration</test_type>
+        <test_file>backend/app/tests/test_dimensional_data.py</test_file>
+      </idea>
+      <idea ac="AC2">
+        <description>Test data quality: validate all team colors are valid hex codes, verify team IDs match NCAA API format, check alias arrays have >= 2 entries</description>
+        <test_type>Integration</test_type>
+        <test_file>backend/app/tests/test_dimensional_data.py</test_file>
+      </idea>
+      <idea ac="AC3">
+        <description>Test migration idempotency: run migration twice in test DB, verify no duplicate entries, verify ON CONFLICT logic works</description>
+        <test_type>Integration</test_type>
+        <test_file>backend/app/tests/test_migrations.py</test_file>
+      </idea>
+      <idea ac="AC4">
+        <description>Test database queries: (1) team count >= 20, (2) conference count >= 6, (3) foreign key integrity, (4) rivalry pairs (Duke+UNC in ACC), (5) downgrade removes only sport='ncaam' data</description>
+        <test_type>Integration</test_type>
+        <test_file>backend/app/tests/test_dimensional_data.py</test_file>
+      </idea>
+    </ideas>
+  </tests>
+</story-context>

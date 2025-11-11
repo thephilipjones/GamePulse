@@ -57,7 +57,7 @@ GamePulse is a real-time sports analytics platform demonstrating modern data eng
 **Technical Stack:**
 - NCAA API client using henrygd/ncaa-api (free, self-hostable, 5 req/sec limit)
 - httpx for async HTTP requests
-- APScheduler for scheduled polling (15-minute intervals)
+- Dagster (self-hosted) for data orchestration with asset-oriented paradigm (15-minute schedules)
 - SQLModel for database operations
 - Alembic migrations for schema management
 
@@ -67,7 +67,7 @@ GamePulse is a real-time sports analytics platform demonstrating modern data eng
 1. [Story 2.1: Create Team and Conference Dimensional Data](./stories/story-2.1-create-dimensional-data.md)
 2. [Story 2.2: Build NCAA API Client with httpx](./stories/story-2.2-build-ncaa-client.md)
 3. [Story 2.3: Create Game SQLModel and Database Migration](./stories/story-2.3-create-game-model.md)
-4. [Story 2.4: Implement Scheduled Polling Worker with APScheduler](./stories/story-2.4-implement-polling-worker.md) - Includes lifecycle integration
+4. [Story 2.4: Implement Dagster Data Orchestration and NCAA Game Asset](./stories/story-2.4-implement-polling-worker.md)
 5. [Story 2.5: Add Retry Logic and Error Handling](./stories/story-2.5-add-retry-logic.md)
 
 ---
