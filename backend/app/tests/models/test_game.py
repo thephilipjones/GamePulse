@@ -13,7 +13,7 @@ from app.models.game import Game
 class TestGameModel:
     """Unit tests for Game model creation and validation."""
 
-    def test_create_game_instance_valid_data(self):
+    def test_create_game_instance_valid_data(self) -> None:
         """Test creating a Game instance with all required fields."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
         game = Game(
@@ -38,7 +38,7 @@ class TestGameModel:
         assert game.game_status == "final"
         assert game.venue == "Cameron Indoor Stadium"
 
-    def test_game_model_serialization(self):
+    def test_game_model_serialization(self) -> None:
         """Test Game works as Pydantic schema for JSON serialization."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
         game = Game(
@@ -64,7 +64,7 @@ class TestGameModel:
         assert hasattr(game, "model_dump")
         assert hasattr(game, "__tablename__")
 
-    def test_game_timestamps_auto_generated(self):
+    def test_game_timestamps_auto_generated(self) -> None:
         """Test created_at and updated_at auto-populated with UTC datetime."""
         before_creation = datetime.utcnow()
         game = Game(
@@ -87,7 +87,7 @@ class TestGameModel:
         # Note: Current implementation uses datetime.utcnow() which returns naive datetimes
         # Future enhancement: Migrate to timezone-aware datetimes using datetime.now(timezone.utc)
 
-    def test_game_default_values(self):
+    def test_game_default_values(self) -> None:
         """Test Game model default values for scores, sport, and game_type."""
         game = Game(
             game_id="ncaam_401234567",
@@ -114,7 +114,7 @@ class TestGameModel:
         assert game.broadcast_network is None
         assert game.attendance is None
 
-    def test_game_field_types(self):
+    def test_game_field_types(self) -> None:
         """Test field type validation for str | None, int, and datetime fields."""
         # Test valid game with all required fields
         game = Game(
@@ -154,7 +154,7 @@ class TestGameModel:
         assert isinstance(game.created_at, datetime)
         assert isinstance(game.updated_at, datetime)
 
-    def test_game_rivalry_factor_optional(self):
+    def test_game_rivalry_factor_optional(self) -> None:
         """Test rivalry_factor field accepts float or None."""
         game = Game(
             game_id="ncaam_401234567",

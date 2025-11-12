@@ -6,6 +6,7 @@ and graceful handling of missing teams.
 """
 
 import logging
+from typing import Any
 
 import pytest
 from sqlmodel import Session, select
@@ -119,7 +120,7 @@ async def test_upsert_preserves_surrogate_key(db: Session) -> None:
     original_team_key = team.team_key
 
     # Sync same team from API multiple times
-    games_data = [
+    games_data: list[dict[str, Any]] = [
         {
             "home": {"id": "356", "names": {"short": "Illinois Fighting Illini"}},
             "away": {"id": "248", "names": {"short": "Houston"}},

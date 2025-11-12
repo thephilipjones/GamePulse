@@ -27,7 +27,7 @@ async def test_dim_team_default_constraints_exist() -> None:
     """
     with Session(engine) as session:
         # Query PostgreSQL information_schema for column defaults
-        result = session.exec(
+        result = session.execute(
             text("""
                 SELECT column_name, column_default
                 FROM information_schema.columns
@@ -65,13 +65,13 @@ async def test_dim_team_insert_without_explicit_values() -> None:
     """
     with Session(engine) as session:
         # Clean up any existing test data
-        session.exec(
+        session.execute(
             text("DELETE FROM dim_team WHERE team_id = 'ncaam_test_migration'")
         )
         session.commit()
 
         # INSERT without team_key, created_at (should use DEFAULTs)
-        session.exec(
+        session.execute(
             text("""
                 INSERT INTO dim_team (team_id, sport, team_name, espn_team_id)
                 VALUES ('ncaam_test_migration', 'ncaam', 'Test Team', '12345')
@@ -80,7 +80,7 @@ async def test_dim_team_insert_without_explicit_values() -> None:
         session.commit()
 
         # Verify row was inserted and DEFAULT values were applied
-        result = session.exec(
+        result = session.execute(
             text("""
                 SELECT team_key, created_at, updated_at, team_name
                 FROM dim_team
@@ -102,7 +102,7 @@ async def test_dim_team_insert_without_explicit_values() -> None:
         assert team_name == "Test Team"
 
         # Clean up
-        session.exec(
+        session.execute(
             text("DELETE FROM dim_team WHERE team_id = 'ncaam_test_migration'")
         )
         session.commit()

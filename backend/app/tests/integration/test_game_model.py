@@ -5,7 +5,9 @@ Tests database insertion, querying, foreign key constraints, indexes,
 and updates with actual PostgreSQL database.
 """
 
+from collections.abc import Generator
 from datetime import datetime, timezone
+from typing import Any
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -17,7 +19,7 @@ from app.models.team import Team, TeamGroup
 
 
 @pytest.fixture(scope="function")
-def db_session():
+def db_session() -> Generator[Session, None, None]:
     """
     Provide a database session with transaction rollback for test isolation.
 
@@ -36,7 +38,7 @@ def db_session():
 
 
 @pytest.fixture(scope="function")
-def sample_teams(db_session: Session):
+def sample_teams(db_session: Session) -> dict[str, Any]:
     """
     Create sample teams for testing Game foreign key relationships.
 
@@ -94,7 +96,9 @@ def sample_teams(db_session: Session):
 class TestGameDatabaseOperations:
     """Integration tests for Game model database operations."""
 
-    def test_insert_game_to_database(self, db_session: Session, sample_teams: dict):
+    def test_insert_game_to_database(
+        self, db_session: Session, sample_teams: dict[str, Any]
+    ) -> None:
         """Test inserting a game with valid foreign keys and querying it back."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
         game = Game(
@@ -136,7 +140,7 @@ class TestGameDatabaseOperations:
         assert retrieved_game.created_at is not None
         assert retrieved_game.updated_at is not None
 
-    def test_foreign_key_constraint_enforcement(self, db_session: Session):
+    def test_foreign_key_constraint_enforcement(self, db_session: Session) -> None:
         """Test that database enforces foreign key constraints on team_id."""
         game = Game(
             game_id="ncaam_401999999",
@@ -158,7 +162,9 @@ class TestGameDatabaseOperations:
         # Rollback the failed transaction
         db_session.rollback()
 
-    def test_query_games_by_date(self, db_session: Session, sample_teams: dict):
+    def test_query_games_by_date(
+        self, db_session: Session, sample_teams: dict[str, Any]
+    ) -> None:
         """Test querying games by date with index usage."""
         # Insert games with different dates
         game1 = Game(
@@ -207,7 +213,9 @@ class TestGameDatabaseOperations:
         game_ids = {game.game_id for game in games_in_range}
         assert game_ids == {"ncaam_401000002", "ncaam_401000003"}
 
-    def test_query_games_by_status(self, db_session: Session, sample_teams: dict):
+    def test_query_games_by_status(
+        self, db_session: Session, sample_teams: dict[str, Any]
+    ) -> None:
         """Test querying games by status with index usage."""
         # Insert games with different statuses
         scheduled_game = Game(
@@ -253,7 +261,9 @@ class TestGameDatabaseOperations:
         assert len(final_games) == 1
         assert final_games[0].game_id == "ncaam_402000003"
 
-    def test_query_games_by_sport(self, db_session: Session, sample_teams: dict):
+    def test_query_games_by_sport(
+        self, db_session: Session, sample_teams: dict[str, Any]
+    ) -> None:
         """Test querying games by sport with index usage."""
         # Insert NCAAM game
         ncaam_game = Game(
@@ -275,7 +285,9 @@ class TestGameDatabaseOperations:
         game_ids = {game.game_id for game in ncaam_games}
         assert "ncaam_403000001" in game_ids
 
-    def test_update_game_scores(self, db_session: Session, sample_teams: dict):
+    def test_update_game_scores(
+        self, db_session: Session, sample_teams: dict[str, Any]
+    ) -> None:
         """Test updating game scores and verifying updated_at timestamp changes."""
         # Insert game with initial scores
         game = Game(
@@ -310,7 +322,7 @@ class TestGameDatabaseOperations:
         # Verify updated_at changed
         assert game.updated_at > original_updated_at
 
-    def test_database_indexes_exist(self, db_session: Session):
+    def test_database_indexes_exist(self, db_session: Session) -> None:
         """Test that all required indexes exist in pg_indexes."""
         # Query PostgreSQL system catalog for games table indexes
         index_query = text(
@@ -322,7 +334,7 @@ class TestGameDatabaseOperations:
             """
         )
 
-        result = db_session.exec(index_query)
+        result = db_session.execute(index_query)
         index_names = [row[0] for row in result]
 
         # Verify required indexes exist
@@ -340,7 +352,9 @@ class TestGameDatabaseOperations:
                 required_index in index_names
             ), f"Missing required index: {required_index}"
 
-    def test_game_type_filtering(self, db_session: Session, sample_teams: dict):
+    def test_game_type_filtering(
+        self, db_session: Session, sample_teams: dict[str, Any]
+    ) -> None:
         """Test querying games by game_type (regular_season vs postseason)."""
         # Insert games with different types
         regular_game = Game(
