@@ -4,27 +4,9 @@ export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
 
-export type ItemCreate = {
-    title: string;
-    description?: (string | null);
-};
-
-export type ItemPublic = {
-    title: string;
-    description?: (string | null);
-    id: string;
-};
-
-export type ItemsPublic = {
-    data: Array<ItemPublic>;
-    count: number;
-};
-
-export type ItemUpdate = {
-    title?: (string | null);
-    description?: (string | null);
-};
-
+/**
+ * Generic message response model.
+ */
 export type Message = {
     message: string;
 };
@@ -34,38 +16,6 @@ export type ValidationError = {
     msg: string;
     type: string;
 };
-
-export type ItemsReadItemsData = {
-    limit?: number;
-    skip?: number;
-};
-
-export type ItemsReadItemsResponse = (ItemsPublic);
-
-export type ItemsCreateItemData = {
-    requestBody: ItemCreate;
-};
-
-export type ItemsCreateItemResponse = (ItemPublic);
-
-export type ItemsReadItemData = {
-    id: string;
-};
-
-export type ItemsReadItemResponse = (ItemPublic);
-
-export type ItemsUpdateItemData = {
-    id: string;
-    requestBody: ItemUpdate;
-};
-
-export type ItemsUpdateItemResponse = (ItemPublic);
-
-export type ItemsDeleteItemData = {
-    id: string;
-};
-
-export type ItemsDeleteItemResponse = (Message);
 
 export type UtilsTestEmailData = {
     emailTo: string;

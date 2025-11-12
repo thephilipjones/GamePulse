@@ -1,10 +1,16 @@
 from fastapi import APIRouter
+from pydantic import BaseModel
 from pydantic.networks import EmailStr
 
-from app.models import Message
 from app.utils import generate_test_email, send_email
 
 router = APIRouter(prefix="/utils", tags=["utils"])
+
+
+class Message(BaseModel):
+    """Generic message response model."""
+
+    message: str
 
 
 @router.post("/test-email/", status_code=201)
