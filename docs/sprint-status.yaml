@@ -58,7 +58,7 @@ development_status:
   2-3-create-game-model: done
   2-3a-refactor-dimensional-model: done
   2-3b-sync-team-metadata: done
-  2-3c-create-dim-date: drafted
+  2-3c-create-dim-date: ready-for-dev
   2-4-implement-polling-worker: drafted
   2-5-add-retry-logic: drafted
   epic-2-retrospective: optional

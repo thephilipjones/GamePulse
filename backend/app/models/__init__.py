@@ -7,6 +7,7 @@ All models must be imported here for migration generation to work.
 
 from sqlmodel import SQLModel
 
+from .dim_date import DimDate
 from .dim_team import DimTeam
 from .fact_game import FactGame
 
@@ -37,6 +38,7 @@ __all__ = [
     "ItemsPublic",
     "Message",
     # Dimensional models (new)
+    "DimDate",
     "DimTeam",
     "FactGame",
     # Legacy models (deprecated, will be removed in future)

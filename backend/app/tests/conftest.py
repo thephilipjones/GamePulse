@@ -7,6 +7,7 @@ from sqlmodel import Session, delete
 from app.core.db import engine
 from app.main import app
 from app.models import Item
+from app.models.dim_date import DimDate
 from app.models.dim_team import DimTeam
 
 
@@ -20,6 +21,7 @@ def db() -> Generator[Session, None, None]:
     """
     with Session(engine) as session:
         # Clean up before test (remove any leftover data)
+        session.execute(delete(DimDate))
         session.execute(delete(DimTeam))
         session.execute(delete(Item))
         session.commit()
@@ -28,6 +30,7 @@ def db() -> Generator[Session, None, None]:
 
         # Clean up after test
         session.rollback()  # Rollback any uncommitted changes
+        session.execute(delete(DimDate))
         session.execute(delete(DimTeam))
         session.execute(delete(Item))
         session.commit()

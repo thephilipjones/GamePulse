@@ -1,0 +1,271 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>3c</storyId>
+    <title>Create and Seed dim_date Dimension Table</title>
+    <status>Drafted</status>
+    <generatedAt>2025-11-12</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>/Users/Philip/dev/gamepulse/docs/stories/2-3c-create-dim-date.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>data engineer building a portfolio project</asA>
+    <iWant>create a date dimension table with NCAA-specific attributes</iWant>
+    <soThat>GamePulse can support time-based analysis (March Madness trends, weekend vs weekday) and demonstrate understanding of Kimball dimensional modeling date dimensions</soThat>
+    <tasks>
+      <task id="1" title="Create Alembic Migration for dim_date Table">
+        - Generate migration skeleton using alembic revision
+        - Define table structure with surrogate key (date_key INTEGER PRIMARY KEY, format: YYYYMMDD)
+        - Add standard Kimball attributes (day_of_week, day_name, month, quarter, year, is_weekend)
+        - Add NCAA-specific attributes (is_march_madness, tournament_round)
+        - Create indexes (full_date unique, year, year+month, is_march_madness)
+        - Add FK constraint from fact_game.game_date_key to dim_date.date_key
+        - Add index on fact_game.game_date_key for join performance
+        - Apply migration using alembic upgrade head
+      </task>
+      <task id="2" title="Create DimDate SQLModel">
+        - Create backend/app/models/dim_date.py
+        - Define class DimDate(SQLModel, table=True) with __tablename__ = "dim_date"
+        - Add all fields matching table schema with proper types
+        - Use date_key: int = Field(primary_key=True) (manually assigned, no auto-increment)
+        - Use full_date: date = Field(unique=True, index=True)
+        - Add to backend/app/models/__init__.py imports
+        - Verify import and type checking pass
+      </task>
+      <task id="3" title="Create Date Dimension Seed Script">
+        - Create backend/app/scripts/__init__.py if missing
+        - Create backend/app/scripts/seed_dim_date.py
+        - Implement calculate_tournament_round() function with hardcoded tournament dates
+        - Implement seed_dim_date() to generate 2024-2026 dates (~1,095 rows)
+        - Calculate all attributes from date using Python datetime
+        - Use batch insert (100 rows per transaction)
+        - Use session.merge() for idempotency
+        - Run via: docker compose exec backend python -m app.scripts.seed_dim_date
+      </task>
+      <task id="4" title="Add Model Tests">
+        - Create backend/app/tests/models/test_dim_date.py
+        - Add test_create_dim_date (basic record creation)
+        - Add test_march_madness_attributes (NCAA attributes)
+        - Add test_query_by_tournament_round (filtering tests)
+        - Run tests: docker compose exec backend uv run pytest app/tests/models/test_dim_date.py -v
+      </task>
+      <task id="4b" title="Add Migration Tests (Critical - Lesson from Story 2-3b)">
+        - Create backend/app/tests/migrations/test_dim_date_migration.py
+        - Add test_dim_date_table_exists
+        - Add test_dim_date_primary_key
+        - Add test_dim_date_unique_constraint
+        - Add test_dim_date_indexes_exist
+        - Add test_dim_date_foreign_key_from_fact_game
+        - Add test_dim_date_columns_not_nullable
+        - Verify migration schema correctness to prevent silent issues
+      </task>
+      <task id="5" title="Update Docker Prestart Script (Optional)">
+        - Optionally add auto-seeding logic to backend/app/backend_pre_start.py
+        - Alternative: Manual seeding via docker exec (recommended for explicit control)
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1" title="dim_date Table with Surrogate Key">
+      GIVEN the dimensional model refactor from Story 2-3a
+      WHEN running the Alembic migration
+      THEN the system SHALL:
+      - Create table: dim_date
+      - Add surrogate key: date_key INTEGER PRIMARY KEY (format: YYYYMMDD, e.g., 20250311)
+      - Add natural key: full_date DATE UNIQUE NOT NULL
+      - Add standard Kimball attributes: day_of_week (1-7), day_name, day_of_month, month, month_name, quarter, year, is_weekend
+      - Add NCAA-specific attributes: is_march_madness, tournament_round (nullable for non-tournament dates)
+      - All fields NOT NULL except tournament_round
+
+      Validation: psql schema inspection, verify empty table after migration, verify surrogate key format
+    </criterion>
+    <criterion id="AC2" title="Date Dimension Seed Script">
+      GIVEN the dim_date table structure exists
+      WHEN running the seed script
+      THEN the system SHALL:
+      - Generate dates from 2024-01-01 to 2026-12-31 (3 years, ~1,095 rows)
+      - Populate all attributes calculated from full_date
+      - Use batch insert (100 rows per transaction)
+      - Script is idempotent using session.merge()
+
+      Validation: Run seed script, verify row count, verify March Madness flags, verify weekend distribution
+    </criterion>
+    <criterion id="AC3" title="NCAA-Specific Attributes Logic">
+      GIVEN the seed script is generating NCAA tournament metadata
+      WHEN calculating is_march_madness and tournament_round
+      THEN the system SHALL apply hardcoded rules:
+      - March Madness date ranges per year (2024: Mar 19-Apr 8, 2025: Mar 18-Apr 7, 2026: Mar 17-Apr 6)
+      - Tournament rounds based on day offsets: First Four (Day 0-1), Round of 64 (Day 2-3), Round of 32 (Day 4-5), Sweet 16 (Day 7-8), Elite 8 (Day 9-10), Final Four (Day 14), Championship (Day 16)
+      - Off days have is_march_madness=TRUE but tournament_round=NULL
+
+      Validation: Query tournament round progression, verify round assignments
+    </criterion>
+    <criterion id="AC4" title="SQLModel Integration">
+      GIVEN the dim_date table exists
+      WHEN creating the SQLModel ORM model
+      THEN the system SHALL:
+      - Create file: backend/app/models/dim_date.py
+      - Define class DimDate(SQLModel, table=True) with __tablename__ = "dim_date"
+      - Use date_key: int = Field(primary_key=True) (manually assigned)
+      - Use full_date: date = Field(unique=True, index=True)
+      - Add to backend/app/models/__init__.py
+
+      Validation: Import test, type checking with mypy, SQLModel introspection
+    </criterion>
+    <criterion id="AC5" title="Foreign Key Integration with fact_game">
+      GIVEN Story 2-3a added game_date_key column to fact_game
+      WHEN the dim_date table is created
+      THEN the system SHALL:
+      - Add FK constraint: fact_game.game_date_key REFERENCES dim_date(date_key)
+      - Allow NULL values initially (Story 2-4 will populate)
+      - Add index on fact_game.game_date_key for join performance
+      - FK is deferrable for insert flexibility
+
+      Validation: Verify FK constraint exists, check constraint details via information_schema
+    </criterion>
+    <criterion id="AC6" title="Query Performance Validation">
+      GIVEN dim_date is populated with ~1,095 rows
+      WHEN executing time-based queries
+      THEN query performance SHALL:
+      - Simple filter by date_key: &lt;5ms
+      - JOIN fact_game to dim_date: &lt;50ms (with proper indexes)
+      - GROUP BY month_name: &lt;10ms
+      - Filter by is_march_madness: &lt;5ms
+
+      Validation: Run EXPLAIN ANALYZE on sample queries, verify index usage
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/architecture.md" title="Architecture Document" section="Data Modeling Approach - Dimensional Schema Design">
+        dim_date table specification with YYYYMMDD surrogate key format, standard Kimball attributes (day_of_week, month, quarter, year), and NCAA-specific attributes (is_march_madness, tournament_round). Design rationale: integer surrogate key for faster JOINs, pre-computed attributes eliminate EXTRACT() calls, seeded 2024-2026 for 1,095 rows.
+      </doc>
+      <doc path="docs/tech-spec-epic-2.md" title="Epic 2 Technical Specification" section="Overview and Objectives">
+        Epic 2 establishes dimensional foundation with Kimball star schema (dim_team, dim_date, fact_game). dim_date provides date dimension for time-based analysis, tournament round filtering, and March Madness queries. Surrogate key pattern with YYYYMMDD format for human readability and join performance.
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-1.2: Dimensional Data">
+        Requirement for dimensional data model supporting team, game, and time-based analysis. NFR-2.1 mandates data accuracy for NCAA tournament metadata. dim_date enables portfolio demonstration of Kimball date dimension best practices.
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown" section="Epic 2: Dimensional Foundation">
+        Epic 2 goal: Establish Kimball-style dimensional modeling with dim_team, dim_date, and fact_game. Value: Portfolio-ready dimensional warehouse patterns with SCD Type 2 readiness and date dimensions. dim_date uses YYYYMMDD surrogate key with NCAA tournament metadata.
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/models/dim_team.py" kind="model" symbol="DimTeam" reason="Reference pattern for dimensional model with surrogate key (team_key), natural key (team_id), SCD Type 2 fields, and proper SQLModel Field usage">
+        Pattern: Surrogate key with autoincrement, natural key with unique index, use of sa_column for advanced types (ARRAY), SCD Type 2 fields (is_current, valid_from, valid_to). DimDate should follow similar structure but WITHOUT autoincrement (manually assigned YYYYMMDD).
+      </artifact>
+      <artifact path="backend/app/models/fact_game.py" kind="model" symbol="FactGame" lines="35-39" reason="FK reference pattern for game_date_key that will point to dim_date.date_key">
+        Current state: game_date_key field exists but FK constraint not yet added (line 35-37: "FK to dim_date.date_key - constraint will be added in Story 2-3c"). This story must add the FK constraint via migration.
+      </artifact>
+      <artifact path="backend/app/tests/migrations/test_dim_team_migration.py" kind="test" symbol="test_dim_team_default_constraints_exist" reason="Migration testing pattern to verify DEFAULT constraints - critical lesson from Story 2-3b">
+        Pattern: Use SQLAlchemy text() query to inspect information_schema.columns for column_default values. For dim_date, verify NOT NULL constraints on all columns except tournament_round. Note: dim_date doesn't need DEFAULT for date_key (manually assigned), but pattern is useful for verifying schema correctness.
+      </artifact>
+      <artifact path="backend/app/alembic/versions/d115685a3652_refactor_to_dimensional_model_with_.py" kind="migration" reason="Reference for creating FK constraints and indexes in Alembic migration">
+        Migration pattern for adding FK constraints with op.create_foreign_key() and indexes with op.create_index(). Story 2-3c must add FK from fact_game.game_date_key to dim_date.date_key.
+      </artifact>
+      <artifact path="backend/app/tests/conftest.py" kind="test_fixture" symbol="db" lines="12-30" reason="Function-scoped test fixture pattern with cleanup">
+        Pattern: Function-scoped fixture with delete() cleanup before/after each test to prevent unique constraint violations. DimDate tests will need similar cleanup pattern for date_key and full_date unique constraints.
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0">ORM for dim_date model</package>
+        <package name="alembic" version=">=1.13.0,<2.0.0">Database migrations</package>
+        <package name="pytest" version=">=8.3.0,<9.0.0">Testing framework</package>
+        <package name="pytest-asyncio" version=">=0.24.0,<1.0.0">Async test support</package>
+        <package name="mypy" version=">=1.11.0,<2.0.0">Type checking</package>
+        <package name="ruff" version=">=0.7.0,<1.0.0">Linting and formatting</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="critical" source="Story 2-3b learnings">
+      ⚠️ CRITICAL: SQLModel Field() defaults do NOT create database-level DEFAULT constraints. For dim_date, date_key is manually assigned (no auto-increment), so no DEFAULT needed. However, be aware that any Field(default_factory=...) only applies at Python ORM level. Migration tests MUST verify schema correctness.
+    </constraint>
+    <constraint type="architecture" source="docs/architecture.md">
+      Surrogate key format must be YYYYMMDD integer (e.g., 20250311 for March 11, 2025). Use int(date.strftime("%Y%m%d")) for generation. Natural key (full_date) must have UNIQUE constraint.
+    </constraint>
+    <constraint type="architecture" source="docs/architecture.md">
+      All Kimball attributes must be pre-computed during seeding. No EXTRACT() or date_trunc() calls in queries. Attributes include: day_of_week (ISO 8601: 1=Monday, 7=Sunday), day_name, month, month_name, quarter, year, is_weekend.
+    </constraint>
+    <constraint type="testing" source="Story 2-3b learnings">
+      Migration tests are MANDATORY to verify table schema, indexes, FK constraints, and NOT NULL constraints. Add test_dim_date_migration.py with 7 tests (table exists, PK, unique constraint, indexes, FK, column nullability, FK from fact_game).
+    </constraint>
+    <constraint type="testing" source="backend/app/tests/conftest.py">
+      Test fixtures must be function-scoped with cleanup to prevent unique constraint violations. Add DimDate cleanup to conftest.py or create isolated fixture for dim_date tests.
+    </constraint>
+    <constraint type="data_integrity" source="Story context">
+      tournament_round is NULLABLE (NULL for non-tournament dates and off days). All other columns are NOT NULL. is_march_madness=TRUE but tournament_round=NULL for travel/rest days during tournament.
+    </constraint>
+    <constraint type="performance" source="docs/architecture.md">
+      FK from fact_game.game_date_key to dim_date.date_key must include index on fact_game.game_date_key for join performance. Target: JOIN queries &lt;50ms.
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="fact_game.game_date_key FK" kind="database_fk" signature="fact_game.game_date_key INTEGER REFERENCES dim_date(date_key)">
+      Foreign key relationship from fact_game table to dim_date table. Migration must add FK constraint with ondelete='SET NULL'. Index on fact_game.game_date_key required for join performance.
+      Path: backend/app/models/fact_game.py lines 35-37
+    </interface>
+    <interface name="DimDate SQLModel" kind="class_interface" signature="class DimDate(SQLModel, table=True)">
+      SQLModel ORM class for dim_date table. Must follow pattern from DimTeam: __tablename__, Field() declarations, proper types. Key difference: date_key is manually assigned (no autoincrement).
+      Path: backend/app/models/dim_date.py (to be created)
+    </interface>
+    <interface name="seed_dim_date()" kind="function_signature" signature="def seed_dim_date() -> None">
+      Seed script entry point that generates 2024-2026 dates and inserts into dim_date table using batch upsert (session.merge() for idempotency). Returns None, prints progress.
+      Path: backend/app/scripts/seed_dim_date.py (to be created)
+    </interface>
+    <interface name="calculate_tournament_round()" kind="function_signature" signature="def calculate_tournament_round(dt: date) -> tuple[bool, str | None]">
+      Utility function that determines if a date is in March Madness and assigns tournament round based on hardcoded year schedules and day offsets. Returns (is_march_madness, tournament_round).
+      Path: backend/app/scripts/seed_dim_date.py (to be created)
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing framework: pytest with pytest-asyncio for async tests. Fixtures defined in backend/app/tests/conftest.py (function-scoped db session with cleanup). Type checking with mypy (strict mode). Linting with ruff. Coverage reporting via pytest-cov. Test organization: backend/app/tests/{category}/test_{module}.py pattern. Migration tests verify schema correctness using SQLAlchemy inspect() and information_schema queries.
+    </standards>
+    <locations>
+      - backend/app/tests/models/test_dim_date.py (model unit tests)
+      - backend/app/tests/migrations/test_dim_date_migration.py (migration schema tests)
+      - Run with: docker compose exec backend uv run pytest {path} -v
+      - Full suite: docker compose exec backend uv run pytest
+    </locations>
+    <ideas>
+      <test id="1" maps_to="AC1, AC4">
+        test_create_dim_date: Basic DimDate record creation with all required fields. Verify date_key format (20250311), full_date value, Kimball attributes correct, NCAA attributes set properly. Covers model instantiation and database insert.
+      </test>
+      <test id="2" maps_to="AC3">
+        test_march_madness_attributes: Create DimDate record for known March Madness date (e.g., Sweet 16). Verify is_march_madness=TRUE, tournament_round="Sweet 16", other attributes correct. Tests NCAA-specific logic.
+      </test>
+      <test id="3" maps_to="AC3">
+        test_query_by_tournament_round: Seed multiple DimDate records with different tournament rounds, then query by tournament_round filter. Verify correct records returned. Tests filtering and indexing.
+      </test>
+      <test id="4" maps_to="AC1">
+        test_dim_date_table_exists (migration): Use SQLAlchemy inspect() to verify dim_date table exists after migration. Critical for catching migration failures.
+      </test>
+      <test id="5" maps_to="AC1">
+        test_dim_date_primary_key (migration): Verify date_key is primary key using inspector.get_pk_constraint(). Ensures correct PK definition.
+      </test>
+      <test id="6" maps_to="AC1">
+        test_dim_date_unique_constraint (migration): Verify full_date has unique constraint using inspector.get_unique_constraints(). Prevents duplicate dates.
+      </test>
+      <test id="7" maps_to="AC1, AC6">
+        test_dim_date_indexes_exist (migration): Verify indexes exist (ix_dim_date_full_date, ix_dim_date_year, ix_dim_date_year_month, ix_dim_date_is_march_madness) using inspector.get_indexes(). Critical for query performance.
+      </test>
+      <test id="8" maps_to="AC5">
+        test_dim_date_foreign_key_from_fact_game (migration): Verify FK constraint from fact_game.game_date_key to dim_date.date_key exists using inspector.get_foreign_keys(). Ensures referential integrity.
+      </test>
+      <test id="9" maps_to="AC1">
+        test_dim_date_columns_not_nullable (migration): Verify all columns except tournament_round are NOT NULL using inspector.get_columns(). Prevents data quality issues.
+      </test>
+      <test id="10" maps_to="AC2">
+        test_seed_script_idempotency: Run seed_dim_date() twice, verify no errors and row count remains ~1,095. Tests session.merge() upsert pattern.
+      </test>
+    </ideas>
+  </tests>
+</story-context>
