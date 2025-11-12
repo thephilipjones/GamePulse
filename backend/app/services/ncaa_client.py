@@ -6,7 +6,7 @@ Designed to be called by Dagster assets for batch data ingestion.
 """
 
 import asyncio
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from typing import Any, cast
 
 import httpx
@@ -14,6 +14,9 @@ import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.models.game import Game
+
+# Python 3.10 compatibility
+UTC = timezone.utc
 
 logger = structlog.get_logger()
 
