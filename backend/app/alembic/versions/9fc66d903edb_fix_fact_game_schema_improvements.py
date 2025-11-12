@@ -8,6 +8,7 @@ Create Date: 2025-11-12 10:12:07.789560
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
+from sqlalchemy import text
 
 
 # revision identifiers, used by Alembic.
@@ -30,23 +31,61 @@ def upgrade():
     6. Fix dim_date.date_key autoincrement (manually assigned YYYYMMDD)
     """
 
-    # Step 1: Add DEFAULT constraint to game_key
-    # This was applied manually in dev but not in migration - must persist for CI/prod
-    op.execute("""
-        ALTER TABLE fact_game
-        ALTER COLUMN game_key
-        SET DEFAULT nextval('games_game_key_seq'::regclass)
-    """)
+    # Step 1 & 2: Normalize sequence state with defensive checks
+    # Check which sequence name exists (if any) and normalize to expected state
+    conn = op.get_bind()
+    result = conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM pg_class
+            WHERE relname = 'games_game_key_seq' AND relkind = 'S'
+        ) as old_exists,
+        EXISTS (
+            SELECT 1 FROM pg_class
+            WHERE relname = 'fact_game_game_key_seq' AND relkind = 'S'
+        ) as new_exists
+    """))
+    row = result.fetchone()
 
-    # Step 2: Rename sequence for naming consistency (table=fact_game, seq should match)
-    op.execute("ALTER SEQUENCE games_game_key_seq RENAME TO fact_game_game_key_seq")
-
-    # Update DEFAULT constraint to use new sequence name
-    op.execute("""
-        ALTER TABLE fact_game
-        ALTER COLUMN game_key
-        SET DEFAULT nextval('fact_game_game_key_seq'::regclass)
-    """)
+    if row[0]:  # old_exists: games_game_key_seq exists
+        # Set DEFAULT to old sequence name first (for clean rename)
+        op.execute("""
+            ALTER TABLE fact_game
+            ALTER COLUMN game_key
+            SET DEFAULT nextval('games_game_key_seq'::regclass)
+        """)
+        # Rename to new consistent name
+        op.execute("ALTER SEQUENCE games_game_key_seq RENAME TO fact_game_game_key_seq")
+        # Update DEFAULT to new name
+        op.execute("""
+            ALTER TABLE fact_game
+            ALTER COLUMN game_key
+            SET DEFAULT nextval('fact_game_game_key_seq'::regclass)
+        """)
+    elif row[1]:  # new_exists: fact_game_game_key_seq already exists
+        # Sequence already has correct name, just ensure DEFAULT is set
+        op.execute("""
+            ALTER TABLE fact_game
+            ALTER COLUMN game_key
+            SET DEFAULT nextval('fact_game_game_key_seq'::regclass)
+        """)
+    else:  # Neither exists: create new sequence with correct name
+        # This shouldn't happen if migrations ran correctly, but handle it defensively
+        op.execute("""
+            CREATE SEQUENCE fact_game_game_key_seq
+            OWNED BY fact_game.game_key
+        """)
+        # Set sequence value to current max + 1
+        op.execute("""
+            SELECT setval('fact_game_game_key_seq',
+                COALESCE((SELECT MAX(game_key) FROM fact_game), 0) + 1,
+                false)
+        """)
+        # Set DEFAULT constraint
+        op.execute("""
+            ALTER TABLE fact_game
+            ALTER COLUMN game_key
+            SET DEFAULT nextval('fact_game_game_key_seq'::regclass)
+        """)
 
     # Step 3: Add composite index on (home_team_key, away_team_key) for team matchup queries
     op.create_index(
@@ -126,24 +165,38 @@ def downgrade():
     # Step 4: Drop composite team index (reverse of Step 3)
     op.drop_index('idx_fact_game_teams', 'fact_game')
 
-    # Step 5: Revert sequence name (reverse of Step 2)
-    # First update DEFAULT to use old name
-    op.execute("""
-        ALTER TABLE fact_game
-        ALTER COLUMN game_key
-        SET DEFAULT nextval('fact_game_game_key_seq'::regclass)
-    """)
+    # Step 5 & 6: Revert sequence to old name with defensive checks
+    conn = op.get_bind()
+    result = conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM pg_class
+            WHERE relname = 'fact_game_game_key_seq' AND relkind = 'S'
+        ) as new_exists,
+        EXISTS (
+            SELECT 1 FROM pg_class
+            WHERE relname = 'games_game_key_seq' AND relkind = 'S'
+        ) as old_exists
+    """))
+    row = result.fetchone()
 
-    # Then rename sequence back
-    op.execute("ALTER SEQUENCE fact_game_game_key_seq RENAME TO games_game_key_seq")
+    if row[0]:  # new_exists: fact_game_game_key_seq exists
+        # Rename back to old name
+        op.execute("ALTER SEQUENCE fact_game_game_key_seq RENAME TO games_game_key_seq")
+        # Update DEFAULT to old name
+        op.execute("""
+            ALTER TABLE fact_game
+            ALTER COLUMN game_key
+            SET DEFAULT nextval('games_game_key_seq'::regclass)
+        """)
+    elif row[1]:  # old_exists: already has old name
+        # Just ensure DEFAULT is set correctly
+        op.execute("""
+            ALTER TABLE fact_game
+            ALTER COLUMN game_key
+            SET DEFAULT nextval('games_game_key_seq'::regclass)
+        """)
+    # If neither exists, downgrade doesn't need to do anything
 
-    # Update DEFAULT to old sequence name
-    op.execute("""
-        ALTER TABLE fact_game
-        ALTER COLUMN game_key
-        SET DEFAULT nextval('games_game_key_seq'::regclass)
-    """)
-
-    # Step 6: Remove DEFAULT constraint (reverse of Step 1)
+    # Finally, remove DEFAULT constraint completely (reverse of Step 1)
     # Note: This will break inserts that don't specify game_key
     op.execute("ALTER TABLE fact_game ALTER COLUMN game_key DROP DEFAULT")
