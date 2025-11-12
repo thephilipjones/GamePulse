@@ -11,9 +11,6 @@ from .dim_date import DimDate
 from .dim_team import DimTeam
 from .fact_game import FactGame
 
-# Legacy models (kept for backward compatibility during migration)
-from .game import Game
-
 # Template demo models (to be removed before production)
 from .item import (
     Item,
@@ -24,7 +21,6 @@ from .item import (
     ItemUpdate,
     Message,
 )
-from .team import Team, TeamGroup, TeamRivalry
 
 __all__ = [
     # SQLModel base
@@ -37,13 +33,8 @@ __all__ = [
     "ItemPublic",
     "ItemsPublic",
     "Message",
-    # Dimensional models (new)
+    # Dimensional models
     "DimDate",
     "DimTeam",
     "FactGame",
-    # Legacy models (deprecated, will be removed in future)
-    "Team",
-    "TeamGroup",
-    "TeamRivalry",
-    "Game",
 ]

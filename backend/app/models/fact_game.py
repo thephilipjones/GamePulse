@@ -8,7 +8,7 @@ Sport-agnostic design supporting basketball, football, and other sports.
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, BigInteger, Column
+from sqlalchemy import DECIMAL, BigInteger, Column, DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -33,8 +33,8 @@ class FactGame(SQLModel, table=True):
 
     # Dimension foreign keys (using surrogate keys)
     game_date_key: int | None = Field(
-        default=None
-    )  # FK to dim_date.date_key - constraint will be added in Story 2-3c
+        default=None, foreign_key="dim_date.date_key"
+    )  # FK to dim_date.date_key
     home_team_key: int = Field(foreign_key="dim_team.team_key")
     away_team_key: int = Field(foreign_key="dim_team.team_key")
 
@@ -57,12 +57,24 @@ class FactGame(SQLModel, table=True):
         default=None, sa_column=Column(DECIMAL(3, 2))
     )  # 1.00 = normal, 1.50 = rivalry
 
-    # Timestamps (context, not measures)
-    game_date: datetime = Field(index=True)
-    game_start_time: datetime | None = None
-    game_end_time: datetime | None = None
+    # Timestamps (context, not measures) - timezone-aware
+    game_date: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), index=True, nullable=False)
+    )
+    game_start_time: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    game_end_time: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
     game_clock: str | None = Field(default=None, max_length=50)
 
-    # Audit timestamps
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Audit timestamps - timezone-aware
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

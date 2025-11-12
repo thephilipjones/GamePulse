@@ -18,7 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.models.game import Game
 from app.services.ncaa_client import (
     NCAAClient,
     fetch_game_details,
@@ -249,25 +248,25 @@ class TestParseGameData:
     """Test parse_game_data() transformation function."""
 
     def test_parse_game_data_success(self) -> None:
-        """AC1: parse_game_data correctly transforms API dict to Game model."""
+        """AC1: parse_game_data correctly transforms API dict to FactGame dict with natural keys."""
         raw_data = SAMPLE_GAME_DETAILS
 
         # Execute
         game = parse_game_data(raw_data)
 
-        # Assert
-        assert isinstance(game, Game)
-        assert game.game_id == "ncaam_401234567"
-        assert game.sport == "ncaam"
-        assert game.home_team_id == "ncaam_150"
-        assert game.away_team_id == "ncaam_62"
-        assert game.home_score == 75
-        assert game.away_score == 72
-        assert game.game_status == "Final"
-        assert game.game_clock == "0:00"
-        assert game.venue == "Cameron Indoor Stadium"
-        assert game.game_type == "regular_season"
-        assert isinstance(game.game_date, datetime)
+        # Assert - returns dict, not model instance (FK resolution happens in Dagster layer)
+        assert isinstance(game, dict)
+        assert game["game_id"] == "ncaam_401234567"
+        assert game["sport"] == "ncaam"
+        assert game["home_team_id"] == "ncaam_150"  # Natural key (string)
+        assert game["away_team_id"] == "ncaam_62"  # Natural key (string)
+        assert game["home_score"] == 75
+        assert game["away_score"] == 72
+        assert game["game_status"] == "Final"
+        assert game["game_clock"] == "0:00"
+        assert game["venue"] == "Cameron Indoor Stadium"
+        assert game["game_type"] == "regular_season"
+        assert isinstance(game["game_date"], datetime)
 
     def test_parse_game_data_missing_fields(self) -> None:
         """Test parse_game_data handles missing optional fields."""
@@ -281,11 +280,11 @@ class TestParseGameData:
         game = parse_game_data(raw_data)
 
         # Assert
-        assert game.game_id == "ncaam_401234567"
-        assert game.game_status is None
-        assert game.game_clock is None
-        assert game.venue is None
-        assert game.game_type == "regular_season"  # default
+        assert game["game_id"] == "ncaam_401234567"
+        assert game["game_status"] is None
+        assert game["game_clock"] is None
+        assert game["venue"] is None
+        assert game["game_type"] == "regular_season"  # default
 
     def test_parse_game_data_date_parsing(self) -> None:
         """Test parse_game_data correctly parses ISO 8601 date strings."""
@@ -298,10 +297,10 @@ class TestParseGameData:
         game = parse_game_data(raw_data)
 
         # Assert
-        assert isinstance(game.game_date, datetime)
-        assert game.game_date.year == 2024
-        assert game.game_date.month == 1
-        assert game.game_date.day == 15
+        assert isinstance(game["game_date"], datetime)
+        assert game["game_date"].year == 2024
+        assert game["game_date"].month == 1
+        assert game["game_date"].day == 15
 
 
 class TestNCAAClientRetryLogic:

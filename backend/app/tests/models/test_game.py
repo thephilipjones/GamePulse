@@ -1,27 +1,28 @@
 """
-Unit tests for Game SQLModel.
+Unit tests for FactGame SQLModel.
 
 Tests model instantiation, serialization, defaults, and field validation
-without database interaction.
+without database interaction using dimensional model.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
-from app.models.game import Game
+from app.models.fact_game import FactGame
 
 
-class TestGameModel:
-    """Unit tests for Game model creation and validation."""
+class TestFactGameModel:
+    """Unit tests for FactGame model creation and validation."""
 
     def test_create_game_instance_valid_data(self) -> None:
-        """Test creating a Game instance with all required fields."""
+        """Test creating a FactGame instance with all required fields."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
-        game = Game(
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=game_date,
-            home_team_id="ncaam_duke",
-            away_team_id="ncaam_unc",
+            home_team_key=1,  # Surrogate key (integer)
+            away_team_key=2,  # Surrogate key (integer)
             home_score=75,
             away_score=72,
             game_status="final",
@@ -31,22 +32,22 @@ class TestGameModel:
         assert game.game_id == "ncaam_401234567"
         assert game.sport == "ncaam"
         assert game.game_date == game_date
-        assert game.home_team_id == "ncaam_duke"
-        assert game.away_team_id == "ncaam_unc"
+        assert game.home_team_key == 1
+        assert game.away_team_key == 2
         assert game.home_score == 75
         assert game.away_score == 72
         assert game.game_status == "final"
         assert game.venue == "Cameron Indoor Stadium"
 
     def test_game_model_serialization(self) -> None:
-        """Test Game works as Pydantic schema for JSON serialization."""
+        """Test FactGame works as Pydantic schema for JSON serialization."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
-        game = Game(
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=game_date,
-            home_team_id="ncaam_duke",
-            away_team_id="ncaam_unc",
+            home_team_key=1,  # Surrogate key (integer)
+            away_team_key=2,  # Surrogate key (integer)
         )
 
         # Test Pydantic model_dump() for JSON serialization
@@ -55,8 +56,8 @@ class TestGameModel:
         assert isinstance(game_dict, dict)
         assert game_dict["game_id"] == "ncaam_401234567"
         assert game_dict["sport"] == "ncaam"
-        assert game_dict["home_team_id"] == "ncaam_duke"
-        assert game_dict["away_team_id"] == "ncaam_unc"
+        assert game_dict["home_team_key"] == 1  # Surrogate key
+        assert game_dict["away_team_key"] == 2  # Surrogate key
         assert game_dict["home_score"] == 0  # Default value
         assert game_dict["away_score"] == 0  # Default value
 
@@ -65,16 +66,16 @@ class TestGameModel:
         assert hasattr(game, "__tablename__")
 
     def test_game_timestamps_auto_generated(self) -> None:
-        """Test created_at and updated_at auto-populated with UTC datetime."""
-        before_creation = datetime.utcnow()
-        game = Game(
+        """Test created_at and updated_at auto-populated with timezone-aware UTC datetime."""
+        before_creation = datetime.now(timezone.utc)
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id="ncaam_duke",
-            away_team_id="ncaam_unc",
+            home_team_key=1,  # Surrogate key (integer)
+            away_team_key=2,  # Surrogate key (integer)
         )
-        after_creation = datetime.utcnow()
+        after_creation = datetime.now(timezone.utc)
 
         # Verify timestamps are auto-populated
         assert game.created_at is not None
@@ -84,17 +85,18 @@ class TestGameModel:
         assert before_creation <= game.created_at <= after_creation
         assert before_creation <= game.updated_at <= after_creation
 
-        # Note: Current implementation uses datetime.utcnow() which returns naive datetimes
-        # Future enhancement: Migrate to timezone-aware datetimes using datetime.now(timezone.utc)
+        # Verify timestamps are timezone-aware
+        assert game.created_at.tzinfo is not None
+        assert game.updated_at.tzinfo is not None
 
     def test_game_default_values(self) -> None:
-        """Test Game model default values for scores, sport, and game_type."""
-        game = Game(
+        """Test FactGame model default values for scores and game_type."""
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id="ncaam_duke",
-            away_team_id="ncaam_unc",
+            home_team_key=1,  # Surrogate key (integer)
+            away_team_key=2,  # Surrogate key (integer)
         )
 
         # Test default score values
@@ -117,12 +119,12 @@ class TestGameModel:
     def test_game_field_types(self) -> None:
         """Test field type validation for str | None, int, and datetime fields."""
         # Test valid game with all required fields
-        game = Game(
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id="ncaam_duke",
-            away_team_id="ncaam_unc",
+            home_team_key=1,  # Surrogate key (integer)
+            away_team_key=2,  # Surrogate key (integer)
         )
 
         # Test str | None fields accept None
@@ -155,21 +157,21 @@ class TestGameModel:
         assert isinstance(game.updated_at, datetime)
 
     def test_game_rivalry_factor_optional(self) -> None:
-        """Test rivalry_factor field accepts float or None."""
-        game = Game(
+        """Test rivalry_factor field accepts Decimal or None."""
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id="ncaam_duke",
-            away_team_id="ncaam_unc",
+            home_team_key=1,  # Surrogate key (integer)
+            away_team_key=2,  # Surrogate key (integer)
         )
 
         # Default should be None
         assert game.rivalry_factor is None
 
-        # Should accept float values
-        game.rivalry_factor = 0.95
-        assert game.rivalry_factor == 0.95
+        # Should accept Decimal values (DECIMAL(3,2) supports 1.00-9.99)
+        game.rivalry_factor = Decimal("1.50")
+        assert game.rivalry_factor == Decimal("1.50")
 
         # Should accept None
         game.rivalry_factor = None

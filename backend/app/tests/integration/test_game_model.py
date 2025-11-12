@@ -1,8 +1,8 @@
 """
-Integration tests for Game model database operations.
+Integration tests for FactGame model database operations.
 
 Tests database insertion, querying, foreign key constraints, indexes,
-and updates with actual PostgreSQL database.
+and updates with actual PostgreSQL database using dimensional model.
 """
 
 from collections.abc import Generator
@@ -14,8 +14,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, text
 
 from app.core.db import engine
-from app.models.game import Game
-from app.models.team import Team, TeamGroup
+from app.models.dim_team import DimTeam
+from app.models.fact_game import FactGame
 
 
 @pytest.fixture(scope="function")
@@ -40,73 +40,70 @@ def db_session() -> Generator[Session, None, None]:
 @pytest.fixture(scope="function")
 def sample_teams(db_session: Session) -> dict[str, Any]:
     """
-    Create sample teams for testing Game foreign key relationships.
+    Create sample teams for testing FactGame foreign key relationships.
 
     Uses Duke and UNC from seeded dimensional data if available,
-    or creates test teams and conference if needed.
+    or creates test DimTeam records. Returns teams with surrogate keys (team_key).
     """
-    # Check if Duke and UNC exist from Story 2.1 seed data
-    duke = db_session.exec(select(Team).where(Team.team_id == "ncaam_duke")).first()
-    unc = db_session.exec(select(Team).where(Team.team_id == "ncaam_unc")).first()
+    # Check if Duke and UNC exist from Story 2.1 seed data (use is_current for SCD Type 2)
+    duke = db_session.exec(
+        select(DimTeam).where(DimTeam.team_id == "ncaam_duke", DimTeam.is_current)
+    ).first()
+    unc = db_session.exec(
+        select(DimTeam).where(DimTeam.team_id == "ncaam_unc", DimTeam.is_current)
+    ).first()
 
     if duke and unc:
         return {"duke": duke, "unc": unc}
 
-    # Create ACC conference if not exists
-    acc = db_session.exec(
-        select(TeamGroup).where(TeamGroup.team_group_id == "acc")
-    ).first()
-    if not acc:
-        acc = TeamGroup(
-            team_group_id="acc",
-            sport="ncaam",
-            team_group_name="Atlantic Coast Conference",
-            group_type="conference",
-        )
-        db_session.add(acc)
-        db_session.commit()
-
     # If seed data not available, create test teams
-    test_duke = Team(
+    # Note: TeamGroup is flattened into team_group_id/team_group_name fields
+    test_duke = DimTeam(
         team_id="ncaam_duke",
         sport="ncaam",
         team_name="Duke Blue Devils",
         team_group_id="acc",
+        team_group_name="Atlantic Coast Conference",  # Flattened from TeamGroup
         primary_color="#003087",
         secondary_color="#FFFFFF",
+        is_current=True,  # SCD Type 2 field
+        aliases=["Duke", "Blue Devils"],  # PostgreSQL ARRAY field
     )
-    test_unc = Team(
+    test_unc = DimTeam(
         team_id="ncaam_unc",
         sport="ncaam",
         team_name="North Carolina Tar Heels",
         team_group_id="acc",
+        team_group_name="Atlantic Coast Conference",  # Flattened from TeamGroup
         primary_color="#7BAFD4",
         secondary_color="#FFFFFF",
+        is_current=True,  # SCD Type 2 field
+        aliases=["UNC", "Tar Heels", "Carolina"],  # PostgreSQL ARRAY field
     )
 
     db_session.add(test_duke)
     db_session.add(test_unc)
     db_session.commit()
-    db_session.refresh(test_duke)
-    db_session.refresh(test_unc)
+    db_session.refresh(test_duke)  # Get auto-generated team_key
+    db_session.refresh(test_unc)  # Get auto-generated team_key
 
     return {"duke": test_duke, "unc": test_unc}
 
 
 class TestGameDatabaseOperations:
-    """Integration tests for Game model database operations."""
+    """Integration tests for FactGame model database operations."""
 
     def test_insert_game_to_database(
         self, db_session: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test inserting a game with valid foreign keys and querying it back."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
-        game = Game(
+        game = FactGame(
             game_id="ncaam_401234567",
             sport="ncaam",
             game_date=game_date,
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,  # Surrogate key (int)
+            away_team_key=sample_teams["unc"].team_key,  # Surrogate key (int)
             home_score=75,
             away_score=72,
             game_status="final",
@@ -117,21 +114,22 @@ class TestGameDatabaseOperations:
         # Insert game
         db_session.add(game)
         db_session.commit()
-        db_session.refresh(game)
+        db_session.refresh(game)  # Get auto-generated game_key
 
-        # Query back by game_id
+        # Query back by natural key (game_id)
         retrieved_game = db_session.exec(
-            select(Game).where(Game.game_id == "ncaam_401234567")
+            select(FactGame).where(FactGame.game_id == "ncaam_401234567")
         ).first()
 
         # Verify all fields persisted correctly
         assert retrieved_game is not None
+        assert retrieved_game.game_key is not None  # Surrogate key auto-generated
         assert retrieved_game.game_id == "ncaam_401234567"
         assert retrieved_game.sport == "ncaam"
-        # Database stores timestamps without timezone, so compare as naive datetimes
-        assert retrieved_game.game_date.replace(tzinfo=timezone.utc) == game_date
-        assert retrieved_game.home_team_id == sample_teams["duke"].team_id
-        assert retrieved_game.away_team_id == sample_teams["unc"].team_id
+        # Database now stores timezone-aware timestamps (timestamptz)
+        assert retrieved_game.game_date == game_date
+        assert retrieved_game.home_team_key == sample_teams["duke"].team_key
+        assert retrieved_game.away_team_key == sample_teams["unc"].team_key
         assert retrieved_game.home_score == 75
         assert retrieved_game.away_score == 72
         assert retrieved_game.game_status == "final"
@@ -141,13 +139,13 @@ class TestGameDatabaseOperations:
         assert retrieved_game.updated_at is not None
 
     def test_foreign_key_constraint_enforcement(self, db_session: Session) -> None:
-        """Test that database enforces foreign key constraints on team_id."""
-        game = Game(
+        """Test that database enforces foreign key constraints on team_key."""
+        game = FactGame(
             game_id="ncaam_401999999",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id="ncaam_fake_team",  # Invalid team_id
-            away_team_id="ncaam_another_fake_team",  # Invalid team_id
+            home_team_key=999999,  # Invalid team_key (surrogate key not in dim_team)
+            away_team_key=999998,  # Invalid team_key (surrogate key not in dim_team)
         )
 
         db_session.add(game)
@@ -167,26 +165,26 @@ class TestGameDatabaseOperations:
     ) -> None:
         """Test querying games by date with index usage."""
         # Insert games with different dates
-        game1 = Game(
+        game1 = FactGame(
             game_id="ncaam_401000001",
             sport="ncaam",
             game_date=datetime(2024, 3, 10, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
         )
-        game2 = Game(
+        game2 = FactGame(
             game_id="ncaam_401000002",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
         )
-        game3 = Game(
+        game3 = FactGame(
             game_id="ncaam_401000003",
             sport="ncaam",
             game_date=datetime(2024, 3, 20, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
         )
 
         db_session.add(game1)
@@ -196,7 +194,9 @@ class TestGameDatabaseOperations:
 
         # Query games on specific date
         target_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
-        games = db_session.exec(select(Game).where(Game.game_date == target_date)).all()
+        games = db_session.exec(
+            select(FactGame).where(FactGame.game_date == target_date)
+        ).all()
 
         # Verify correct filtering
         assert len(games) == 1
@@ -206,7 +206,9 @@ class TestGameDatabaseOperations:
         start_date = datetime(2024, 3, 12, 0, 0, 0, tzinfo=timezone.utc)
         end_date = datetime(2024, 3, 22, 0, 0, 0, tzinfo=timezone.utc)
         games_in_range = db_session.exec(
-            select(Game).where(Game.game_date >= start_date, Game.game_date <= end_date)
+            select(FactGame).where(
+                FactGame.game_date >= start_date, FactGame.game_date <= end_date
+            )
         ).all()
 
         assert len(games_in_range) == 2
@@ -218,28 +220,28 @@ class TestGameDatabaseOperations:
     ) -> None:
         """Test querying games by status with index usage."""
         # Insert games with different statuses
-        scheduled_game = Game(
+        scheduled_game = FactGame(
             game_id="ncaam_402000001",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
             game_status="scheduled",
         )
-        live_game = Game(
+        live_game = FactGame(
             game_id="ncaam_402000002",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 20, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
             game_status="live",
         )
-        final_game = Game(
+        final_game = FactGame(
             game_id="ncaam_402000003",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 21, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
             game_status="final",
         )
 
@@ -250,13 +252,13 @@ class TestGameDatabaseOperations:
 
         # Query by status
         live_games = db_session.exec(
-            select(Game).where(Game.game_status == "live")
+            select(FactGame).where(FactGame.game_status == "live")
         ).all()
         assert len(live_games) == 1
         assert live_games[0].game_id == "ncaam_402000002"
 
         final_games = db_session.exec(
-            select(Game).where(Game.game_status == "final")
+            select(FactGame).where(FactGame.game_status == "final")
         ).all()
         assert len(final_games) == 1
         assert final_games[0].game_id == "ncaam_402000003"
@@ -266,19 +268,21 @@ class TestGameDatabaseOperations:
     ) -> None:
         """Test querying games by sport with index usage."""
         # Insert NCAAM game
-        ncaam_game = Game(
+        ncaam_game = FactGame(
             game_id="ncaam_403000001",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
         )
 
         db_session.add(ncaam_game)
         db_session.commit()
 
         # Query by sport
-        ncaam_games = db_session.exec(select(Game).where(Game.sport == "ncaam")).all()
+        ncaam_games = db_session.exec(
+            select(FactGame).where(FactGame.sport == "ncaam")
+        ).all()
 
         # Should find at least the one we just inserted
         assert len(ncaam_games) >= 1
@@ -290,12 +294,12 @@ class TestGameDatabaseOperations:
     ) -> None:
         """Test updating game scores and verifying updated_at timestamp changes."""
         # Insert game with initial scores
-        game = Game(
+        game = FactGame(
             game_id="ncaam_404000001",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
             home_score=0,
             away_score=0,
             game_status="live",
@@ -324,12 +328,12 @@ class TestGameDatabaseOperations:
 
     def test_database_indexes_exist(self, db_session: Session) -> None:
         """Test that all required indexes exist in pg_indexes."""
-        # Query PostgreSQL system catalog for games table indexes
+        # Query PostgreSQL system catalog for fact_game table indexes
         index_query = text(
             """
             SELECT indexname
             FROM pg_indexes
-            WHERE tablename = 'games'
+            WHERE tablename = 'fact_game'
             ORDER BY indexname
             """
         )
@@ -337,14 +341,15 @@ class TestGameDatabaseOperations:
         result = db_session.execute(index_query)
         index_names = [row[0] for row in result]
 
-        # Verify required indexes exist
+        # Verify required indexes exist (dimensional model indexes)
         required_indexes = [
-            "games_pkey",  # Primary key index
-            "ix_games_game_date",  # Date index
-            "ix_games_game_status",  # Status index
-            "ix_games_sport",  # Sport index
-            "ix_games_game_type",  # Game type index
-            "idx_games_teams",  # Composite teams index
+            "fact_game_pkey",  # Primary key index (game_key)
+            "fact_game_game_id_key",  # Natural key UNIQUE constraint index
+            "idx_fact_game_teams",  # Composite team index (home_team_key, away_team_key)
+            "ix_fact_game_game_date",  # Date index
+            "ix_fact_game_game_status",  # Status index
+            "ix_fact_game_sport",  # Sport index
+            "ix_fact_game_game_type",  # Game type index
         ]
 
         for required_index in required_indexes:
@@ -355,20 +360,20 @@ class TestGameDatabaseOperations:
     ) -> None:
         """Test querying games by game_type (regular_season vs postseason)."""
         # Insert games with different types
-        regular_game = Game(
+        regular_game = FactGame(
             game_id="ncaam_405000001",
             sport="ncaam",
             game_date=datetime(2024, 2, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
             game_type="regular_season",
         )
-        postseason_game = Game(
+        postseason_game = FactGame(
             game_id="ncaam_405000002",
             sport="ncaam",
             game_date=datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc),
-            home_team_id=sample_teams["duke"].team_id,
-            away_team_id=sample_teams["unc"].team_id,
+            home_team_key=sample_teams["duke"].team_key,
+            away_team_key=sample_teams["unc"].team_key,
             game_type="postseason",
         )
 
@@ -378,7 +383,7 @@ class TestGameDatabaseOperations:
 
         # Query by game_type
         postseason_games = db_session.exec(
-            select(Game).where(Game.game_type == "postseason")
+            select(FactGame).where(FactGame.game_type == "postseason")
         ).all()
 
         assert len(postseason_games) >= 1

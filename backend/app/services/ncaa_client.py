@@ -13,8 +13,6 @@ import httpx
 import structlog
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from app.models.game import Game
-
 # Python 3.10 compatibility
 UTC = timezone.utc
 
@@ -195,17 +193,23 @@ class NCAAClient:
             return {}
 
 
-def parse_game_data(raw_data: dict[str, Any]) -> Game:
+def parse_game_data(raw_data: dict[str, Any]) -> dict[str, Any]:
     """
-    Transform NCAA API response dictionary to Game SQLModel schema.
+    Transform NCAA API response dictionary to FactGame schema (as dict).
 
-    Maps API fields (game ID, teams, scores, status, clock) to Game model fields.
+    Maps API fields (game ID, teams, scores, status, clock) to FactGame fields.
+    Returns dictionary with natural keys (team_id strings) rather than surrogate
+    keys (team_key integers), since FK resolution requires database access.
+
+    The calling code (Dagster asset) is responsible for resolving team_id → team_key
+    before inserting into the database.
 
     Args:
         raw_data: Raw game dictionary from NCAA API.
 
     Returns:
-        Game model instance ready for database insertion.
+        Dictionary with parsed game data using natural keys.
+        Includes 'home_team_id' and 'away_team_id' (strings) for FK resolution.
 
     Example API structure:
         {
@@ -259,20 +263,22 @@ def parse_game_data(raw_data: dict[str, Any]) -> Game:
         status=game_status,
     )
 
-    return Game(
-        game_id=game_id,
-        sport="ncaam",
-        game_date=game_date,
-        home_team_id=home_team_id,
-        away_team_id=away_team_id,
-        home_score=home_score,
-        away_score=away_score,
-        game_status=game_status,
-        game_clock=game_clock,
-        game_start_time=game_start_time,
-        venue=venue,
-        game_type=game_type,
-    )
+    # Return dict with natural keys (team_id strings)
+    # Calling code must resolve team_id → team_key (surrogate keys) before DB insert
+    return {
+        "game_id": game_id,
+        "sport": "ncaam",
+        "game_date": game_date,
+        "home_team_id": home_team_id,  # Natural key (string) - needs FK resolution
+        "away_team_id": away_team_id,  # Natural key (string) - needs FK resolution
+        "home_score": home_score,
+        "away_score": away_score,
+        "game_status": game_status,
+        "game_clock": game_clock,
+        "game_start_time": game_start_time,
+        "venue": venue,
+        "game_type": game_type,
+    }
 
 
 # Module-level wrapper functions for AC1 compliance
@@ -347,16 +353,16 @@ async def _test_client() -> None:
             print("Testing parse_game_data on first game...")
             first_game = games[0]
             parsed = parse_game_data(first_game)
-            print("\nParsed Game Model:")
-            print(f"  game_id: {parsed.game_id}")
-            print(f"  sport: {parsed.sport}")
-            print(f"  home_team_id: {parsed.home_team_id}")
-            print(f"  away_team_id: {parsed.away_team_id}")
-            print(f"  home_score: {parsed.home_score}")
-            print(f"  away_score: {parsed.away_score}")
-            print(f"  game_status: {parsed.game_status}")
-            print(f"  game_clock: {parsed.game_clock}")
-            print(f"  venue: {parsed.venue}")
+            print("\nParsed Game Data:")
+            print(f"  game_id: {parsed['game_id']}")
+            print(f"  sport: {parsed['sport']}")
+            print(f"  home_team_id: {parsed['home_team_id']}")
+            print(f"  away_team_id: {parsed['away_team_id']}")
+            print(f"  home_score: {parsed['home_score']}")
+            print(f"  away_score: {parsed['away_score']}")
+            print(f"  game_status: {parsed['game_status']}")
+            print(f"  game_clock: {parsed['game_clock']}")
+            print(f"  venue: {parsed['venue']}")
 
 
 if __name__ == "__main__":
