@@ -348,9 +348,7 @@ class TestGameDatabaseOperations:
         ]
 
         for required_index in required_indexes:
-            assert (
-                required_index in index_names
-            ), f"Missing required index: {required_index}"
+            assert required_index in index_names, f"Missing: {required_index}"
 
     def test_game_type_filtering(
         self, db_session: Session, sample_teams: dict[str, Any]
