@@ -76,9 +76,9 @@ async def test_dim_date_indexes_exist() -> None:
         "ix_dim_date_is_march_madness",
     }
 
-    assert expected_indexes.issubset(
-        index_names
-    ), f"Missing indexes: {expected_indexes - index_names}"
+    assert expected_indexes.issubset(index_names), (
+        f"Missing indexes: {expected_indexes - index_names}"
+    )
 
     # Verify composite index on year+month
     year_month_index = next(
@@ -148,9 +148,9 @@ async def test_dim_date_columns_not_nullable() -> None:
 
         # tournament_round should be nullable
         assert "tournament_round" in nullability
-        assert (
-            nullability["tournament_round"] == "YES"
-        ), "tournament_round should be nullable"
+        assert nullability["tournament_round"] == "YES", (
+            "tournament_round should be nullable"
+        )
 
 
 @pytest.mark.asyncio
@@ -177,9 +177,9 @@ async def test_dim_date_insert_without_sequence() -> None:
         row = result.fetchone()
 
         assert row is not None, "date_key column should exist"
-        assert (
-            row[1] is None
-        ), "date_key should NOT have DEFAULT constraint (manually assigned)"
+        assert row[1] is None, (
+            "date_key should NOT have DEFAULT constraint (manually assigned)"
+        )
 
         # Verify INSERT without date_key fails (proves no autoincrement)
         session.execute(text("BEGIN"))
