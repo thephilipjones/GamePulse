@@ -5,7 +5,7 @@ Sport-agnostic fact table supporting basketball, football, and other sports.
 Optimized for BI tool queries with indexed fields (sport, date, status, type).
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -40,5 +40,5 @@ class Game(SQLModel, table=True):
     )
     broadcast_network: str | None = None
     attendance: int | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)

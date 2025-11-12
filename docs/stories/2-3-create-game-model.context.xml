@@ -1,0 +1,251 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>3</storyId>
+    <title>Create Game SQLModel and Database Migration</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-11</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/2-3-create-game-model.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a developer</asA>
+    <iWant>to create the Game SQLModel with proper indexes and database migration</iWant>
+    <soThat>I can store and query NCAA game data efficiently in the database</soThat>
+    <tasks>
+      <task id="2.3.1" ac="#1, #2">
+        <title>Create Game SQLModel</title>
+        <description>Create backend/app/models/game.py with Game SQLModel class including all fields from Epic 2 tech spec, foreign keys to teams table, and indexes on game_date, game_status, sport, and game_type</description>
+      </task>
+      <task id="2.3.2" ac="#3">
+        <title>Generate and Review Alembic Migration</title>
+        <description>Run alembic revision --autogenerate to create migration for games table, review for correctness including all columns, foreign key constraints, and indexes</description>
+      </task>
+      <task id="2.3.3" ac="#3">
+        <title>Apply Migration and Verify Database Schema</title>
+        <description>Apply migration with alembic upgrade head, verify table exists with correct schema and indexes using psql</description>
+      </task>
+      <task id="2.3.4" ac="#4">
+        <title>Test Model Creation and Validation</title>
+        <description>Write unit tests in backend/app/tests/models/test_game.py for model creation, validation, serialization, default values, and foreign key constraints</description>
+      </task>
+      <task id="2.3.5" ac="#4">
+        <title>Integration Test with Database</title>
+        <description>Write integration tests in backend/app/tests/integration/test_game_model.py for database operations including insert, query, update, and index usage verification</description>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1" title="Game SQLModel Created">
+      <requirement>File created: backend/app/models/game.py</requirement>
+      <requirement>Game SQLModel class includes all required fields from Epic 2 tech spec</requirement>
+      <requirement>Foreign keys defined: home_team_id, away_team_id reference teams.team_id</requirement>
+      <requirement>SQLModel includes proper type hints and Field definitions</requirement>
+      <requirement>Model follows FastAPI/SQLModel patterns from CLAUDE.md</requirement>
+    </criterion>
+    <criterion id="AC2" title="Database Indexes Added">
+      <requirement>Index created on game_date for date-based queries (GET /api/games/today)</requirement>
+      <requirement>Index created on game_status for status filtering (live, scheduled, final)</requirement>
+      <requirement>Index created on sport for multi-sport support</requirement>
+      <requirement>Index created on game_type for tournament classification</requirement>
+    </criterion>
+    <criterion id="AC3" title="Alembic Migration Generated and Applied">
+      <requirement>Alembic migration generated with proper message</requirement>
+      <requirement>Migration file created in backend/app/alembic/versions/</requirement>
+      <requirement>Migration reviewed for correctness (no unintended changes)</requirement>
+      <requirement>Migration applied: alembic upgrade head succeeds</requirement>
+      <requirement>Database table exists: \d games shows correct schema with indexes</requirement>
+    </criterion>
+    <criterion id="AC4" title="Model Validation and Testing">
+      <requirement>Can create Game instance with valid data</requirement>
+      <requirement>Foreign key constraint enforced (invalid team_id raises error)</requirement>
+      <requirement>Can query games using SQLModel ORM patterns</requirement>
+      <requirement>Model serializes correctly (SQLModel works as Pydantic schema)</requirement>
+      <requirement>Test game insertion successful in test database</requirement>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <artifact>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Data Models and Contracts - Game SQLModel Schema</section>
+        <snippet>Complete Game SQLModel schema specification with all required fields, foreign keys to teams table, indexes on sport/game_date/game_status/game_type, rivalry_factor for excitement scoring, and timestamps. Schema includes game_id (primary key), multi-sport support, live score tracking, game status tracking, and optional enrichment fields (broadcast_network, attendance).</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Acceptance Criteria - AC-3 Game Model Requirements</section>
+        <snippet>Detailed acceptance criteria for Game model including file creation at backend/app/models/game.py, foreign key constraints to teams.team_id, required indexes, Alembic migration generation and application, database verification commands, and foreign key enforcement testing.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>Backend Structure - Models</section>
+        <snippet>Game SQLModel defined at backend/app/models/game.py alongside team.py, reddit.py, excitement.py, and betting.py. Part of Epic 2 Game Data Ingestion components.</snippet>
+      </artifact>
+      <artifact>
+        <path>CLAUDE.md</path>
+        <title>Project Development Guide</title>
+        <section>Essential Development Commands - Database migrations</section>
+        <snippet>Alembic migration workflow: docker compose exec backend bash, alembic revision --autogenerate -m "Description", alembic upgrade head. All schema changes must go through Alembic migrations.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/stories/2-2-build-ncaa-client.md</path>
+        <title>Story 2.2: Build NCAA Client</title>
+        <section>Senior Developer Review - SQLModel Pattern Established</section>
+        <snippet>Story 2.2 established pattern of using SQLModel models directly as Pydantic schemas (no separate GameCreate/GameUpdate/GameResponse schemas needed). SQLModel provides automatic serialization for FastAPI endpoints, reducing code duplication.</snippet>
+      </artifact>
+      <artifact>
+        <path>docs/stories/2-1-create-dimensional-data.md</path>
+        <title>Story 2.1: Create Dimensional Data</title>
+        <section>Teams Table Reference</section>
+        <snippet>Teams table created with team_id as primary key. Game model foreign keys (home_team_id, away_team_id) reference teams.team_id. Dimensional data seeded includes Duke, UNC, and other ACC/Big Ten teams for testing.</snippet>
+      </artifact>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/models/game.py</path>
+        <kind>model</kind>
+        <symbol>Game</symbol>
+        <lines>13-45</lines>
+        <reason>✅ ALREADY EXISTS! Game SQLModel with all required fields, foreign keys to teams table, and indexes. Uses datetime.now(UTC) for timestamps. Status: Model complete, but tests missing.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/team.py</path>
+        <kind>model</kind>
+        <symbol>Team, TeamGroup, TeamRivalry</symbol>
+        <lines>14-80</lines>
+        <reason>Reference pattern for SQLModel structure - Team model shows proper use of Field, foreign keys, indexes, ARRAY columns, and datetime timestamps. Game model follows same patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/ncaa_client.py</path>
+        <kind>service</kind>
+        <symbol>NCAAClient</symbol>
+        <lines>21-80</lines>
+        <reason>Data source for Game model. Imports Game model (line 16), fetches game data from NCAA API. Game model will be populated by Dagster assets using this client.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/29a82f0b5d5b_create_multi_sport_schema.py</path>
+        <kind>migration</kind>
+        <symbol>upgrade</symbol>
+        <lines>49-76</lines>
+        <reason>✅ ALREADY APPLIED! Migration creating games table with all indexes (game_date, game_status, game_type, sport) and foreign key constraints to teams table. Games table exists in database.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/conftest.py</path>
+        <kind>test</kind>
+        <symbol>db, client</symbol>
+        <lines>12-24</lines>
+        <reason>Test fixtures pattern for pytest - provides db Session fixture and TestClient fixture. Use as reference for creating test_game.py and test_game_model.py.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/services/test_ncaa_client.py</path>
+        <kind>test</kind>
+        <symbol>test_fetch_todays_games, test_parse_game_data</symbol>
+        <lines>N/A</lines>
+        <reason>Testing pattern reference for Game model tests - shows httpx mocking, async test patterns, pytest fixtures. Created in Story 2.2.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="sqlmodel" purpose="ORM and Pydantic validation - used for Game model definition" />
+        <package name="alembic" purpose="Database migrations - already applied for games table" />
+        <package name="pytest" purpose="Testing framework - needed for unit and integration tests" />
+        <package name="httpx" purpose="Async HTTP client - already added in Story 2.2 for NCAA client" />
+        <package name="tenacity" purpose="Retry logic - already added in Story 2.2" />
+      </python>
+      <database>
+        <table name="teams" status="exists" purpose="Referenced by Game.home_team_id and Game.away_team_id foreign keys" />
+        <table name="team_groups" status="exists" purpose="Conference/division data for rivalry detection" />
+        <table name="games" status="exists" purpose="✅ Main table for this story - ALREADY CREATED with all indexes and constraints" />
+      </database>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="architecture">SQLModel Pattern: Use Game model directly as Pydantic schema (no separate GameCreate/GameUpdate schemas). Established in Story 2.2.</constraint>
+    <constraint type="architecture">Timestamps: Use datetime.now(UTC) for created_at and updated_at (not datetime.utcnow which is deprecated)</constraint>
+    <constraint type="database">All schema changes MUST go through Alembic migrations - never use SQLModel.metadata.create_all()</constraint>
+    <constraint type="database">Foreign key constraints required: home_team_id and away_team_id must reference teams.team_id</constraint>
+    <constraint type="database">Required indexes: game_date (for date queries), game_status (for status filtering), sport (multi-sport), game_type (tournament classification)</constraint>
+    <constraint type="testing">Create test directories: backend/app/tests/models/ and backend/app/tests/integration/ (currently do not exist)</constraint>
+    <constraint type="testing">Follow pytest patterns from conftest.py - use db Session fixture and TestClient fixture</constraint>
+    <constraint type="testing">Test foreign key enforcement by attempting to insert game with invalid team_id</constraint>
+    <constraint type="code-quality">Type hints required for all fields using Python 3.10+ syntax (str | None instead of Optional[str])</constraint>
+    <constraint type="code-quality">Use absolute imports (from app.models.game import Game) not relative imports</constraint>
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>Game SQLModel</name>
+      <kind>ORM Model / Pydantic Schema</kind>
+      <signature>class Game(SQLModel, table=True)</signature>
+      <path>backend/app/models/game.py</path>
+      <usage>Used by NCAAClient service for game data ingestion, Dagster assets for orchestration, and future API endpoints for game queries</usage>
+    </interface>
+    <interface>
+      <name>teams.team_id Foreign Key</name>
+      <kind>Database Constraint</kind>
+      <signature>home_team_id: str = Field(foreign_key="teams.team_id"), away_team_id: str = Field(foreign_key="teams.team_id")</signature>
+      <path>backend/app/models/game.py</path>
+      <usage>Enforces referential integrity - games cannot exist without valid teams in teams table</usage>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+      Testing framework: pytest with coverage reporting (uv run pytest -v, uv run coverage run -m pytest).
+      Test organization: Mirror app structure - backend/app/tests/models/ for unit tests, backend/app/tests/integration/ for integration tests.
+      Fixtures: Use conftest.py for shared fixtures (db Session, TestClient).
+      Database testing: Use test database (automatically created/torn down by pytest fixtures).
+      Async testing: Use pytest-asyncio for async test functions.
+      Mocking: Use httpx mocking for external API calls (reference: test_ncaa_client.py).
+      Coverage target: Story 2.2 achieved comprehensive test coverage with 15+ test cases covering success paths, error handling, and edge cases.
+    </standards>
+    <locations>
+      <location>backend/app/tests/models/test_game.py</location>
+      <location>backend/app/tests/integration/test_game_model.py</location>
+      <location>backend/app/tests/conftest.py (update with Game model fixtures)</location>
+    </locations>
+    <ideas>
+      <test ac="AC1, AC4" priority="high">
+        <name>test_create_game_instance_valid_data</name>
+        <description>Create Game instance with all required fields, verify all fields set correctly, check default values (home_score=0, sport="ncaam")</description>
+      </test>
+      <test ac="AC1, AC4" priority="high">
+        <name>test_game_model_serialization</name>
+        <description>Verify Game model works as Pydantic schema - create instance, call model_dump(), verify JSON serialization</description>
+      </test>
+      <test ac="AC4" priority="high">
+        <name>test_game_timestamps_auto_generated</name>
+        <description>Create Game instance, verify created_at and updated_at are auto-populated with UTC datetime</description>
+      </test>
+      <test ac="AC4" priority="high">
+        <name>test_foreign_key_constraint_enforcement</name>
+        <description>Integration test: Attempt to insert game with invalid team_id (e.g., "ncaam_fake_team"), verify IntegrityError raised</description>
+      </test>
+      <test ac="AC4" priority="high">
+        <name>test_insert_game_to_database</name>
+        <description>Integration test: Insert valid game with existing team_ids (from seeded data), verify insertion succeeds, query back by game_id</description>
+      </test>
+      <test ac="AC4" priority="medium">
+        <name>test_query_games_by_date</name>
+        <description>Integration test: Insert multiple games with different dates, query by game_date, verify index usage and correct filtering</description>
+      </test>
+      <test ac="AC4" priority="medium">
+        <name>test_query_games_by_status</name>
+        <description>Integration test: Insert games with different statuses ("scheduled", "live", "final"), query by game_status, verify filtering works</description>
+      </test>
+      <test ac="AC4" priority="medium">
+        <name>test_update_game_scores</name>
+        <description>Integration test: Insert game, update home_score and away_score, verify upsert pattern works correctly</description>
+      </test>
+      <test ac="AC2" priority="low">
+        <name>test_database_indexes_exist</name>
+        <description>Integration test: Query pg_indexes table, verify ix_games_game_date, ix_games_game_status, ix_games_sport, ix_games_game_type indexes exist</description>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
