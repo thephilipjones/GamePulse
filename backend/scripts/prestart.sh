@@ -19,10 +19,11 @@ if [ ! -z "$DAGSTER_POSTGRES_DB" ] && [ "$DAGSTER_POSTGRES_DB" != "$POSTGRES_DB"
     echo "==================================================================="
 
     # Create dagster database if it doesn't exist
-    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_SERVER -U $POSTGRES_USER -d postgres -c "
-        SELECT 'CREATE DATABASE $DAGSTER_POSTGRES_DB'
-        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$DAGSTER_POSTGRES_DB')\gexec
-    " || echo "Database $DAGSTER_POSTGRES_DB may already exist, continuing..."
+    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_SERVER -U $POSTGRES_USER -d postgres -tc \
+        "SELECT 1 FROM pg_database WHERE datname = '$DAGSTER_POSTGRES_DB'" | grep -q 1 || \
+    PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_SERVER -U $POSTGRES_USER -d postgres -c \
+        "CREATE DATABASE $DAGSTER_POSTGRES_DB" || \
+    echo "Database $DAGSTER_POSTGRES_DB may already exist, continuing..."
 
     # Run Dagster schema migration
     echo "Running Dagster instance migration..."
