@@ -52,6 +52,9 @@ def upgrade():
     # Make team_key NOT NULL
     op.alter_column('teams', 'team_key', nullable=False)
 
+    # Set DEFAULT constraint for team_key to use sequence (fixes Story 2-3b batch upsert)
+    op.execute("ALTER TABLE teams ALTER COLUMN team_key SET DEFAULT nextval('teams_team_key_seq'::regclass)")
+
     # Step 2: Flatten team_groups into teams (add team_group_name column)
     op.add_column('teams', sa.Column('team_group_name', sa.VARCHAR(100), nullable=True))
 
@@ -80,6 +83,10 @@ def upgrade():
     op.drop_constraint('teams_pkey', 'dim_team', type_='primary')
     op.create_primary_key('dim_team_pkey', 'dim_team', ['team_key'])
     op.create_unique_constraint('dim_team_team_id_key', 'dim_team', ['team_id'])
+
+    # Set DEFAULT constraints for audit timestamps (fixes Story 2-3b batch upsert)
+    op.execute("ALTER TABLE dim_team ALTER COLUMN created_at SET DEFAULT NOW()")
+    op.execute("ALTER TABLE dim_team ALTER COLUMN updated_at SET DEFAULT NOW()")
 
     # Step 5: Add game_key to games table
     op.add_column('games', sa.Column('game_key', sa.BigInteger(), autoincrement=True, nullable=True))
@@ -233,6 +240,11 @@ def downgrade():
     op.drop_column('teams', 'team_group_name')
 
     # Step 11: Remove SCD Type 2 fields
+    # Drop DEFAULT constraints before dropping columns (reverse of upgrade)
+    op.execute("ALTER TABLE teams ALTER COLUMN team_key DROP DEFAULT")
+    op.execute("ALTER TABLE teams ALTER COLUMN created_at DROP DEFAULT")
+    op.execute("ALTER TABLE teams ALTER COLUMN updated_at DROP DEFAULT")
+
     op.drop_column('teams', 'valid_to')
     op.drop_column('teams', 'valid_from')
     op.drop_column('teams', 'is_current')

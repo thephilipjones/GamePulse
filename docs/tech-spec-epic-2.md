@@ -1152,3 +1152,65 @@ pytest backend/app/tests/e2e/ -v -m e2e
 # Coverage report
 pytest --cov=app --cov-report=html
 ```
+
+---
+
+## Post-Review Follow-ups
+
+This section tracks action items identified during code reviews for Epic 2 stories.
+
+### Story 2-3b: Sync Team Metadata from NCAA API
+
+**Code Review Date**: 2025-11-12
+**Reviewer**: Philip (AI Senior Developer Review)
+**Fix Date**: 2025-11-12
+**Developer**: Amelia (Dev Agent)
+**Status**: ✅ **COMPLETE** - All issues resolved, all tests passing
+
+**All Issues Resolved**:
+
+1. ✅ **[HIGH]** Migration `d115685a3652` missing DEFAULT constraints - **FIXED**
+   - **Fix Applied**: Added ALTER TABLE statements for DEFAULT constraints in migration
+   - **Changes**:
+     - `ALTER TABLE dim_team ALTER COLUMN team_key SET DEFAULT nextval('teams_team_key_seq'::regclass)`
+     - `ALTER TABLE dim_team ALTER COLUMN created_at SET DEFAULT NOW()`
+     - `ALTER TABLE dim_team ALTER COLUMN updated_at SET DEFAULT NOW()`
+   - **Validation**: Schema verified with `\d dim_team`, DEFAULT constraints present
+   - **File**: [d115685a3652_refactor_to_dimensional_model_with_.py](../backend/app/alembic/versions/d115685a3652_refactor_to_dimensional_model_with_.py)
+
+2. ✅ **[HIGH]** All tests passing - **VERIFIED**
+   - **Result**: 13/13 team_sync tests passing (was 1/13)
+   - **Additional**: 2/2 new migration tests passing
+   - **Validation**: `pytest app/tests/services/test_team_sync.py -v` → all green
+   - **ACs Validated**: AC1-AC6 all verified through passing tests
+
+3. ✅ **[MED]** Removed unused `type: ignore` comment - **FIXED**
+   - **Fix Applied**: Deleted `# type: ignore[arg-type]` from line 136
+   - **Validation**: `mypy app/services/team_sync.py` → Success: no issues found
+   - **File**: [team_sync.py:136](../backend/app/services/team_sync.py)
+
+4. ✅ **[LOW]** Migration tests added - **COMPLETE**
+   - **Files Created**:
+     - `backend/app/tests/migrations/__init__.py`
+     - `backend/app/tests/migrations/test_dim_team_migration.py`
+   - **Tests**: Validate DEFAULT constraints exist and INSERT works without explicit values
+   - **Result**: 2/2 tests passing
+
+5. ✅ **[LOW]** AC4 WARNING logging implemented - **COMPLETE**
+   - **Fix Applied**: Changed log level from INFO to WARNING for new team discoveries
+   - **Message**: "Team {team_id} auto-created with minimal data - consider adding colors/aliases in teams.json"
+   - **Validation**: `test_logging_output` passing with WARNING level verification
+
+**Lessons Learned**:
+- Always verify DEFAULT constraints are properly set when using Alembic `add_column()` with autoincrement
+- SQLModel Field defaults don't translate to database-level DEFAULT constraints when using raw SQL INSERT
+- Consider using SQLModel ORM methods over raw PostgreSQL dialect for better portability
+- Function-scoped test fixtures prevent unique constraint violations from seed data
+- Migration tests should validate schema constraints, not just table existence
+
+**Story Completion**:
+- All 6 Acceptance Criteria verified ✅
+- 15/15 tests passing (13 team_sync + 2 migration) ✅
+- Type checking passing ✅
+- No regressions introduced ✅
+- Ready for merge ✅

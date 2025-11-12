@@ -185,8 +185,8 @@ async def test_metadata_counts(db: Session) -> None:
 
 @pytest.mark.asyncio
 async def test_logging_output(db: Session, caplog: pytest.LogCaptureFixture) -> None:
-    """Test that logging outputs correct INFO/DEBUG messages."""
-    caplog.set_level(logging.INFO)
+    """Test that logging outputs correct WARNING/DEBUG messages per AC4."""
+    caplog.set_level(logging.DEBUG)
 
     # Seed one team
     existing = DimTeam(
@@ -206,15 +206,19 @@ async def test_logging_output(db: Session, caplog: pytest.LogCaptureFixture) -> 
         },
     ]
 
-    caplog.set_level(logging.DEBUG)  # Capture DEBUG for update messages
     await sync_teams_from_games(games_data, db)
 
-    # Verify INFO log for new team
+    # Verify WARNING log for new team (AC4 requirement)
     assert any(
-        "Team discovered from API: ncaam_999" in record.message
+        record.levelname == "WARNING"
+        and "Team ncaam_999 auto-created with minimal data" in record.message
         for record in caplog.records
     )
-    assert any("ESPN ID 999" in record.message for record in caplog.records)
+    assert any(
+        "consider adding colors/aliases in teams.json" in record.message
+        for record in caplog.records
+    )
+    assert any("ESPN ID: 999" in record.message for record in caplog.records)
 
     # Verify DEBUG log for updated team
     assert any(

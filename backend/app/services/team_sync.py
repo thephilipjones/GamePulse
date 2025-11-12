@@ -133,14 +133,15 @@ async def sync_teams_from_games(
                 # Preserve: team_key (surrogate PK), colors, aliases, team_group_*
             },
         )
-        session.exec(stmt)  # type: ignore[arg-type]
+        session.exec(stmt)
         session.commit()
 
     # Step 6: Structured logging
     for team_data in teams_to_insert:
-        logger.info(
-            f"Team discovered from API: {team_data['team_id']} "
-            f"({team_data['team_name']}) - ESPN ID {team_data['espn_team_id']}"
+        logger.warning(
+            f"Team {team_data['team_id']} auto-created with minimal data - "
+            f"consider adding colors/aliases in teams.json "
+            f"(Team: {team_data['team_name']}, ESPN ID: {team_data['espn_team_id']})"
         )
 
     for team_data in teams_to_update:
