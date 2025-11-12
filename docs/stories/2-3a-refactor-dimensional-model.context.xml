@@ -1,0 +1,240 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>2-3a</storyId>
+    <title>Refactor to Dimensional Model with Surrogate Keys</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-11</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/2-3a-refactor-dimensional-model.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a data engineer building a portfolio project</asA>
+    <iWant>to refactor the current normalized schema to a Kimball-style dimensional model with surrogate keys</iWant>
+    <soThat>GamePulse demonstrates professional data warehouse design patterns including SCD Type 2 readiness and industry-standard naming conventions</soThat>
+    <tasks>
+      - Task 1: Create Alembic Migration for Schema Refactor (AC1-AC3, AC5)
+        - Add surrogate keys and SCD Type 2 fields to teams table
+        - Flatten team_groups into teams table
+        - Rename teams → dim_team
+        - Make team_key the new primary key
+        - Add game_key to games table
+        - Add team_key foreign keys to games
+        - Populate team_key FKs from natural keys
+        - Rename games → fact_game
+        - Make game_key the new primary key
+        - Add performance indexes
+        - Drop team_groups and team_rivalries tables
+        - Implement downgrade path for reversibility
+      - Task 2: Refactor SQLModel Files (AC4)
+        - Rename backend/app/models/team.py → dim_team.py
+        - Rename backend/app/models/game.py → fact_game.py
+        - Update dim_team.py with new schema
+        - Update fact_game.py with new schema
+        - Update backend/app/models/__init__.py imports
+      - Task 3: Update Seed Data Migration (AC6)
+        - Update 7a8f23177a57_seed_dimensional_data.py to use dim_team
+        - Add team_group_name field to inserts
+        - Set SCD Type 2 defaults
+        - Ensure idempotency with ON CONFLICT
+      - Task 4: Update Tests (AC4)
+        - Rename test_team.py → test_dim_team.py
+        - Rename test_game.py → test_fact_game.py
+        - Update all test imports and assertions
+        - Verify surrogate key auto-generation
+      - Task 5: Validate Migration and Document (AC1-AC6)
+        - Run alembic upgrade head
+        - Verify data preservation
+        - Test downgrade/upgrade cycle
+        - Run unit and integration tests
+        - Update documentation
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <title>dim_team Table with Surrogate Keys</title>
+      <description>Rename teams → dim_team, add team_key SERIAL PRIMARY KEY, keep team_id as unique natural key, add SCD Type 2 fields (is_current, valid_from, valid_to), flatten team_group attributes from team_groups table, preserve all existing data</description>
+      <validation>
+        - SELECT COUNT(*) FROM dim_team = same count as old teams table
+        - Duke (team_id="ncaam_150") has team_group_name="Atlantic Coast Conference"
+        - All teams have is_current=TRUE, valid_from=NOW(), valid_to=NULL
+        - psql \d dim_team shows correct schema
+      </validation>
+    </criterion>
+    <criterion id="AC2">
+      <title>fact_game Table with Surrogate Keys</title>
+      <description>Rename games → fact_game, add game_key BIGSERIAL PRIMARY KEY, keep game_id as unique natural key, update FKs (home_team_key, away_team_key) to reference dim_team.team_key, add game_date_key FK for dim_date (populated in Story 2-3c), add indexes for performance</description>
+      <validation>
+        - SELECT COUNT(*) FROM fact_game = same count as old games table
+        - JOIN query works: SELECT fg.*, ht.team_name FROM fact_game fg JOIN dim_team ht ON fg.home_team_key = ht.team_key LIMIT 1
+        - Game with game_id="ncaam_401681988" still queryable
+        - psql \d fact_game shows correct schema with indexes
+      </validation>
+    </criterion>
+    <criterion id="AC3">
+      <title>Drop Normalized Tables No Longer Needed</title>
+      <description>Drop team_groups table (data now in dim_team.team_group_*), drop team_rivalries table (not used in MVP), verify no orphaned FK constraints</description>
+      <validation>
+        - psql \dt does not list team_groups or team_rivalries
+        - No FK constraint errors when inserting into dim_team
+      </validation>
+    </criterion>
+    <criterion id="AC4">
+      <title>SQLModel Files Refactored</title>
+      <description>Rename model files (team.py → dim_team.py, game.py → fact_game.py), update class names (DimTeam, FactGame), update __tablename__, add surrogate key fields, update FK references, update __init__.py imports</description>
+      <validation>
+        - python -c "from app.models import DimTeam, FactGame" succeeds
+        - mypy backend/app/models/ passes
+        - DimTeam.__tablename__ == "dim_team"
+      </validation>
+    </criterion>
+    <criterion id="AC5">
+      <title>Migration Reversibility and Idempotency</title>
+      <description>Migration supports both upgrade and downgrade paths, running upgrade → downgrade → upgrade preserves all data, no data loss or orphaned records</description>
+      <validation>
+        - alembic upgrade head (success)
+        - Verify data in dim_team, fact_game
+        - alembic downgrade -1 (success)
+        - Verify data in teams, games
+        - alembic upgrade head again (success, idempotent)
+        - Compare row counts before/after (identical)
+      </validation>
+    </criterion>
+    <criterion id="AC6">
+      <title>Seed Data Migration Updated</title>
+      <description>Update 7a8f23177a57_seed_dimensional_data.py to use dim_team table name, insert using natural key team_id, populate team_group_id and team_group_name from JSON, set SCD Type 2 fields, maintain idempotency with ON CONFLICT</description>
+      <validation>
+        - Run seed migration after refactor: alembic upgrade head
+        - Verify 20 teams seeded with team_group_name populated
+        - Duke has team_group_id="ncaam_acc", team_group_name="Atlantic Coast Conference"
+        - Run migration again (idempotent, no errors)
+      </validation>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/PRD.md" title="Product Requirements Document">
+        <section>Project Classification - Data Engineering Pipeline</section>
+        <snippet>This is a data-first web application - the core value is in the data engineering pipeline. Must prove mastery of modern data engineering patterns including dimensional modeling.</snippet>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture">
+        <section>Decision Summary - Database + ORM</section>
+        <snippet>PostgreSQL 16.x + TimescaleDB 2.23.0 for time-series optimization. SQLModel 0.0.21+ for type-safe ORM with native FastAPI integration. Alembic 1.12.1+ for database migrations.</snippet>
+      </doc>
+      <doc path="docs/tech-spec-epic-2.md" title="Epic 2 Technical Specification">
+        <section>Overview - Dimensional Foundation</section>
+        <snippet>Epic 2 establishes foundational batch data ingestion with Dagster orchestration. Implements dimensional schema (teams, conferences, games) with multi-sport support. This story refactors to Kimball-style dimensional model with surrogate keys.</snippet>
+      </doc>
+      <doc path="docs/epics.md" title="Epic Breakdown">
+        <section>Epic 2: Dimensional Foundation + Game Data Ingestion</section>
+        <snippet>Establishes Kimball-style dimensional modeling foundation with surrogate keys (team_key, game_key), SCD Type 2 readiness, and portfolio-ready data warehouse patterns. Story 2-3a refactors current normalized schema to dimensional model.</snippet>
+      </doc>
+      <doc path="CLAUDE.md" title="Project Instructions">
+        <section>Database migrations</section>
+        <snippet>Always use Alembic for schema changes. Run: alembic revision --autogenerate -m "Description", then alembic upgrade head. Never manually modify database schema. Commit migration files to git.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/models/team.py" kind="model" symbol="Team">
+        <lines>14-38</lines>
+        <reason>Current Team model using natural key team_id as PK. Needs refactoring to add surrogate key team_key and SCD Type 2 fields.</reason>
+      </artifact>
+      <artifact path="backend/app/models/team.py" kind="model" symbol="TeamGroup">
+        <lines>40-59</lines>
+        <reason>TeamGroup table to be dropped - data will be flattened into dim_team (team_group_id, team_group_name fields).</reason>
+      </artifact>
+      <artifact path="backend/app/models/team.py" kind="model" symbol="TeamRivalry">
+        <lines>61-80</lines>
+        <reason>TeamRivalry table to be dropped - not used in MVP, rivalry_factor calculated from team_group matching.</reason>
+      </artifact>
+      <artifact path="backend/app/models/game.py" kind="model" symbol="Game">
+        <lines>13-45</lines>
+        <reason>Current Game model using natural key game_id as PK with FKs to teams.team_id. Needs refactoring to add surrogate key game_key and update FKs to use team_key.</reason>
+      </artifact>
+      <artifact path="backend/app/tests/models/test_game.py" kind="test" symbol="TestGameModel">
+        <lines>13-177</lines>
+        <reason>Existing Game model tests - will need to be updated to test FactGame with surrogate keys. Good patterns to follow for testing auto-generated keys.</reason>
+      </artifact>
+      <artifact path="backend/app/alembic/versions/29a82f0b5d5b_create_multi_sport_schema.py" kind="migration">
+        <reason>Initial schema migration creating teams, team_groups, team_rivalries, and games tables. Reference for understanding current schema structure.</reason>
+      </artifact>
+      <artifact path="backend/app/alembic/versions/7a8f23177a57_seed_dimensional_data.py" kind="migration">
+        <reason>Seed data migration loading teams and conferences from JSON. Needs updating to use dim_team table and add team_group_name field.</reason>
+      </artifact>
+      <artifact path="backend/app/models/__init__.py" kind="module">
+        <reason>Module exports - will need updating to export DimTeam and FactGame instead of Team and Game.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="sqlmodel" version=">=0.0.22,&lt;1.0.0">Type-safe ORM for database models</package>
+        <package name="alembic" version=">=1.13.0,&lt;2.0.0">Database migration management</package>
+        <package name="psycopg" version=">=3.2.0,&lt;4.0.0">PostgreSQL database adapter</package>
+        <package name="pydantic" version=">=2.9.0,&lt;3.0.0">Data validation for SQLModel</package>
+        <package name="pytest" version=">=8.3.0,&lt;9.0.0">Testing framework</package>
+        <package name="mypy" version=">=1.11.0,&lt;2.0.0">Type checking</package>
+        <package name="ruff" version=">=0.7.0,&lt;1.0.0">Linting and formatting</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>All schema changes MUST go through Alembic migrations - never modify SQLModel.metadata.create_all</constraint>
+    <constraint>Migration must be reversible - implement both upgrade() and downgrade() paths</constraint>
+    <constraint>Preserve all existing data during migration - zero data loss acceptable</constraint>
+    <constraint>Use surrogate keys (SERIAL/BIGSERIAL) as primary keys, keep natural keys as unique constraints</constraint>
+    <constraint>Follow Kimball naming conventions: dim_ prefix for dimensions, fact_ prefix for facts</constraint>
+    <constraint>SCD Type 2 fields (is_current, valid_from, valid_to) are placeholders for future use - set defaults but don't implement SCD logic yet</constraint>
+    <constraint>Test files must mirror model structure - test_dim_team.py for dim_team.py</constraint>
+    <constraint>All Python code must pass: mypy (type checking), ruff (linting), pytest (tests)</constraint>
+    <constraint>Defer CRUD and API code updates to subsequent stories (2-3b, 2-4) to avoid breaking existing functionality</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="DimTeam.team_key" kind="database-column">
+      <signature>team_key: int (SERIAL PRIMARY KEY, auto-increment)</signature>
+      <path>backend/app/models/dim_team.py</path>
+      <usage>Surrogate key for dimension table, used in fact table FKs</usage>
+    </interface>
+    <interface name="FactGame.game_key" kind="database-column">
+      <signature>game_key: int (BIGSERIAL PRIMARY KEY, auto-increment)</signature>
+      <path>backend/app/models/fact_game.py</path>
+      <usage>Surrogate key for fact table, replaces game_id as PK</usage>
+    </interface>
+    <interface name="FactGame.home_team_key" kind="foreign-key">
+      <signature>home_team_key: int (FK to dim_team.team_key)</signature>
+      <path>backend/app/models/fact_game.py</path>
+      <usage>Foreign key to home team dimension using surrogate key</usage>
+    </interface>
+    <interface name="FactGame.game_date_key" kind="foreign-key">
+      <signature>game_date_key: int | None (FK to dim_date.date_key)</signature>
+      <path>backend/app/models/fact_game.py</path>
+      <usage>Optional FK to date dimension, will be populated in Story 2-3c</usage>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Tests use pytest framework with SQLModel fixtures. Unit tests verify model instantiation, field validation, and defaults without database interaction. Integration tests verify migrations with actual database operations. Test files mirror model structure (test_dim_team.py for dim_team.py). All tests must pass before marking story done. Type checking with mypy and linting with ruff also required.
+    </standards>
+    <locations>
+      - backend/app/tests/models/ (model unit tests)
+      - backend/app/tests/ (integration tests)
+    </locations>
+    <ideas>
+      <test-idea ac="AC1">Test DimTeam model creation with surrogate key auto-generation (verify team_key is auto-assigned)</test-idea>
+      <test-idea ac="AC1">Test DimTeam SCD Type 2 field defaults (is_current=TRUE, valid_from set, valid_to=NULL)</test-idea>
+      <test-idea ac="AC1">Test DimTeam flattened team_group fields (team_group_id, team_group_name)</test-idea>
+      <test-idea ac="AC2">Test FactGame model creation with surrogate key auto-generation (verify game_key is auto-assigned)</test-idea>
+      <test-idea ac="AC2">Test FactGame FK references to DimTeam using team_key (not team_id)</test-idea>
+      <test-idea ac="AC2">Test FactGame optional game_date_key FK (defaults to NULL)</test-idea>
+      <test-idea ac="AC5">Integration test: alembic upgrade → verify data → downgrade → verify data → upgrade (idempotent)</test-idea>
+      <test-idea ac="AC5">Integration test: verify row counts identical before/after migration</test-idea>
+      <test-idea ac="AC6">Integration test: seed migration runs after refactor migration without errors</test-idea>
+      <test-idea ac="AC6">Integration test: seed migration is idempotent (run twice, no duplicate key errors)</test-idea>
+    </ideas>
+  </tests>
+</story-context>

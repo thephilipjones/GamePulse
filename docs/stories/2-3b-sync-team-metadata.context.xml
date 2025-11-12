@@ -1,0 +1,755 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context>
+  <metadata>
+    <story-id>2-3b</story-id>
+    <story-title>Sync Team Metadata from NCAA API</story-title>
+    <epic>Epic 2: Game Data Ingestion (Batch)</epic>
+    <status>drafted</status>
+    <generated-date>2025-11-11</generated-date>
+    <context-purpose>
+      Provide comprehensive technical context for implementing automatic team discovery
+      and synchronization from NCAA API game responses while preserving manually curated
+      team metadata (colors, aliases, conferences).
+    </context-purpose>
+  </metadata>
+
+  <story-file>
+    <location>docs/stories/2-3b-sync-team-metadata.md</location>
+    <description>
+      Complete story specification including user story, context, 6 acceptance criteria,
+      6 implementation tasks, testing requirements, and technical notes. This is the
+      single source of truth for Story 2-3b requirements.
+    </description>
+  </story-file>
+
+  <architectural-context>
+    <prd-requirements>
+      <requirement id="FR-1.2" source="docs/prd.md" line="1116">
+        <title>Team and Conference Dimensional Data</title>
+        <description>
+          System SHALL maintain dimensional data for NCAA teams and conferences.
+          MVP requires minimum 20 top NCAA teams with names, abbreviations, colors,
+          conference IDs, and team aliases for matching variations.
+        </description>
+        <acceptance>
+          - 20+ teams with full metadata (colors, aliases)
+          - 6+ major conferences (ACC, Big Ten, Big 12, SEC, Pac-12, Big East)
+          - Team aliases for fuzzy Reddit matching
+        </acceptance>
+        <story-2-3b-extends>
+          Story 2-3b automates team discovery beyond the initial 20 seeded teams,
+          enabling GamePulse to handle 350+ NCAA Division I teams without manual
+          maintenance for every team. Manually curated metadata (colors, aliases)
+          remains for top teams while auto-discovered teams get minimal data.
+        </story-2-3b-extends>
+      </requirement>
+
+      <requirement id="PRD-Philosophy" source="docs/prd.md" line="143-144">
+        <title>Quality Over Coverage</title>
+        <quote>
+          "Priority: High-quality deep data on 5-10 most interesting games > shallow coverage of all 50"
+        </quote>
+        <implication-for-2-3b>
+          Auto-discovery enables comprehensive team coverage without sacrificing quality.
+          Top 20 teams retain rich metadata (colors, aliases), while auto-discovered teams
+          get minimal data sufficient for game display. Future enhancements can add colors/aliases
+          for frequently appearing teams based on actual game observations.
+        </implication-for-2-3b>
+      </requirement>
+    </prd-requirements>
+
+    <architecture-decisions>
+      <decision id="ADR-DimensionalData" source="docs/architecture.md" line="1714">
+        <title>Dimensional Data as JSON Config</title>
+        <context>
+          Epic 2 design specifies "Dimensional data (teams, conferences) as JSON config"
+          loaded via Alembic migration. This was a deliberate choice to enable manual
+          curation of colors, aliases, and other metadata not available from NCAA API.
+        </context>
+        <story-2-3b-evolution>
+          Story 2-3b extends this pattern to hybrid approach:
+          - Seed data (teams.json) remains foundation for top teams with rich metadata
+          - Auto-discovery adds new teams from API with minimal data
+          - Merge logic preserves manual curation while automating team ID management
+          - Future work documented for color/alias automation (see future-enhancements.md)
+        </story-2-3b-evolution>
+      </decision>
+
+      <decision id="ADR-Upsert" source="backend/app/alembic/versions/7a8f23177a57_seed_dimensional_data.py">
+        <title>Idempotent Upsert Pattern</title>
+        <rationale>
+          Seed data migration uses ON CONFLICT DO UPDATE to allow re-running safely.
+          This pattern enables:
+          - Updating seed data without data loss
+          - Merging manual overrides with existing records
+          - Graceful handling of conflicts during concurrent operations
+        </rationale>
+        <story-2-3b-reuses>
+          Story 2-3b adopts same upsert pattern for team sync service. When syncing
+          teams from API, use ON CONFLICT (team_id) DO UPDATE to merge API data
+          with existing records while preserving manually curated fields.
+        </story-2-3b-reuses>
+      </decision>
+    </architecture-decisions>
+
+    <epic-tech-spec>
+      <location>docs/epics/tech-spec-epic-2.md</location>
+      <relevant-sections>
+        <section name="Data Flow Architecture" line="245-290">
+          <summary>
+            Epic 2 data flow: NCAA API → Client → Parse → Transform → Database
+            Story 2-3b inserts team sync BEFORE game insert to ensure foreign keys exist.
+          </summary>
+          <flow>
+            1. Dagster Asset triggers (every 15 minutes)
+            2. NCAA Client fetches scoreboard (Story 2-2)
+            3. **Team Sync Service** extracts and upserts teams (Story 2-3b NEW)
+            4. Game data parsed and transformed (Story 2-3)
+            5. Games inserted with foreign keys to teams (Story 2-4)
+          </flow>
+        </section>
+
+        <section name="NCAA API Contract" line="450-500">
+          <endpoint>https://ncaa-api.henrygd.me/scoreboard/basketball-men/d1?date=YYYYMMDD</endpoint>
+          <team-data-structure>
+            {
+              "home": {
+                "id": "150",                    // ESPN team ID (string)
+                "names": {
+                  "short": "Duke",              // Preferred for team_name
+                  "full": "Duke Blue Devils",   // Alternative
+                  "abbrev": "DUKE"              // May not always be present
+                }
+              }
+            }
+          </team-data-structure>
+          <limitations>
+            - NO conference/division data
+            - NO team colors
+            - NO team logos (separate endpoint)
+            - NO historical data
+          </limitations>
+        </section>
+
+        <section name="Rivalry Detection" line="612-645">
+          <algorithm>
+            same_conference_factor = 1.2 if home.team_group_id == away.team_group_id else 1.0
+          </algorithm>
+          <impact-of-2-3b>
+            Auto-discovered teams will have NULL team_group_id (conference), resulting in
+            rivalry factor 1.0 (neutral). This is acceptable for MVP as 6 major conferences
+            cover most high-profile rivalries. Future enhancement can add conference
+            assignments for frequently appearing teams.
+          </impact-of-2-3b>
+        </section>
+      </relevant-sections>
+    </epic-tech-spec>
+  </architectural-context>
+
+  <code-references>
+    <current-team-model>
+      <location>backend/app/models/team.py</location>
+      <schema>
+        class Team(SQLModel, table=True):
+            __tablename__ = "teams"
+
+            # PRIMARY KEY
+            team_id: str = Field(primary_key=True)  # Format: "{sport}_{espn_id}"
+
+            # CORE FIELDS
+            sport: str = Field(index=True)          # "ncaam", "nfl", "nba"
+            team_name: str                          # Display name (from API or manual)
+            team_abbr: str | None = None            # Abbreviation (manual only)
+
+            # RELATIONSHIPS
+            team_group_id: str | None = Field(      # Conference FK (manual only)
+                default=None,
+                foreign_key="team_groups.team_group_id"
+            )
+
+            # UI METADATA (manual curation only - NOT in NCAA API)
+            primary_color: str | None = None        # Hex color for UI theming
+            secondary_color: str | None = None      # Hex color for UI theming
+
+            # REDDIT MATCHING (manual curation only)
+            aliases: list[str] = Field(             # ["Duke", "Blue Devils", ...]
+                default_factory=list,
+                sa_column=Column(ARRAY(String))
+            )
+
+            # AUDIT FIELDS
+            created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+            updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+            # NEW FIELD (Story 2-3b)
+            # espn_team_id: str | None = Field(default=None, index=True)
+            # TODO: Add this field as part of Task 1
+      </schema>
+
+      <field-classification>
+        <auto-synced-from-api>
+          team_name: Updated from names.short when API differs
+          espn_team_id: Set from API id field (NEW in Story 2-3b)
+          updated_at: Timestamp of last sync
+        </auto-synced-from-api>
+
+        <preserved-manual-curation>
+          primary_color: Never overwritten by API sync
+          secondary_color: Never overwritten by API sync
+          aliases: Never overwritten by API sync
+          team_group_id: Never overwritten by API sync (conference assignment)
+          team_abbr: Never overwritten by API sync
+        </preserved-manual-curation>
+
+        <immutable>
+          team_id: Primary key, never changes once set
+          sport: Set on creation, never changes
+          created_at: Set once on creation
+        </immutable>
+      </field-classification>
+    </current-team-model>
+
+    <ncaa-client-implementation>
+      <location>backend/app/clients/ncaa.py</location>
+      <key-methods>
+        <method name="fetch_todays_games">
+          <signature>
+            async def fetch_todays_games(self, date: datetime | None = None) -> list[dict]:
+          </signature>
+          <returns>
+            List of game dictionaries from NCAA API scoreboard response.
+            Each game has "home" and "away" keys with team data.
+          </returns>
+          <usage-in-2-3b>
+            Team sync service will receive this list and extract unique teams
+            from home/away fields before game processing begins.
+          </usage-in-2-3b>
+        </method>
+
+        <method name="parse_game_data">
+          <signature>
+            def parse_game_data(game_data: dict) -> Game:
+          </signature>
+          <note>
+            Currently parses game data assuming teams exist. Story 2-3b ensures
+            teams are synced BEFORE this method is called, preventing foreign key errors.
+          </note>
+        </method>
+      </key-methods>
+
+      <retry-logic>
+        <location>backend/app/clients/ncaa.py lines 45-78</location>
+        <description>
+          NCAA client has exponential backoff retry logic (max 3 attempts).
+          Team sync service should leverage same pattern if direct API calls are needed
+          in future enhancements (e.g., fetching team logos).
+        </description>
+      </retry-logic>
+    </ncaa-client-implementation>
+
+    <seed-data-migration>
+      <location>backend/app/alembic/versions/7a8f23177a57_seed_dimensional_data.py</location>
+      <upsert-pattern>
+        INSERT INTO teams (team_id, sport, team_name, team_abbr, team_group_id,
+                          primary_color, secondary_color, aliases, updated_at)
+        VALUES (:team_id, :sport, :team_name, :team_abbr, :team_group_id,
+               :primary_color, :secondary_color, :aliases, NOW())
+        ON CONFLICT (team_id) DO UPDATE SET
+            team_name = EXCLUDED.team_name,
+            team_abbr = EXCLUDED.team_abbr,
+            team_group_id = EXCLUDED.team_group_id,
+            primary_color = EXCLUDED.primary_color,
+            secondary_color = EXCLUDED.secondary_color,
+            aliases = EXCLUDED.aliases,
+            updated_at = EXCLUDED.updated_at
+      </upsert-pattern>
+
+      <story-2-3b-modification>
+        <task>
+          Update migration to extract and set espn_team_id during seed data load.
+          Extract numeric portion from team_id (e.g., "ncaam_150" → "150").
+        </task>
+        <new-upsert-fields>
+          Add espn_team_id to INSERT and UPDATE SET clauses.
+        </new-upsert-fields>
+      </story-2-3b-modification>
+
+      <idempotency-requirement>
+        Migration must remain idempotent after Story 2-3b changes. Running migration
+        multiple times should:
+        - Update seed data teams to latest teams.json values
+        - Preserve auto-discovered teams (not in teams.json)
+        - Not cause errors or data loss
+      </idempotency-requirement>
+    </seed-data-migration>
+
+    <seed-data-files>
+      <teams-json>
+        <location>backend/app/data/teams.json</location>
+        <structure>
+          {
+            "teams": [
+              {
+                "team_id": "ncaam_150",
+                "sport": "ncaam",
+                "team_name": "Duke",
+                "team_abbr": "DUKE",
+                "team_group_id": "ncaam_acc",
+                "primary_color": "#003087",
+                "secondary_color": "#FFFFFF",
+                "aliases": ["Duke", "Blue Devils", "Duke Blue Devils", "Blue Devil"]
+              }
+              // ... 19 more teams
+            ]
+          }
+        </structure>
+        <coverage>20 top NCAA teams with full metadata</coverage>
+        <future-use>
+          Add teams discovered from API to this file when colors/aliases are manually
+          curated. Re-running seed migration will merge manual metadata with API data.
+        </future-use>
+      </teams-json>
+
+      <conferences-json>
+        <location>backend/app/data/conferences.json</location>
+        <structure>
+          {
+            "conferences": [
+              {
+                "team_group_id": "ncaam_acc",
+                "team_group_name": "Atlantic Coast Conference",
+                "sport": "ncaam",
+                "group_type": "conference",
+                "level": 1
+              }
+              // ... 5 more conferences
+            ]
+          }
+        </structure>
+        <coverage>6 major NCAA conferences</coverage>
+        <note>
+          Conference assignments (team_group_id in teams) are manual only.
+          NCAA API does not provide conference data. See future-enhancements.md
+          for conference automation options.
+        </note>
+      </conferences-json>
+    </seed-data-files>
+  </code-references>
+
+  <implementation-guidance>
+    <task-1-add-espn-team-id>
+      <file>backend/app/models/team.py</file>
+      <change>
+        Add field to Team model:
+        espn_team_id: str | None = Field(default=None, index=True)
+      </change>
+      <alembic-migration>
+        cd backend
+        alembic revision --autogenerate -m "Add espn_team_id to teams table"
+
+        # Review generated migration, ensure it includes:
+        # 1. ALTER TABLE teams ADD COLUMN espn_team_id VARCHAR;
+        # 2. CREATE INDEX ix_teams_espn_team_id ON teams(espn_team_id);
+        # 3. UPDATE teams SET espn_team_id = SUBSTRING(...) for backfill
+
+        alembic upgrade head
+      </alembic-migration>
+      <validation>
+        - Run migration in test database
+        - Verify existing teams have espn_team_id populated
+        - Test downgrade/upgrade cycle (idempotent)
+      </validation>
+    </task-1-add-espn-team-id>
+
+    <task-2-create-team-sync-service>
+      <new-file>backend/app/services/team_sync.py</new-file>
+      <imports>
+        from sqlmodel import Session, select
+        from sqlalchemy.dialects import postgresql
+        from app.models.team import Team
+        from datetime import datetime, UTC
+        import logging
+      </imports>
+
+      <function-signature>
+        async def sync_teams_from_games(
+            games_data: list[dict],
+            session: Session
+        ) -> dict[str, int]:
+            """
+            Extract teams from NCAA API game responses and sync to database.
+
+            Args:
+                games_data: List of game dicts from NCAA API scoreboard
+                session: SQLModel database session
+
+            Returns:
+                Metadata: {"teams_discovered": int, "teams_updated": int, "teams_unchanged": int}
+            """
+      </function-signature>
+
+      <implementation-steps>
+        1. Extract unique teams from games_data (deduplicate home/away)
+        2. Query existing teams from database
+        3. Classify: new teams vs updates vs unchanged
+        4. Build upsert list with team data
+        5. Execute PostgreSQL INSERT ... ON CONFLICT DO UPDATE
+        6. Log discoveries and updates
+        7. Return metadata counts
+      </implementation-steps>
+
+      <postgresql-upsert-example>
+        stmt = postgresql.insert(Team).values(teams_to_upsert)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["team_id"],
+            set_={
+                "team_name": stmt.excluded.team_name,
+                "espn_team_id": stmt.excluded.espn_team_id,
+                "updated_at": stmt.excluded.updated_at
+            }
+            # NOTE: primary_color, secondary_color, aliases, team_group_id NOT in set_
+            # This preserves manual curation
+        )
+        session.exec(stmt)
+        session.commit()
+      </postgresql-upsert-example>
+
+      <logging-example>
+        logger.info(f"Team discovered from API: {team_id} ({team_name}) - ESPN ID {espn_team_id}")
+        logger.debug(f"Team updated from API: {team_id} - name changed from '{old_name}' to '{new_name}'")
+      </logging-example>
+    </task-2-create-team-sync-service>
+
+    <task-3-integration-with-dagster>
+      <note>
+        Story 2-4 will implement full Dagster asset for NCAA games.
+        Story 2-3b prepares the team sync service for integration.
+        Example integration pattern shown below for reference.
+      </note>
+
+      <integration-pattern>
+        from app.services.team_sync import sync_teams_from_games
+
+        @asset
+        def ncaa_games_today(context, ncaa_client: NCAAClient):
+            # Fetch games
+            games_data = ncaa_client.fetch_todays_games()
+
+            # SYNC TEAMS FIRST (Story 2-3b)
+            with get_session() as session:
+                team_metadata = await sync_teams_from_games(games_data, session)
+                context.log.info(f"Team sync: {team_metadata}")
+                context.add_output_metadata(team_metadata)
+
+            # Process games (teams guaranteed to exist now)
+            # ... game insert logic ...
+      </integration-pattern>
+
+      <benefits>
+        - Foreign key constraints satisfied (teams exist before games)
+        - Transactional integrity (team sync commits before game processing)
+        - Error isolation (team sync failures don't block game processing)
+        - Observability (team counts in Dagster UI)
+      </benefits>
+    </task-3-integration-with-dagster>
+
+    <task-4-update-seed-migration>
+      <file>backend/app/alembic/versions/7a8f23177a57_seed_dimensional_data.py</file>
+      <changes-required>
+        1. Add espn_team_id to INSERT statement
+        2. Extract espn_team_id from team_id during load
+        3. Add espn_team_id to ON CONFLICT DO UPDATE SET clause
+      </changes-required>
+
+      <extraction-logic>
+        # Extract ESPN ID from team_id format "ncaam_150" → "150"
+        espn_team_id = team["team_id"].split("_")[1]
+      </extraction-logic>
+
+      <validation>
+        - Create auto-discovered team via team sync
+        - Run seed migration
+        - Verify auto-discovered team still exists (not deleted)
+        - Verify seed data teams updated correctly
+        - Verify espn_team_id preserved for auto-discovered team
+      </validation>
+    </task-4-update-seed-migration>
+
+    <task-5-add-tests>
+      <new-file>backend/app/tests/services/test_team_sync.py</new-file>
+      <test-cases>
+        - test_discover_new_team: New team from API should be inserted
+        - test_preserve_manual_data: Colors/aliases should NOT be overwritten
+        - test_update_team_name: Name should update if API differs
+        - test_batch_upsert_efficiency: Single query for multiple teams
+        - test_empty_games_list: Should return zero counts, not error
+        - test_duplicate_teams: Should deduplicate teams in response
+        - test_null_team_name: Should handle gracefully (skip or error)
+      </test-cases>
+
+      <fixtures>
+        Use pytest fixtures from conftest.py:
+        - session: Database session
+        - test_db: Clean test database
+      </fixtures>
+
+      <assertions>
+        - Verify metadata counts match database changes
+        - Verify team records have correct fields
+        - Verify manual curation preserved
+        - Verify logs contain expected messages
+      </assertions>
+    </task-5-add-tests>
+
+    <task-6-create-documentation>
+      <file-1>backend/app/data/README.md</file-1>
+      <content-1>
+        Document:
+        - Hybrid team data strategy (seed + auto-discovery)
+        - Merge logic (what's updated vs preserved)
+        - Manual override process (edit teams.json, re-run migration)
+        - Field classification table (auto-synced vs manual vs immutable)
+      </content-1>
+
+      <file-2>docs/stories/future-enhancements.md</file-2>
+      <content-2>
+        Document future work:
+        - Team colors automation (options, effort, priority)
+        - Team aliases generation (options, effort, priority)
+        - Conference automation (options, effort, priority)
+        - Historical backfill (options, effort, priority)
+        - Player roster data (options, effort, priority)
+      </content-2>
+      <note-2>This file already created as part of Story 2-3b creation</note-2>
+    </task-6-create-documentation>
+  </implementation-guidance>
+
+  <testing-strategy>
+    <unit-tests>
+      <location>backend/app/tests/services/test_team_sync.py</location>
+      <coverage-target>80%+ for new team_sync.py service</coverage-target>
+      <mock-strategy>
+        Mock NCAA API responses with sample game data.
+        Use real database transactions (test container) for integration accuracy.
+      </mock-strategy>
+    </unit-tests>
+
+    <integration-tests>
+      <location>backend/app/tests/integration/test_team_sync_flow.py</location>
+      <scenarios>
+        - End-to-end: Fetch games → Sync teams → Insert games
+        - Migration interaction: Seed migration after team sync
+        - Concurrent syncs: Multiple workers syncing simultaneously
+      </scenarios>
+    </integration-tests>
+
+    <manual-validation>
+      <steps>
+        1. Start Docker Compose: docker compose up -d
+        2. Run team sync against live NCAA API
+        3. Query teams table: SELECT * FROM teams WHERE espn_team_id IS NOT NULL
+        4. Verify auto-discovered teams have NULL colors/aliases
+        5. Verify seed data teams preserved colors/aliases
+        6. Edit teams.json to add color for auto-discovered team
+        7. Re-run seed migration: alembic upgrade head
+        8. Verify color now populated for that team
+      </steps>
+    </manual-validation>
+  </testing-strategy>
+
+  <acceptance-validation-checklist>
+    <ac1>
+      ☐ Team sync service extracts unique teams from games_data
+      ☐ Creates team_id as "ncaam_{espn_id}"
+      ☐ Stores espn_team_id from API id field
+      ☐ Uses names.short for team_name
+      ☐ Sets sport to "ncaam"
+      ☐ Leaves colors/aliases/conference NULL for new teams
+    </ac1>
+
+    <ac2>
+      ☐ Uses ON CONFLICT (team_id) DO UPDATE pattern
+      ☐ Updates team_name if API differs
+      ☐ Updates espn_team_id if previously NULL
+      ☐ Updates updated_at timestamp
+      ☐ DOES NOT overwrite primary_color
+      ☐ DOES NOT overwrite secondary_color
+      ☐ DOES NOT overwrite aliases
+      ☐ DOES NOT overwrite team_group_id
+      ☐ DOES NOT overwrite team_abbr
+    </ac2>
+
+    <ac3>
+      ☐ Logs INFO for each new team discovered
+      ☐ Logs DEBUG for each team updated
+      ☐ Returns metadata dict with teams_discovered count
+      ☐ Returns metadata dict with teams_updated count
+      ☐ Returns metadata dict with teams_unchanged count
+      ☐ (Future) Dagster UI shows team counts in asset metadata
+    </ac3>
+
+    <ac4>
+      ☐ Games with unknown teams trigger team creation
+      ☐ Warning logged for manual follow-up
+      ☐ Game processing continues (does not fail batch)
+      ☐ Metadata includes warning count
+    </ac4>
+
+    <ac5>
+      ☐ Migration adds espn_team_id column (VARCHAR NULL)
+      ☐ Migration creates index on espn_team_id
+      ☐ Migration backfills existing rows (extract from team_id)
+      ☐ Row count unchanged after migration
+      ☐ Migration is reversible (downgrade works)
+      ☐ Migration is idempotent (can run multiple times)
+    </ac5>
+
+    <ac6>
+      ☐ backend/app/data/README.md created and comprehensive
+      ☐ docs/stories/future-enhancements.md created with priorities
+      ☐ Documentation explains hybrid strategy clearly
+      ☐ Manual override process documented with examples
+    </ac6>
+  </acceptance-validation-checklist>
+
+  <dependencies-and-blockers>
+    <prerequisites>
+      <completed-stories>
+        - Story 2-1: Dimensional data structure and seed migration exist
+        - Story 2-2: NCAA client implemented and tested
+        - Story 2-3: Game model with foreign keys to teams table
+      </completed-stories>
+    </prerequisites>
+
+    <blocks-nothing>
+      Story 2-3b is optional enhancement. Story 2-4 (Dagster worker) can proceed
+      without it, but would need error handling for unknown teams. Integrating
+      team sync makes Story 2-4 implementation cleaner and more robust.
+    </blocks-nothing>
+
+    <enables>
+      - Story 2-4: Dagster polling worker (cleaner implementation with team sync)
+      - Epic 4: Reddit matching (more teams available for matching)
+      - Future epics: Comprehensive team coverage without manual maintenance
+    </enables>
+  </dependencies-and-blockers>
+
+  <risks-and-mitigations>
+    <risk id="api-name-changes">
+      <description>NCAA API changes team name format</description>
+      <likelihood>Low</likelihood>
+      <impact>Low (name update, not breaking)</impact>
+      <mitigation>
+        Store both names.short and names.full if needed. Current implementation
+        uses names.short as it's more suitable for display.
+      </mitigation>
+    </risk>
+
+    <risk id="espn-id-conflicts">
+      <description>ESPN reuses team ID across sports</description>
+      <likelihood>Low</likelihood>
+      <impact>None (architecture handles this)</impact>
+      <mitigation>
+        team_id includes sport prefix ("ncaam_150" vs "nfl_150"), preventing
+        conflicts even if ESPN ID 150 exists in multiple sports.
+      </mitigation>
+    </risk>
+
+    <risk id="conference-unknown">
+      <description>Auto-discovered teams lack conference, affecting rivalry detection</description>
+      <likelihood>High (expected)</likelihood>
+      <impact>Low (fallback to 1.0 factor)</impact>
+      <mitigation>
+        Rivalry detection algorithm handles NULL conference with default factor 1.0.
+        6 major conferences in seed data cover most high-profile rivalries.
+        Future enhancement can add conference automation (see future-enhancements.md).
+      </mitigation>
+    </risk>
+
+    <risk id="seed-data-overwrite">
+      <description>Migration accidentally overwrites manual colors/aliases</description>
+      <likelihood>Low (tested)</likelihood>
+      <impact>High (data loss of manual curation)</impact>
+      <mitigation>
+        Comprehensive tests verify upsert pattern preserves manual fields.
+        ON CONFLICT DO UPDATE explicitly lists fields to update, excluding
+        colors, aliases, conference. Idempotency tests catch regressions.
+      </mitigation>
+    </risk>
+
+    <risk id="performance">
+      <description>Team sync adds latency to game ingestion</description>
+      <likelihood>Low</likelihood>
+      <impact>Negligible (&lt;50ms)</impact>
+      <mitigation>
+        Batch upsert (single query) for all teams. Only new/changed teams
+        trigger updates. Typical scoreboard has ~40 teams (20 games), well
+        within PostgreSQL batch insert capabilities.
+      </mitigation>
+    </risk>
+  </risks-and-mitigations>
+
+  <definition-of-done>
+    <code-complete>
+      ☐ espn_team_id field added to Team model
+      ☐ Alembic migration created for espn_team_id column
+      ☐ backend/app/services/team_sync.py implemented
+      ☐ Seed data migration updated for espn_team_id
+      ☐ All 6 implementation tasks completed
+    </code-complete>
+
+    <testing-complete>
+      ☐ Unit tests written and passing (test_team_sync.py)
+      ☐ Integration tests written and passing
+      ☐ Test coverage &gt;80% for new code
+      ☐ Manual validation completed against live NCAA API
+      ☐ Migration tested (upgrade/downgrade/idempotent)
+    </testing-complete>
+
+    <quality-gates>
+      ☐ Ruff linting passes: uv run ruff check .
+      ☐ Ruff formatting passes: uv run ruff format --check .
+      ☐ Mypy type checking passes: uv run mypy .
+      ☐ Pre-commit hooks pass: uv run pre-commit run --all-files
+      ☐ No regressions in existing tests
+    </quality-gates>
+
+    <documentation-complete>
+      ☐ backend/app/data/README.md created and comprehensive
+      ☐ docs/stories/future-enhancements.md created
+      ☐ Code comments added for complex logic
+      ☐ Docstrings complete for all public functions
+    </documentation-complete>
+
+    <acceptance-validated>
+      ☐ All 6 acceptance criteria validated and checked off
+      ☐ SM review completed (code review workflow)
+      ☐ Story marked "done" in sprint-status.yaml
+    </acceptance-validated>
+  </definition-of-done>
+
+  <notes>
+    <development-tips>
+      - Start with Task 1 (schema change) as it's foundational for all other tasks
+      - Task 2 (team sync service) is the core logic - write tests first (TDD)
+      - Task 4 (update seed migration) is critical for idempotency - test thoroughly
+      - Task 3 (Dagster integration) is reference only - Story 2-4 will implement
+      - Use PostgreSQL's ON CONFLICT for upsert - more efficient than SELECT + UPDATE
+      - Log liberally for observability - team discoveries are important events
+    </development-tips>
+
+    <common-pitfalls>
+      - DON'T add colors/aliases/conference to upsert SET clause (would overwrite manual data)
+      - DON'T use multiple queries for team sync (batch insert for performance)
+      - DON'T assume all teams have names.abbrev (it may be missing in API)
+      - DON'T forget to commit after upsert (transaction required)
+      - DON'T skip migration downgrade testing (reversibility important)
+    </common-pitfalls>
+
+    <future-story-references>
+      - Story 2-4 will integrate team sync into Dagster NCAA games asset
+      - Epic 4 may need to revisit team aliases if Reddit matching accuracy is poor
+      - Epic 5+ may implement color/conference automation from future-enhancements.md
+    </future-story-references>
+  </notes>
+</story-context>

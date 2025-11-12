@@ -294,6 +294,404 @@ External Sources → Data Ingestion → Database → API → Frontend
 - Backend ↔ PostgreSQL: SQLModel ORM (connection pooling)
 - Backend ↔ External APIs: HTTP polling (NCAA, Reddit) + WebSocket (Betfair)
 
+## Data Modeling Approach
+
+### Overview: Hybrid Dimensional + Time-Series Architecture
+
+GamePulse employs a **modern dimensional modeling approach** combining Kimball star schema patterns with TimescaleDB time-series optimization. This design demonstrates portfolio-ready data warehouse patterns while maintaining pragmatic simplicity for a 60MB dataset.
+
+**Architecture Philosophy:**
+- **Dimensional core** (Kimball star schema): dim_team, dim_date, fact_game
+- **Time-series facts** (TimescaleDB hypertables): fact_moment, fact_betting_odds
+- **Event streams** (semi-structured): event_reddit_post
+- **SCD Type 2 readiness**: Future-proof for historical tracking
+
+### Dimensional Schema Design
+
+**1. Dimensions (Slowly Changing Dimensions)**
+
+**dim_team** (Surrogate Key: team_key)
+```sql
+dim_team (
+  team_key INTEGER PRIMARY KEY,              -- Surrogate key (SERIAL, auto-increment)
+  team_id VARCHAR(50) UNIQUE NOT NULL,       -- Natural key "ncaam_150"
+  sport VARCHAR(20) NOT NULL,                -- "ncaam", "nfl", "nba" (multi-sport)
+  team_name VARCHAR(100),
+  team_abbr VARCHAR(10),
+
+  -- Flattened team_group (denormalized for query performance)
+  team_group_id VARCHAR(50),                 -- "ncaam_acc", "nfl_nfc_east"
+  team_group_name VARCHAR(100),              -- "Atlantic Coast Conference"
+
+  -- UI metadata
+  primary_color CHAR(7),                     -- Hex color for UI accents
+  secondary_color CHAR(7),
+  aliases TEXT[],                            -- For Reddit fuzzy matching
+
+  -- SCD Type 2 fields (for future conference realignment tracking)
+  is_current BOOLEAN DEFAULT TRUE,
+  valid_from TIMESTAMP DEFAULT NOW(),
+  valid_to TIMESTAMP DEFAULT NULL,           -- NULL = current version
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+)
+```
+
+**Design Rationale:**
+- **Surrogate key (team_key)**: Enables SCD Type 2 - multiple versions of same team (e.g., Texas in Big 12 vs SEC)
+- **Natural key preserved (team_id)**: API integration, external references
+- **Flattened team_group**: Only 6 conferences, minimal attributes → no separate dim_conference table (avoids JOIN overhead)
+- **Generic naming (team_group)**: Not "conference" - supports NFL divisions, NBA conferences
+- **SCD Type 2 ready**: Conference realignment (Texas→SEC, USC→Big Ten) trackable without schema changes
+
+**dim_date** (Surrogate Key: date_key)
+```sql
+dim_date (
+  date_key INTEGER PRIMARY KEY,              -- YYYYMMDD format (20250311)
+  full_date DATE UNIQUE NOT NULL,
+
+  -- Standard Kimball attributes
+  day_of_week INTEGER,                       -- 1-7 (Monday=1, Sunday=7)
+  day_name VARCHAR(10),                      -- "Monday", "Tuesday"
+  day_of_month INTEGER,                      -- 1-31
+  month INTEGER,                             -- 1-12
+  month_name VARCHAR(10),                    -- "January", "February"
+  quarter INTEGER,                           -- 1-4
+  year INTEGER,                              -- 2024, 2025, 2026
+  is_weekend BOOLEAN,
+
+  -- Domain-specific NCAA attributes
+  is_march_madness BOOLEAN,                  -- Mid-March to early April
+  tournament_round VARCHAR(50)               -- "Sweet 16", "Elite 8", etc.
+)
+```
+
+**Design Rationale:**
+- **Integer surrogate key (YYYYMMDD)**: Faster JOINs than DATE type, human-readable
+- **Domain-specific attributes**: March Madness analysis, tournament round filtering
+- **Pre-computed**: No EXTRACT() calls in queries - attributes pre-calculated at seed time
+- **Seeded 2024-2026**: 1,095 rows, negligible storage, massive query simplification
+
+**2. Fact Tables (Measures + Foreign Keys)**
+
+**fact_game** (Operational Fact - Grain: One game occurrence)
+```sql
+fact_game (
+  game_key BIGSERIAL PRIMARY KEY,            -- Surrogate key
+  game_id VARCHAR(50) UNIQUE NOT NULL,       -- Natural key "ncaam_12345"
+
+  -- Dimension foreign keys (surrogate keys, not natural keys)
+  game_date_key INTEGER REFERENCES dim_date(date_key),
+  home_team_key INTEGER REFERENCES dim_team(team_key),
+  away_team_key INTEGER REFERENCES dim_team(team_key),
+
+  -- Degenerate dimensions (no separate dim table)
+  sport VARCHAR(20),
+  game_status VARCHAR(20),                   -- "scheduled", "live", "final"
+  game_type VARCHAR(50),                     -- "regular_season", "tournament"
+  venue VARCHAR(200),
+  broadcast_network VARCHAR(50),
+  game_clock VARCHAR(50),
+
+  -- Measures (numeric facts)
+  home_score INTEGER,
+  away_score INTEGER,
+  attendance INTEGER,
+  rivalry_factor DECIMAL(3,2),               -- Cached denormalization (1.0-1.5)
+
+  -- Timestamps (context, not measures)
+  game_date DATE NOT NULL,
+  game_start_time TIMESTAMP,
+  game_end_time TIMESTAMP,
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+)
+```
+
+**Design Rationale:**
+- **Surrogate key**: Enables future expansion (same game played multiple times in tournament scenarios)
+- **Degenerate dimensions**: sport, game_status, venue - low cardinality, no separate dim table
+- **Cached rivalry_factor**: Denormalized from team_group match - query performance optimization
+- **Indexes on**: game_date, game_status, sport, game_type (hot path queries)
+
+**fact_moment** (Time-Series Fact - Grain: One measurement per game per time interval)
+```sql
+fact_moment (
+  moment_key BIGSERIAL,
+  game_key BIGINT REFERENCES fact_game(game_key),
+  moment_time TIMESTAMP NOT NULL,
+  moment_date_key INTEGER REFERENCES dim_date(date_key),
+
+  -- Measures (excitement components)
+  excitement_score DECIMAL(5,2),             -- 0-100 composite
+  reddit_velocity DECIMAL(8,2),              -- posts/minute
+  reddit_engagement INTEGER,                 -- upvotes + comments*0.5 + awards*2
+  sentiment_score DECIMAL(5,2),              -- -1 to +1 (VADER)
+  odds_volatility DECIMAL(8,4),              -- probability shift
+
+  -- Context
+  game_clock VARCHAR(20),                    -- "2:34 2nd Half"
+  period VARCHAR(10),                        -- "1st", "2nd", "OT"
+
+  -- Optional link to triggering Reddit post
+  source_reddit_post_key BIGINT REFERENCES event_reddit_post(post_key),
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (game_key, moment_time)
+) PARTITION BY RANGE (moment_time);
+```
+
+**TimescaleDB Hypertable Configuration:**
+```sql
+SELECT create_hypertable('fact_moment', 'moment_time', chunk_time_interval => INTERVAL '1 day');
+```
+
+**Design Rationale:**
+- **Grain precision**: One row per measurement snapshot (15 min during batch, potentially real-time later)
+- **TimescaleDB partitioning**: 1-day chunks (low write volume, batch polling)
+- **Optional FK to event_reddit_post**: Links moments to specific triggering posts (heuristic matching)
+- **Query optimization**: TimescaleDB time_bucket for sparkline aggregations
+
+**fact_betting_odds** (High-Velocity Time-Series Fact - Grain: One odds snapshot per game per time per bookmaker)
+```sql
+fact_betting_odds (
+  odds_key BIGSERIAL,
+  game_key BIGINT REFERENCES fact_game(game_key),
+  odds_time TIMESTAMP NOT NULL,
+  odds_date_key INTEGER REFERENCES dim_date(date_key),
+
+  -- Measures
+  home_odds DECIMAL(10,4),                   -- Decimal odds (1.85)
+  away_odds DECIMAL(10,4),
+  home_implied_prob DECIMAL(5,4),            -- 1 / home_odds
+  away_implied_prob DECIMAL(5,4),
+  market_margin DECIMAL(5,4),                -- Overround/vig
+
+  -- Degenerate dimensions (MVP - single bookmaker)
+  bookmaker VARCHAR(50),                     -- "Betfair"
+  market_type VARCHAR(50),                   -- "moneyline"
+
+  created_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (game_key, odds_time, bookmaker, market_type)
+) PARTITION BY RANGE (odds_time);
+```
+
+**TimescaleDB Hypertable Configuration:**
+```sql
+SELECT create_hypertable('fact_betting_odds', 'odds_time', chunk_time_interval => INTERVAL '1 hour');
+```
+
+**Design Rationale:**
+- **Partitioning strategy**: 1-hour chunks (high write volume from WebSocket streaming)
+- **Degenerate dimensions**: bookmaker, market_type - no separate dim_bookmaker for MVP (single bookmaker)
+- **Future normalization**: Epic 11 - create dim_bookmaker if multiple bookmakers added
+
+**3. Event Tables (Semi-Structured Event Streams)**
+
+**event_reddit_post** (Event Stream - NOT a traditional fact table)
+```sql
+event_reddit_post (
+  post_key BIGSERIAL PRIMARY KEY,
+  post_id VARCHAR(50) UNIQUE NOT NULL,       -- Reddit ID "abc123"
+  game_key BIGINT REFERENCES fact_game(game_key),
+  moment_key BIGINT,                         -- FK to fact_moment (nullable, populated via heuristic)
+  post_time TIMESTAMP NOT NULL,
+  post_date_key INTEGER REFERENCES dim_date(date_key),
+
+  -- Event attributes
+  post_title TEXT,
+  post_type VARCHAR(50),                     -- "game_thread", "highlight", "moment"
+  post_url TEXT,
+  author VARCHAR(100),
+
+  -- Measures (for aggregation)
+  upvotes INTEGER,
+  num_comments INTEGER,
+  num_awards INTEGER,
+  engagement_score DECIMAL(10,2),            -- Calculated measure
+  sentiment_score DECIMAL(5,2),              -- VADER on title
+
+  -- Matching metadata
+  matched_teams TEXT[],                      -- ["Duke", "UNC"]
+  match_confidence DECIMAL(3,2),             -- 0-1 fuzzy match quality
+
+  created_at TIMESTAMP DEFAULT NOW()
+) PARTITION BY RANGE (post_time);
+```
+
+**Design Rationale:**
+- **event_ prefix**: Signals semi-structured event stream, NOT traditional fact table
+- **Conceptual distinction**: Events that happened vs measurements of business processes
+- **Future expansion**: JSONB fields, nested comment threads, media attachments
+- **Query patterns**: Full-text search, JSONB queries - different from fact table aggregations
+
+### Why Kimball Dimensional Modeling?
+
+**Portfolio Value:**
+- Demonstrates understanding of industry-standard dimensional modeling methodology
+- Shows ability to make pragmatic trade-offs (when to normalize vs denormalize)
+- SCD Type 2 readiness proves forward-thinking design
+
+**Query Performance Benefits:**
+1. **Pre-computed attributes**: dim_date.is_march_madness, dim_date.tournament_round (no EXTRACT() in queries)
+2. **Strategic denormalization**: team_group flattened into dim_team (6 groups, avoids JOIN)
+3. **Surrogate key JOINs**: Integer comparison faster than VARCHAR natural keys
+4. **TimescaleDB optimization**: time_bucket aggregations on partitioned data
+
+**Example: Dimensional Query Pattern**
+```sql
+-- Top 10 Exciting Games Today (Primary Dashboard Query)
+SELECT
+  fg.game_key,
+  fg.game_id,
+  fg.game_status,
+  ht.team_name AS home_team,
+  ht.primary_color AS home_color,
+  at.team_name AS away_team,
+  at.primary_color AS away_color,
+  fg.home_score,
+  fg.away_score,
+  latest_moment.excitement_score,
+  dd.tournament_round
+FROM fact_game fg
+JOIN dim_team ht ON fg.home_team_key = ht.team_key AND ht.is_current = TRUE
+JOIN dim_team at ON fg.away_team_key = at.team_key AND at.is_current = TRUE
+JOIN dim_date dd ON fg.game_date_key = dd.date_key
+LEFT JOIN LATERAL (
+  SELECT excitement_score, reddit_velocity
+  FROM fact_moment
+  WHERE game_key = fg.game_key
+  ORDER BY moment_time DESC
+  LIMIT 1
+) latest_moment ON TRUE
+WHERE dd.full_date = CURRENT_DATE
+ORDER BY latest_moment.excitement_score DESC NULLS LAST
+LIMIT 10;
+```
+
+**Query Benefits:**
+- Surrogate key JOINs (team_key, date_key) - faster than natural keys
+- SCD Type 2 filter (is_current = TRUE) - gets current team version
+- Pre-computed tournament_round - no date extraction logic
+- TimescaleDB lateral JOIN - efficient latest moment lookup
+
+### When NOT to Use Dimensional Modeling
+
+**Reddit Posts → event_reddit_post (event stream)**
+- Semi-structured social data with variable attributes
+- May need JSONB fields, nested structures
+- Query patterns: full-text search, not traditional aggregations
+- Use event_ prefix to signal conceptual difference
+
+**Operational Tables → fact_game (hybrid approach)**
+- Updated frequently during live games (score changes, status transitions)
+- Supports both OLTP (real-time updates) and OLAP (analytical queries)
+- Compromise: operational fact table with dimensional FK relationships
+
+### SCD Type 2 Strategy (Epic 11 - Post-MVP)
+
+**Use Case: Conference Realignment Tracking**
+
+Example: Texas moves from Big 12 to SEC in 2024
+
+**Current State (Big 12):**
+```sql
+team_key: 42
+team_id: "ncaam_251"
+team_name: "Texas"
+team_group_id: "ncaam_b12"
+team_group_name: "Big 12 Conference"
+is_current: TRUE
+valid_from: 2020-01-01
+valid_to: NULL
+```
+
+**After Conference Change:**
+```sql
+-- Old version (expire)
+UPDATE dim_team
+SET is_current = FALSE, valid_to = '2024-07-01'
+WHERE team_key = 42;
+
+-- New version (insert)
+INSERT INTO dim_team (
+  team_id, team_name, team_group_id, team_group_name,
+  is_current, valid_from, valid_to, ...
+)
+VALUES (
+  'ncaam_251', 'Texas', 'ncaam_sec', 'Southeastern Conference',
+  TRUE, '2024-07-01', NULL, ...
+);
+```
+
+**Historical Query:**
+```sql
+-- "Which conference was Texas in during 2023 season?"
+SELECT team_group_name
+FROM dim_team
+WHERE team_id = 'ncaam_251'
+  AND '2023-12-01' BETWEEN valid_from AND COALESCE(valid_to, '9999-12-31');
+-- Result: "Big 12 Conference"
+```
+
+**Benefits:**
+- Historical accuracy preserved (games played in Big 12 vs SEC)
+- No cascade updates to fact tables
+- Temporal queries: "Show all SEC teams for 2024 season"
+
+### TimescaleDB Partitioning Strategy
+
+**fact_moment: 1-day chunks**
+- Write volume: Low (batch polling every 15 min = ~100 writes/day per game)
+- Query pattern: Recent data (last 4 hours for sparklines)
+- Retention: Keep all data (60MB total for full season)
+
+**fact_betting_odds: 1-hour chunks**
+- Write volume: High (WebSocket streaming = ~100 ticks per game)
+- Query pattern: Recent volatility calculations (5-min windows)
+- Retention: Keep all data for MVP, compress older data in Epic 11
+
+**Compression (Deferred to Epic 11):**
+```sql
+-- Compress data older than 7 days
+ALTER TABLE fact_moment SET (
+  timescaledb.compress,
+  timescaledb.compress_segmentby = 'game_key'
+);
+
+SELECT add_compression_policy('fact_moment', INTERVAL '7 days');
+```
+
+### Schema Evolution Pattern
+
+**Phase 1 (Epic 2): Normalized → Dimensional Refactor**
+- Story 2-3a: Add surrogate keys, flatten team_groups, add SCD Type 2 fields
+- Migration preserves all data, no downtime
+
+**Phase 2 (Epic 4-6): Add Time-Series Facts**
+- Create fact_moment, fact_betting_odds as hypertables
+- Partitioning strategy optimized per write volume
+
+**Phase 3 (Epic 11): Advanced Features**
+- Implement SCD Type 2 logic for conference changes
+- Add dim_time, dim_tournament
+- Create continuous aggregates for performance
+
+### Interview Talking Points
+
+**"Why hybrid dimensional + time-series?"**
+> "GamePulse has dual requirements: operational queries for the real-time dashboard (which game is exciting RIGHT NOW) and analytical queries for trending analysis (which teams generated the most excitement this tournament). Pure Kimball would over-engineer the operational queries, but pure normalized OLTP would make the time-series analysis inefficient. I used TimescaleDB hypertables for high-velocity measurements while keeping a dimensional core for slicing by team, conference, and time."
+
+**"Why flatten team_group instead of separate dim_conference table?"**
+> "With only 6 major conferences and minimal attributes (just name and type), normalizing to a separate dim_conference table adds JOIN overhead without providing value. However, I kept the team_group_id for potential future expansion - if we add NFL with 8 divisions and complex hierarchies, we can denormalize to a proper dimension table with SCD Type 2 without changing the fact tables. It's pragmatic dimensional modeling - Kimball patterns where they add value, denormalization where they don't."
+
+**"Why event_ prefix for Reddit data?"**
+> "Reddit posts are semi-structured events with JSONB-friendly attributes, not traditional business process measurements. The schema signals this is an event stream that might evolve to include nested comment threads, media attachments, or real-time CDC from Reddit's API. It's conceptually distinct from fact tables which measure repeatable business processes. This naming convention makes the architectural intent clear to future developers."
+
+---
+
 ## Implementation Patterns
 
 ### Naming Conventions

@@ -173,7 +173,7 @@ From Story 2.2 review findings (line 165): "Uses `Game` model directly since SQL
 - [x] Integration tests written and passing (database operations)
 - [x] Foreign key constraints enforced (tested with invalid team_id)
 - [x] Code follows architecture patterns (SQLModel, type hints, async)
-- [ ] Changes committed to git
+- [x] Changes committed to git
 
 ## Dev Agent Record
 

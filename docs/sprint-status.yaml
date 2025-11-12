@@ -1,7 +1,7 @@
 # Sprint Status - GamePulse Project
 # This tracks progress through implementation phases
 
-# generated: 2025-11-07
+# generated: 2025-11-11
 # project: gamepulse
 # project_key: gamepulse
 # tracking_system: file-system
@@ -32,14 +32,14 @@
 # - SM typically drafts next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
 
-generated: 2025-11-07
+generated: 2025-11-11
 project: gamepulse
 project_key: gamepulse
 tracking_system: file-system
 story_location: "{project-root}/docs/stories"
 
 development_status:
-  # Epic 1: Project Foundation & Infrastructure (8 stories - reordered sequence)
+  # Epic 1: Project Foundation & Infrastructure (8 stories)
   epic-1: done
   1-1-initialize-fastapi-template: done
   1-1b-provision-aws-infrastructure: done
@@ -51,11 +51,14 @@ development_status:
   1-7-ecr-remote-builds: done
   epic-1-retrospective: completed
 
-  # Epic 2: Game Data Ingestion (Batch) (5 stories)
+  # Epic 2: Dimensional Foundation + Game Data Ingestion (8 stories)
   epic-2: contexted
   2-1-create-dimensional-data: done
   2-2-build-ncaa-client: done
-  2-3-create-game-model: ready-for-dev
+  2-3-create-game-model: done
+  2-3a-refactor-dimensional-model: ready-for-dev
+  2-3b-sync-team-metadata: drafted
+  2-3c-create-dim-date: drafted
   2-4-implement-polling-worker: drafted
   2-5-add-retry-logic: drafted
   epic-2-retrospective: optional
@@ -69,11 +72,11 @@ development_status:
   3-5-add-auto-refresh: drafted
   epic-3-retrospective: optional
 
-  # Epic 4: Reddit Social Sentiment (Batch) (not decomposed yet)
+  # Epic 4: Reddit Social Sentiment (not decomposed yet)
   epic-4: backlog
   epic-4-retrospective: optional
 
-  # Epic 5: Excitement Score Algorithm (not decomposed yet)
+  # Epic 5: Moment Detection & Excitement Scoring (not decomposed yet)
   epic-5: backlog
   epic-5-retrospective: optional
 
@@ -96,3 +99,7 @@ development_status:
   # Epic 10: Documentation & Polish (not decomposed yet)
   epic-10: backlog
   epic-10-retrospective: optional
+
+  # Epic 11: Advanced Dimensional Features (not decomposed yet - post-MVP)
+  epic-11: backlog
+  epic-11-retrospective: optional
