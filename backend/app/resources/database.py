@@ -3,15 +3,20 @@
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from dagster import ConfigurableResource
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import settings
 
 
-class DatabaseResource(ConfigurableResource):
+class DatabaseResource(ConfigurableResource):  # type: ignore[type-arg]
     """Dagster resource for managing async database connections.
 
     Provides async SQLModel sessions for asset materializations.
@@ -21,7 +26,7 @@ class DatabaseResource(ConfigurableResource):
     """
 
     _engine: AsyncEngine | None = None
-    _session_factory: sessionmaker | None = None
+    _session_factory: async_sessionmaker[AsyncSession] | None = None
     _pid: int | None = None  # Track which process created the engine
 
     def _ensure_engine(self) -> None:
@@ -42,7 +47,7 @@ class DatabaseResource(ConfigurableResource):
                 max_overflow=5,  # Reduced for in-process executor (was 10)
             )
 
-            self._session_factory = sessionmaker(
+            self._session_factory = async_sessionmaker(
                 bind=self._engine,
                 class_=AsyncSession,
                 expire_on_commit=False,
@@ -50,7 +55,7 @@ class DatabaseResource(ConfigurableResource):
 
             self._pid = current_pid
 
-    def teardown_after_execution(self, context) -> None:
+    def teardown_after_execution(self, context: Any) -> None:
         """Dispose of async engine when resource is unloaded."""
         if self._engine and self._pid == os.getpid():
             import asyncio
