@@ -708,10 +708,20 @@ frontend/src/
 
 ### Database & Migrations
 
+**Database Architecture:**
+GamePulse uses **two separate PostgreSQL databases** on the same server:
+1. **`app` database** - Application data (teams, games, users) managed by Alembic migrations
+2. **`dagster` database** - Dagster orchestration metadata (runs, schedules, event logs) managed by Dagster
+
+**Why Separate Databases:**
+- Prevents conflicts between Alembic migrations (application) and Dagster schema
+- Isolates orchestration metadata from application data
+- Allows independent backup/restore and migration strategies
+
 **TimescaleDB Extension:**
 The PostgreSQL database includes the TimescaleDB extension for time-series data capabilities.
 
-**Migration Workflow:**
+**Application Database Migration Workflow (Alembic):**
 1. Modify SQLModel models in `backend/app/models.py`
 2. Generate migration: `alembic revision --autogenerate -m "Description"`
 3. Review generated migration in `backend/app/alembic/versions/`
@@ -722,6 +732,27 @@ The PostgreSQL database includes the TimescaleDB extension for time-series data 
 - Uncomment `SQLModel.metadata.create_all(engine)` in production
 - Manually modify the database schema
 - Skip migrations for schema changes
+
+**Dagster Database Initialization:**
+
+The `dagster` database requires separate initialization from Alembic migrations:
+
+```bash
+# Check if dagster database exists
+docker compose exec db psql -U postgres -l | grep dagster
+
+# Create database if missing
+docker compose exec db psql -U postgres -c "CREATE DATABASE dagster;"
+
+# Initialize Dagster schema (creates ~25 tables)
+docker compose exec dagster-daemon dagster instance migrate
+
+# Verify tables created
+docker compose exec db psql -U postgres -d dagster -c "\dt" | head -20
+```
+
+**Automatic Initialization:**
+The `backend/scripts/prestart.sh` script automatically handles Dagster database creation and schema initialization on deployment if `DAGSTER_POSTGRES_DB` environment variable is set to a value different from `POSTGRES_DB`.
 
 **Dimensional Data Seeding:**
 
@@ -1005,3 +1036,94 @@ docker compose exec backend python
 - Check AWS credentials: `aws sts get-caller-identity`
 - Verify terraform.tfvars has correct IP addresses
 - Check SSH key exists: `ls -l ~/.ssh/gamepulse-key*`
+
+**Issue: Dagster services won't start or in restart loop**
+- **Symptom:** Dagster webserver/daemon containers constantly restarting
+- **Common causes:**
+  1. Missing `dagster` database - Check if database exists:
+     ```bash
+     docker compose exec db psql -U postgres -l | grep dagster
+     ```
+  2. Database exists but schema not initialized - Verify tables exist:
+     ```bash
+     docker compose exec db psql -U postgres -d dagster -c "\dt" | head -20
+     ```
+- **Solution:**
+  ```bash
+  # Create database if missing
+  docker compose exec db psql -U postgres -c "CREATE DATABASE dagster;"
+
+  # Initialize Dagster schema
+  docker compose exec dagster-daemon dagster instance migrate
+
+  # Restart services
+  docker compose restart dagster-daemon dagster-webserver
+  ```
+- **Prevention:** The `prestart.sh` script should handle this automatically in future deployments
+
+**Issue: High CPU usage from Dagster or ssm-worker processes**
+- **Symptom:** EC2 instance slow, high CPU usage visible in `top` or CloudWatch
+- **Root cause:** Dagster services in infinite retry loop trying to connect to uninitialized database
+- **Solution:** Follow "Dagster services won't start" steps above - CPU should normalize within 1-2 minutes
+- **Verification:**
+  ```bash
+  # Check CPU before fix
+  top -bn1 | grep -E "Cpu|dagster|ssm"
+
+  # After fix, verify Dagster is healthy
+  docker compose exec dagster-daemon dagster instance info
+
+  # Check CPU normalized
+  top -bn1 | grep -E "Cpu|dagster|ssm"
+  ```
+
+**Issue: Dagster UI shows "Instance misconfigured" or connection errors**
+- **Symptom:** Dagster UI loads but shows configuration errors
+- **Check environment variables:**
+  ```bash
+  docker compose config | grep DAGSTER
+  ```
+- **Verify all required variables are set:**
+  - `DAGSTER_POSTGRES_URL` - Should point to `dagster` database (not `app`)
+  - `DAGSTER_POSTGRES_DB=dagster` - Separate database name
+  - `DAGSTER_HOME=/tmp/dagster_home` - Dagster runtime directory
+- **Verify database connection:**
+  ```bash
+  docker compose exec dagster-daemon python -c "
+  import os
+  from dagster_postgres.run_storage import PostgresRunStorage
+  print(f'DB URL: {os.getenv(\"DAGSTER_POSTGRES_URL\")}')
+  "
+  ```
+
+**Issue: Dagster schedule not running (ncaa_games_schedule)**
+- **Check schedule status in Dagster UI:**
+  - Navigate to **Schedules** tab
+  - Verify `ncaa_games_schedule` shows status **Running** (not **Stopped**)
+- **If stopped, start it:**
+  - Click toggle to enable schedule
+  - Schedule runs every 15 minutes (cron: `*/15 * * * *`)
+- **Check daemon is processing schedules:**
+  ```bash
+  docker compose logs dagster-daemon | grep -i schedule
+  # Should see: "Checking for new runs for schedule: ncaa_games_schedule"
+  ```
+- **Manual test:**
+  ```bash
+  # Trigger manual materialization
+  docker compose exec dagster-daemon dagster asset materialize -m app.dagster_definitions ncaa_games
+  ```
+
+**Issue: Dagster asset materialization fails**
+- **Check logs for specific error:**
+  ```bash
+  docker compose logs dagster-daemon | grep -A 20 "ncaa_games"
+  ```
+- **Common causes:**
+  1. **Database connection issues** - Check `POSTGRES_*` env vars
+  2. **NCAA API timeout** - Network connectivity issue
+  3. **Missing teams in dim_team** - Run seed migration: `alembic upgrade head`
+- **Verify database tables exist:**
+  ```bash
+  docker compose exec db psql -U postgres -d app -c "\dt" | grep -E "dim_team|fact_game"
+  ```

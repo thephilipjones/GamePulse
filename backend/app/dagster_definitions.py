@@ -5,6 +5,7 @@ Registers assets, schedules, and resources for Dagster workspace.
 """
 
 from dagster import (
+    DefaultScheduleStatus,
     Definitions,
     ScheduleDefinition,
     define_asset_job,
@@ -25,13 +26,14 @@ ncaa_games_job = define_asset_job(
     description="Manually materialize NCAA games asset",
 )
 
-# Define schedule: every 15 minutes
+# Define schedule: every 15 minutes (starts STOPPED, manually enable in UI)
 ncaa_games_schedule = ScheduleDefinition(
     name="ncaa_games_schedule",
     job=ncaa_games_job,
     cron_schedule="*/15 * * * *",  # Every 15 minutes
     description="Materialize NCAA games data every 15 minutes",
     execution_timezone="America/New_York",  # NCAA games typically in Eastern Time
+    default_status=DefaultScheduleStatus.STOPPED,  # Start disabled to prevent auto-execution
 )
 
 # Initialize resources

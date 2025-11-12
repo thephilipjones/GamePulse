@@ -28,16 +28,20 @@ nano .env
 # DAGSTER ORCHESTRATION (NEW)
 # ============================================
 
-# Dagster metadata storage (PostgreSQL)
-DAGSTER_POSTGRES_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+# Dagster metadata storage (PostgreSQL - separate database)
+# IMPORTANT: Uses separate 'dagster' database to avoid conflicts with application data
+DAGSTER_POSTGRES_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/dagster
 DAGSTER_POSTGRES_USER=postgres
 DAGSTER_POSTGRES_PASSWORD=<same-as-POSTGRES_PASSWORD>
-DAGSTER_POSTGRES_DB=app
+DAGSTER_POSTGRES_DB=dagster
 DAGSTER_POSTGRES_HOSTNAME=db
 DAGSTER_POSTGRES_PORT=5432
 
 # Dagster runtime
 DAGSTER_HOME=/tmp/dagster_home
+
+# NOTE: The 'dagster' database and schema will be automatically created
+# by the prestart.sh script on first deployment.
 ```
 
 **Validation:**
@@ -84,16 +88,21 @@ If DNS not configured:
 
 ---
 
-### **Step 3: Update GitHub Secrets (Optional - for separate Dagster DB)**
+### **Step 3: Update GitHub Secrets (Dagster Database Configuration)**
 
-**IF using separate database for Dagster metadata** (recommended to avoid Alembic conflicts):
+**Action:** Configure separate Dagster database in GitHub Secrets to avoid Alembic conflicts
 
 1. Navigate to: `https://github.com/PhilipTrauner/gamepulse/settings/secrets/actions`
 2. Add new secret:
    - Name: `DAGSTER_POSTGRES_DB`
    - Value: `dagster`
 
-**Note:** Current implementation uses same database (`app`). Separate DB setup can be done later.
+**Why Separate Database:**
+- Prevents conflicts between Alembic migrations (application) and Dagster schema
+- Isolates Dagster metadata from application data
+- Allows independent backup/restore strategies
+
+**Note:** The `dagster` database will be automatically created and initialized by `prestart.sh` on first deployment.
 
 ---
 
@@ -325,10 +334,26 @@ docker compose logs dagster-daemon --tail 50
    - Check: `docker compose logs db | grep "ready to accept connections"`
    - Fix: Ensure PostgreSQL container is healthy before starting Dagster
 
-3. **Alembic migration conflict** (known issue)
-   - Symptom: `Can't locate revision identified by 'e85b1a0dd26b'`
-   - **Workaround:** This is a warning, not a blocker. Dagster still functions.
-   - **Permanent Fix:** Use separate database for Dagster metadata (future story)
+3. **Dagster database not initialized**
+   - Symptom: Connection errors, `relation "runs" does not exist`, or services in restart loop
+   - Cause: The `dagster` database exists but schema hasn't been initialized
+   - **Fix:** Manually run initialization:
+     ```bash
+     # Create database if missing
+     docker compose exec db psql -U postgres -c "CREATE DATABASE dagster;"
+
+     # Initialize Dagster schema
+     docker compose exec dagster-daemon dagster instance migrate
+
+     # Restart services
+     docker compose restart dagster-daemon dagster-webserver
+     ```
+   - **Prevention:** This should be handled automatically by `prestart.sh` in future deployments
+
+4. **High CPU usage from retry loops**
+   - Symptom: `ssm-worker` or Dagster processes consuming high CPU
+   - Cause: Services repeatedly failing to connect to uninitialized database
+   - **Fix:** Follow step 3 above to initialize the database, CPU should normalize within 1-2 minutes
 
 **Recovery:**
 ```bash

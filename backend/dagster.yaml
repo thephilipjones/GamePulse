@@ -7,6 +7,7 @@ run_storage:
   config:
     postgres_url:
       env: DAGSTER_POSTGRES_URL
+    connection_timeout: 10
 
 event_log_storage:
   module: dagster_postgres.event_log
@@ -14,6 +15,7 @@ event_log_storage:
   config:
     postgres_url:
       env: DAGSTER_POSTGRES_URL
+    connection_timeout: 10
 
 schedule_storage:
   module: dagster_postgres.schedule_storage
@@ -21,6 +23,7 @@ schedule_storage:
   config:
     postgres_url:
       env: DAGSTER_POSTGRES_URL
+    connection_timeout: 10
 
 run_coordinator:
   module: dagster.core.run_coordinator
@@ -29,6 +32,8 @@ run_coordinator:
 run_launcher:
   module: dagster.core.launcher
   class: DefaultRunLauncher
+  config:
+    max_concurrent_runs: 10
 
 telemetry:
   enabled: false
