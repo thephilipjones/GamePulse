@@ -57,15 +57,18 @@ def upgrade():
             team_group_id = team["team_group_id"]
             team_group_name = conference_lookup.get(team_group_id)
 
+            # Extract ESPN team ID from team_id (e.g., "ncaam_150" → "150")
+            espn_team_id = team["team_id"].split("_")[1] if "_" in team["team_id"] else None
+
             conn.execute(
                 sa.text("""
                     INSERT INTO dim_team (
-                        team_id, sport, team_name, team_abbr, team_group_id, team_group_name,
+                        team_id, sport, team_name, team_abbr, espn_team_id, team_group_id, team_group_name,
                         primary_color, secondary_color, aliases,
                         is_current, valid_from, valid_to, created_at, updated_at
                     )
                     VALUES (
-                        :team_id, :sport, :team_name, :team_abbr, :team_group_id, :team_group_name,
+                        :team_id, :sport, :team_name, :team_abbr, :espn_team_id, :team_group_id, :team_group_name,
                         :primary_color, :secondary_color, :aliases,
                         TRUE, NOW(), NULL, NOW(), NOW()
                     )
@@ -74,6 +77,7 @@ def upgrade():
                         sport = EXCLUDED.sport,
                         team_name = EXCLUDED.team_name,
                         team_abbr = EXCLUDED.team_abbr,
+                        espn_team_id = EXCLUDED.espn_team_id,
                         team_group_id = EXCLUDED.team_group_id,
                         team_group_name = EXCLUDED.team_group_name,
                         primary_color = EXCLUDED.primary_color,
@@ -86,6 +90,7 @@ def upgrade():
                     "sport": team["sport"],
                     "team_name": team["team_name"],
                     "team_abbr": team["team_abbr"],
+                    "espn_team_id": espn_team_id,
                     "team_group_id": team_group_id,
                     "team_group_name": team_group_name,
                     "primary_color": team["primary_color"],

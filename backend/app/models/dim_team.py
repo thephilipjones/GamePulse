@@ -34,6 +34,7 @@ class DimTeam(SQLModel, table=True):
     sport: str = Field(index=True, max_length=20)  # "ncaam", "nfl", "nba"
     team_name: str = Field(max_length=100)
     team_abbr: str | None = Field(default=None, max_length=10)
+    espn_team_id: str | None = Field(default=None, index=True)  # ESPN team ID from API
 
     # Flattened team_group (denormalized for query performance)
     team_group_id: str | None = Field(default=None, max_length=50)

@@ -1,7 +1,7 @@
 # Story 2-3b: Sync Team Metadata from NCAA API
 
 **Epic**: Epic 2 - Dimensional Foundation + Game Data Ingestion (Batch)
-**Status**: Drafted
+**Status**: ready-for-dev
 **Estimated Effort**: 2-3 hours
 **Priority**: Medium (Optional enhancement, prevents future issues)
 
@@ -965,3 +965,9 @@ None - can be implemented immediately after Story 2-3.
 - Estimated 2-3 hours implementation time
 - Can run in parallel with Story 2-4 (Dagster worker) if needed
 - Future work documented for Epic 4+ planning
+
+## Dev Agent Record
+
+### Context Reference
+
+- [Story Context XML](./2-3b-sync-team-metadata.context.xml) (Generated: 2025-11-11)

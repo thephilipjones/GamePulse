@@ -33,8 +33,8 @@ class FactGame(SQLModel, table=True):
 
     # Dimension foreign keys (using surrogate keys)
     game_date_key: int | None = Field(
-        default=None, foreign_key="dim_date.date_key"
-    )  # Will be populated in Story 2-3c
+        default=None
+    )  # FK to dim_date.date_key - constraint will be added in Story 2-3c
     home_team_key: int = Field(foreign_key="dim_team.team_key")
     away_team_key: int = Field(foreign_key="dim_team.team_key")
 

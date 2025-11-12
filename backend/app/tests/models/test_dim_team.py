@@ -226,3 +226,29 @@ class TestDimTeamModel:
 
         assert team.team_key == 1
         assert isinstance(team.team_key, int)
+
+    def test_dim_team_espn_team_id_field(self):
+        """Test espn_team_id field for ESPN API integration."""
+        # Test with espn_team_id
+        team_with_espn_id = DimTeam(
+            team_id="ncaam_150",
+            sport="ncaam",
+            team_name="Duke",
+            espn_team_id="150",
+        )
+
+        assert team_with_espn_id.espn_team_id == "150"
+        assert isinstance(team_with_espn_id.espn_team_id, str)
+
+        # Test without espn_team_id (defaults to None)
+        team_without_espn_id = DimTeam(
+            team_id="ncaam_manual_team",
+            sport="ncaam",
+            team_name="Manual Team",
+        )
+
+        assert team_without_espn_id.espn_team_id is None
+
+        # Test espn_team_id can be set after creation
+        team_without_espn_id.espn_team_id = "999"
+        assert team_without_espn_id.espn_team_id == "999"
