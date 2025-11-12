@@ -1,0 +1,187 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>2</storyId>
+    <title>Build NCAA API Client with httpx</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-11</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/2-2-build-ncaa-client.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a developer</asA>
+    <iWant>to create an async NCAA API client that fetches game schedules and scores</iWant>
+    <soThat>I can retrieve today's games and their current status</soThat>
+    <tasks>
+      - Create NCAA client module at backend/app/services/ncaa_client.py
+      - Implement fetch_todays_games() async function
+      - Implement fetch_game_details(game_id) async function
+      - Implement parse_game_data(raw_data) async function
+      - Use httpx.AsyncClient for HTTP requests
+      - Add retry logic with tenacity (3 attempts, exponential backoff)
+      - Implement rate limiting (200ms delay between requests)
+      - Add error handling for 4xx/5xx responses
+      - Add dependencies (httpx, tenacity) to pyproject.toml
+      - Add structured logging with structlog
+      - Create manual test: python -m app.services.ncaa_client
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    - AC1: NCAA API client module includes three async functions:
+      * fetch_todays_games() -> List[dict]: Returns all games for current date
+      * fetch_game_details(game_id: str) -> dict: Returns detailed info for single game
+      * parse_game_data(raw_data: dict) -> GameCreate: Transforms API response to SQLModel schema
+    - AC2: Client uses httpx.AsyncClient for async HTTP requests
+    - AC3: Client includes retry logic with tenacity (3 attempts, exponential backoff)
+    - AC4: Client respects 5 req/sec rate limit (200ms delay between requests)
+    - AC5: Client includes error handling for 4xx/5xx responses
+    - AC6: Manual test works: python -m app.services.ncaa_client fetches today's games
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification: Game Data Ingestion (Batch)</title>
+        <section>NCAA API Client Module (lines 138-183)</section>
+        <snippet>Complete NCAA client implementation with NCAAClient class using httpx.AsyncClient, rate limiting (200ms delay), retry logic with tenacity (3 attempts, exponential backoff), and structured logging. Includes fetch_games() method that returns List[dict] from NCAA API endpoint.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Acceptance Criteria AC-2 (lines 894-902)</section>
+        <snippet>Testing requirements: Mock NCAA API response for unit test, verify parsing logic. Integration test with live NCAA API when games scheduled. Verify client.close() releases resources properly.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Epic 2: Game Data Ingestion (Batch)</section>
+        <snippet>Goal: Ingest NCAA Men's Basketball game schedules, live scores, and final results via batch polling every 15 minutes. Provides foundational game data for all other features. Story 2.2 builds the async NCAA API client.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Technical Decisions - Backend Framework</section>
+        <snippet>FastAPI 0.114.2+ for async/await support, automatic OpenAPI docs, and high performance. Use async patterns throughout services layer.</snippet>
+      </doc>
+      <doc>
+        <path>CLAUDE.md</path>
+        <title>Project Development Guide</title>
+        <section>Backend Development Commands</section>
+        <snippet>Test commands: uv run pytest -v for all tests, uv run pytest app/tests/path/test_file.py for specific tests. Coverage: uv run coverage run -m pytest && uv run coverage report. Lint: uv run ruff check . && uv run mypy .</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/models/game.py</path>
+        <kind>model</kind>
+        <symbol>Game</symbol>
+        <lines>13-45</lines>
+        <reason>SQLModel schema that parse_game_data() must transform NCAA API response into. Contains fields: game_id, sport, game_date, home/away_team_id, scores, status, clock, venue, etc.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/team.py</path>
+        <kind>model</kind>
+        <symbol>Team</symbol>
+        <lines>14-38</lines>
+        <reason>Team dimensional table that NCAA client will reference via foreign keys (home_team_id, away_team_id). Team IDs format: "{sport}_{slug}" (e.g., "ncaam_duke").</reason>
+      </artifact>
+      <artifact>
+        <path>backend/pyproject.toml</path>
+        <kind>config</kind>
+        <symbol>dependencies</symbol>
+        <lines>6-20</lines>
+        <reason>Project dependencies already include httpx (0.27.0+) and tenacity (9.0.0+) required for this story. No new dependencies needed.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/conftest.py</path>
+        <kind>test</kind>
+        <symbol>pytest fixtures</symbol>
+        <lines>all</lines>
+        <reason>Existing pytest configuration and fixtures for testing patterns. Use for NCAA client unit/integration tests.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="httpx" version=">=0.27.0,<1.0.0" status="installed">Async HTTP client for NCAA API requests</package>
+        <package name="tenacity" version=">=9.0.0,<10.0.0" status="installed">Retry logic with exponential backoff</package>
+        <package name="structlog" version="implicit" status="check">Structured logging (verify if installed)</package>
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0" status="installed">ORM for Game model integration</package>
+        <package name="fastapi[standard]" version=">=0.115.0,<1.0.0" status="installed">Framework providing async support</package>
+        <package name="pytest" version=">=8.3.0,<9.0.0" status="installed">Testing framework</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Module Location: Create new file at backend/app/services/ncaa_client.py (services directory does not exist yet, must be created)
+    - Async Patterns: All functions must be async (async def) using await for HTTP calls with httpx.AsyncClient
+    - Rate Limiting: Must implement 200ms delay between requests (5 req/sec limit) using asyncio.sleep(0.2)
+    - Retry Logic: Use @retry decorator from tenacity with stop_after_attempt(3) and wait_exponential(min=2, max=60)
+    - Error Handling: Graceful degradation - return empty list on total failure, log all errors with structlog
+    - Logging: Use structured logging (structlog.get_logger()) with context fields (url, date, games_count)
+    - Type Hints: All functions must have type hints (List[dict], dict, GameCreate return types)
+    - Testing: Manual test via python -m app.services.ncaa_client must work
+    - Code Style: Follow project ruff/mypy standards (see pyproject.toml)
+    - Import Pattern: Use absolute imports (from app.models.game import Game)
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>fetch_todays_games</name>
+      <kind>async function</kind>
+      <signature>async def fetch_todays_games() -> List[dict]</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>Returns all games for current date from NCAA API. Uses default date=today. Returns raw API response as list of game dictionaries.</description>
+    </interface>
+    <interface>
+      <name>fetch_game_details</name>
+      <kind>async function</kind>
+      <signature>async def fetch_game_details(game_id: str) -> dict</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>Returns detailed information for a single game by ID. Uses NCAA API game detail endpoint.</description>
+    </interface>
+    <interface>
+      <name>parse_game_data</name>
+      <kind>async function</kind>
+      <signature>async def parse_game_data(raw_data: dict) -> GameCreate</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>Transforms NCAA API response dictionary to Game SQLModel schema (GameCreate). Maps API fields (game ID, teams, scores, status, clock) to Game model fields.</description>
+    </interface>
+    <interface>
+      <name>NCAAClient</name>
+      <kind>class</kind>
+      <signature>class NCAAClient with methods: fetch_games(game_date: date = None), close()</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>Main client class from tech-spec-epic-2.md. BASE_URL = "https://ncaa-api.henrygd.me/scoreboard/basketball-men/d1", RATE_LIMIT_DELAY = 0.2. Uses httpx.AsyncClient with timeout=10.0.</description>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+      Testing framework: pytest with async support (pytest-asyncio)
+      Test structure: Mirror source structure - backend/app/tests/services/test_ncaa_client.py
+      Test commands: uv run pytest -v for all tests, uv run pytest app/tests/services/test_ncaa_client.py -v for specific test
+      Coverage: uv run coverage run -m pytest && uv run coverage report
+      Mocking: Use pytest-mock or unittest.mock for HTTP responses
+      Fixtures: Use existing conftest.py patterns for database fixtures
+      Linting: Tests must pass ruff check and mypy type checking
+    </standards>
+    <locations>
+      backend/app/tests/services/test_ncaa_client.py (create new)
+      backend/app/tests/conftest.py (existing fixtures)
+    </locations>
+    <ideas>
+      <test id="AC1">Unit test: Mock httpx.AsyncClient response, verify fetch_todays_games() returns List[dict]</test>
+      <test id="AC1">Unit test: Mock httpx.AsyncClient response, verify fetch_game_details(game_id) returns dict with game data</test>
+      <test id="AC1">Unit test: Verify parse_game_data() correctly transforms NCAA API dict to Game model fields</test>
+      <test id="AC3">Unit test: Verify @retry decorator is applied and retries 3 times on failure</test>
+      <test id="AC4">Unit test: Verify 200ms delay between requests using asyncio time mocking</test>
+      <test id="AC5">Unit test: Verify 4xx/5xx responses raise HTTPStatusError and are logged</test>
+      <test id="AC5">Unit test: Verify graceful degradation - return empty list on total failure</test>
+      <test id="AC6">Integration test: Manual test - python -m app.services.ncaa_client fetches today's games (if games scheduled)</test>
+      <test id="general">Test NCAAClient.close() properly releases httpx.AsyncClient resources</test>
+    </ideas>
+  </tests>
+</story-context>
