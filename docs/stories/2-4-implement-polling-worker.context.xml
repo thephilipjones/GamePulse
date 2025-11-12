@@ -1,0 +1,229 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>4</storyId>
+    <title>Implement Dagster Data Orchestration and NCAA Game Asset</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-12</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/2-4-implement-polling-worker.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a developer</asA>
+    <iWant>a Dagster asset that materializes NCAA game data on a 15-minute schedule</iWant>
+    <soThat>game data is continuously updated with full observability and lineage tracking</soThat>
+    <tasks>
+      <task id="1">Create Dagster workspace configuration (workspace.yaml)</task>
+      <task id="2">Implement database resource for Dagster (app/resources/database.py)</task>
+      <task id="3">Create NCAA games asset (app/assets/ncaa_games.py) with polling, transformation, and upsert logic</task>
+      <task id="4">Create Dagster definitions (app/dagster_definitions.py) with job and 15-minute schedule</task>
+      <task id="5">Add Dagster dependencies to pyproject.toml (dagster, dagster-webserver, dagster-postgres)</task>
+      <task id="6">Verify Docker Compose has dagster-webserver and dagster-daemon services configured</task>
+      <task id="7">Implement retry policy with exponential backoff (2s, 4s, 8s)</task>
+      <task id="8">Integrate rivalry detection via calculate_rivalry_factor()</task>
+      <task id="9">Add structured logging with ncaa_games_asset_started/completed events</task>
+      <task id="10">Test manual materialization via Dagster UI and CLI</task>
+      <task id="11">Verify schedule activation and observability in Dagster UI</task>
+      <task id="12">Validate games are upserted to database with correct rivalry factors</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <given>I have an NCAA API client and Game SQLModel</given>
+      <when>I create a Dagster asset for NCAA game ingestion</when>
+      <then>
+        - Materializes on a 15-minute schedule (cron: `*/15 * * * *`)
+        - Fetches today's games from NCAA API using the async client
+        - For each game, upserts to database (INSERT or UPDATE if game_id exists)
+        - Logs materialization events with game count: "ncaa_games_asset_completed, games_processed=8"
+        - Handles API failures gracefully using Dagster's built-in retry policy
+      </then>
+    </criterion>
+    <criterion id="AC2">
+      <description>I have Dagster infrastructure running</description>
+      <requirements>
+        - Dagster webserver container accessible at http://localhost:3000 (dev) or https://dagster.gamepulse.top (prod)
+        - Dagster daemon container running schedules and materializations
+        - Both containers share database connection with FastAPI backend
+        - Dagster uses PostgreSQL for metadata storage (separate schema from app data)
+      </requirements>
+    </criterion>
+    <criterion id="AC3">
+      <description>I can observe asset behavior in Dagster UI</description>
+      <requirements>
+        - Asset catalog shows `ncaa_games` asset with description and group
+        - Asset lineage graph displays data flow: NCAA API → ncaa_games → PostgreSQL
+        - Schedule shows active with next run time
+        - Run history displays materialization events with metadata (games_processed count)
+        - Failed runs show retry attempts with exponential backoff (2s, 4s, 8s)
+      </requirements>
+    </criterion>
+    <criterion id="AC4">
+      <description>I run an immediate materialization on first deployment</description>
+      <requirements>
+        - Manual "Materialize" button in Dagster UI triggers immediate run
+        - OR use CLI: `dagster asset materialize -m app.dagster_definitions ncaa_games`
+      </requirements>
+    </criterion>
+    <criterion id="AC5">
+      <description>I can verify the asset is working</description>
+      <requirements>
+        - Check Dagster logs for "ncaa_games_asset_started" events every 15 min
+        - Check database: `SELECT COUNT(*) FROM games WHERE game_date = CURRENT_DATE` returns results
+        - Check Dagster UI: Asset shows recent successful materialization timestamp
+      </requirements>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic Technical Specification: Game Data Ingestion (Batch)</title>
+        <section>Overview, Detailed Design - Module Structure</section>
+        <snippet>Epic 2 establishes the foundational batch data ingestion pipeline for NCAA Men's Basketball game data, implementing scheduled polling of the NCAA API every 15 minutes using Dagster's asset-oriented paradigm, async Python (httpx), and resilient error handling with Dagster's built-in retry policies. Defines Dagster assets and sensors for game polling with rivalry detection based on conference matching.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture - ADR-007: Dagster for Data Orchestration</title>
+        <section>ADR-007 (lines 1511-1540)</section>
+        <snippet>Dagster chosen over APScheduler for asset-oriented paradigm treating data as first-class citizens. Self-hosted deployment ($0 vs $200-600/month Cloud). Full async support with FastAPI patterns. Dagster webserver + daemon containers added to Docker Compose, uses existing PostgreSQL for metadata storage. Visual asset lineage graph for portfolio demos.</snippet>
+      </doc>
+      <doc>
+        <path>docs/database-schema.md</path>
+        <title>GamePulse Database Schema Reference</title>
+        <section>Architecture Overview, fact_game table</section>
+        <snippet>Kimball dimensional model with surrogate keys. dim_team dimension for team/conference relationships used in rivalry detection. fact_game table stores game data with foreign keys to dim_team (home_team_key, away_team_key) and dim_date (game_date_key). Strategic denormalization with team_group flattened into dim_team for efficient conference matching.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic 2: Game Data Ingestion (Batch Processing)</title>
+        <section>Epic Overview, Story 2.4</section>
+        <snippet>Dagster (self-hosted) for data orchestration with asset-oriented paradigm (15-minute schedules). NCAA API client using henrygd/ncaa-api (5 req/sec limit), httpx for async HTTP requests, SQLModel for database operations with dimensional model support.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/ncaa_client.py</path>
+        <kind>service</kind>
+        <symbol>NCAAClient</symbol>
+        <lines>24-160</lines>
+        <reason>Async NCAA API client with rate limiting (5 req/sec), retry logic (tenacity), and structured logging. Will be called from Dagster asset. Provides fetch_todays_games() method.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/fact_game.py</path>
+        <kind>model</kind>
+        <symbol>FactGame</symbol>
+        <lines>15-95</lines>
+        <reason>Game fact table SQLModel with surrogate keys (game_key PK, game_id unique natural key). Foreign keys to dim_team (home_team_key, away_team_key) and dim_date (game_date_key). Includes rivalry_factor field (Decimal). Dagster asset will upsert to this table.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/dim_team.py</path>
+        <kind>model</kind>
+        <symbol>DimTeam</symbol>
+        <lines>14-70</lines>
+        <reason>Team dimension with flattened team_group (conference) for rivalry detection. team_group_id field used to match conferences for same-conference rivalry calculation. Natural key team_id (format: sport_slug).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/db.py</path>
+        <kind>core</kind>
+        <symbol>engine</symbol>
+        <lines>1-5</lines>
+        <reason>SQLModel engine creation pattern. Dagster DatabaseResource will adapt this for async engine (postgresql+asyncpg://) with AsyncSession.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/config.py</path>
+        <kind>core</kind>
+        <symbol>settings</symbol>
+        <lines>N/A</lines>
+        <reason>Settings object with SQLALCHEMY_DATABASE_URI. Dagster resources will use settings to connect to database.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <existing>
+          <package name="fastapi" version=">=0.115.0,<1.0.0" />
+          <package name="sqlmodel" version=">=0.0.22,<1.0.0" />
+          <package name="alembic" version=">=1.13.0,<2.0.0" />
+          <package name="httpx" version=">=0.27.0,<1.0.0" />
+          <package name="structlog" version=">=24.0.0,<25.0.0" />
+          <package name="tenacity" version=">=9.0.0,<10.0.0" />
+          <package name="psycopg[binary]" version=">=3.2.0,<4.0.0" />
+          <package name="pytest" version=">=8.3.0,<9.0.0" dev="true" />
+          <package name="pytest-asyncio" version=">=0.24.0,<1.0.0" dev="true" />
+        </existing>
+        <to_add>
+          <package name="dagster" version=">=1.9.0" reason="Core orchestration framework for asset-oriented data pipelines" />
+          <package name="dagster-webserver" version=">=1.9.0" reason="Web UI for asset catalog, lineage graphs, and observability" />
+          <package name="dagster-postgres" version=">=0.25.0" reason="PostgreSQL storage backend for Dagster metadata" />
+          <package name="asyncpg" version=">=0.29.0" reason="Async PostgreSQL driver for sqlalchemy+asyncpg:// connection" />
+        </to_add>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <interfaces>
+    <interface>
+      <name>NCAAClient.fetch_todays_games()</name>
+      <kind>async method</kind>
+      <signature>async def fetch_todays_games() -> list[Game]</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>Fetches today's NCAA games from API with automatic retry and rate limiting. Returns list of Game SQLModel instances ready for database insertion.</description>
+    </interface>
+    <interface>
+      <name>DatabaseResource.get_session()</name>
+      <kind>async context manager</kind>
+      <signature>@asynccontextmanager async def get_session() -> AsyncSession</signature>
+      <path>backend/app/resources/database.py (to be created)</path>
+      <description>Provides async database session for Dagster assets. Handles rollback on exception, automatic cleanup.</description>
+    </interface>
+    <interface>
+      <name>Dagster @asset decorator</name>
+      <kind>decorator</kind>
+      <signature>@asset(name, description, retry_policy, group_name)</signature>
+      <path>dagster library</path>
+      <description>Defines software-defined asset. Return dict with metadata keys (games_processed, status) for Dagster observability.</description>
+    </interface>
+    <interface>
+      <name>ScheduleDefinition</name>
+      <kind>class</kind>
+      <signature>ScheduleDefinition(job, cron_schedule, description)</signature>
+      <path>dagster library</path>
+      <description>Creates cron-based schedule for asset materialization. Format: "*/15 * * * *" for 15-minute intervals.</description>
+    </interface>
+  </interfaces>
+  <constraints>
+    <constraint priority="critical">Use absolute imports: "from app.models.game import Game" not relative imports</constraint>
+    <constraint priority="critical">All async functions must use async/await. Dagster supports async asset definitions.</constraint>
+    <constraint priority="critical">Dagster daemon runs independently from FastAPI - no lifecycle integration needed</constraint>
+    <constraint priority="high">Use structlog for all logging with structured events (ncaa_games_asset_started, ncaa_games_asset_completed)</constraint>
+    <constraint priority="high">Database resource must use postgresql+asyncpg:// URL (not postgresql://) for async support</constraint>
+    <constraint priority="high">Workspace.yaml must be at backend/workspace.yaml (same level as app/ directory)</constraint>
+    <constraint priority="high">Retry policy in @asset decorator: RetryPolicy(max_retries=3, delay=2, backoff=2.0) for exponential backoff</constraint>
+    <constraint priority="medium">Upsert pattern: Check if game exists via session.get(FactGame, game_id), update if exists, insert if new</constraint>
+    <constraint priority="medium">Rivalry detection: Query dim_team to get team_group_id for both teams, rivalry_factor=1.2 if same conference, 1.0 otherwise</constraint>
+    <constraint priority="medium">Dagster uses PostgreSQL for metadata storage (separate schema from app data)</constraint>
+    <constraint priority="low">Asset group_name="data_ingestion" for organization in Dagster UI</constraint>
+  </constraints>
+  <tests>
+    <standards>Project uses pytest with pytest-asyncio for async test support. Tests organized by module type (services, models, integration). Mock external dependencies (httpx, database sessions) using unittest.mock.AsyncMock and patch decorators. Integration tests use real PostgreSQL test database. All tests follow AAA pattern (Arrange, Act, Assert) with descriptive docstrings.</standards>
+    <locations>
+      <location>backend/app/tests/services/ - Service layer tests (NCAA client, Dagster assets)</location>
+      <location>backend/app/tests/models/ - Model validation and relationship tests</location>
+      <location>backend/app/tests/integration/ - End-to-end tests with real database</location>
+      <location>backend/app/tests/conftest.py - Shared pytest fixtures</location>
+    </locations>
+    <ideas>
+      <idea ac_ref="AC1">Test ncaa_games asset with mocked NCAAClient.fetch_todays_games() returning sample game data. Verify games are upserted to database (check insert new + update existing). Assert games_processed count in returned metadata.</idea>
+      <idea ac_ref="AC1">Test retry policy triggers on API failure. Mock NCAAClient to raise httpx.RequestError 2 times, succeed on 3rd attempt. Verify asset completes successfully after retries.</idea>
+      <idea ac_ref="AC1">Test database upsert logic: Insert game first time, update scores on second materialization. Verify game_key remains stable, scores updated, updated_at timestamp changes.</idea>
+      <idea ac_ref="AC1">Test rivalry detection logic: Create dim_team records with same team_group_id (conference). Verify rivalry_factor=1.2 for same-conference games, 1.0 for different-conference games.</idea>
+      <idea ac_ref="AC2">Integration test: Start Dagster daemon container, verify schedule is active, trigger manual materialization, check database for inserted games. Cleanup containers after test.</idea>
+      <idea ac_ref="AC3">Test asset metadata return: Verify returned dict contains {games_processed: int, status: "success"} keys for Dagster observability.</idea>
+      <idea ac_ref="AC4">Test DatabaseResource.get_session() context manager: Verify session commits on success, rolls back on exception, always closes connection.</idea>
+      <idea ac_ref="AC5">Test structured logging: Verify ncaa_games_asset_started and ncaa_games_asset_completed events are logged with correct metadata (games_processed count).</idea>
+    </ideas>
+  </tests>
+</story-context>

@@ -131,6 +131,14 @@ services:
     ports:
       - 9323:9323
 
+  dagster-webserver:
+    restart: "no"
+    ports:
+      - "3000:3000"
+
+  dagster-daemon:
+    restart: "no"
+
 networks:
   traefik-public:
     # For local dev, don't expect an external Traefik network

@@ -31,6 +31,7 @@ docker compose watch
 # Backend API docs: http://localhost:8000/docs
 # Adminer (DB): http://localhost:8080
 # Traefik UI: http://localhost:8090
+# Dagster UI: http://localhost:3000
 ```
 
 ### Backend Development
@@ -70,6 +71,37 @@ alembic upgrade head
 docker compose exec backend bash scripts/tests-start.sh
 # Stop on first error:
 docker compose exec backend bash scripts/tests-start.sh -x
+```
+
+### Dagster Development (Data Orchestration)
+
+```bash
+# Access Dagster UI
+# Development: http://localhost:3000
+# Production: https://dagster.gamepulse.top
+
+# View asset catalog and lineage
+# Navigate to Assets tab in Dagster UI
+
+# Materialize an asset manually (trigger job)
+# Option 1: Via UI - Click "Materialize" button on ncaa_games asset
+# Option 2: Via CLI
+docker compose exec dagster-daemon dagster asset materialize -m app.dagster_definitions ncaa_games
+
+# View asset materializations and run history
+# Navigate to Runs tab in Dagster UI
+
+# Check Dagster logs
+docker compose logs -f dagster-daemon
+docker compose logs -f dagster-webserver
+
+# Restart Dagster services
+docker compose restart dagster-daemon dagster-webserver
+
+# Access Dagster Python shell for debugging
+docker compose exec dagster-daemon python
+>>> from app.dagster_definitions import defs
+>>> from app.assets.ncaa_games import ncaa_games
 ```
 
 ### Frontend Development

@@ -1,0 +1,8 @@
+# Dagster workspace configuration
+# This file tells Dagster where to find definitions (assets, schedules, resources)
+
+load_from:
+  - python_module:
+      module_name: app.dagster_definitions
+      working_directory: /app
+      location_name: gamepulse

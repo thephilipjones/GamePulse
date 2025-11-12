@@ -31,7 +31,13 @@ ENV PYTHONPATH=/app
 
 COPY ./scripts /app/scripts
 
-COPY ./pyproject.toml ./uv.lock ./alembic.ini /app/
+COPY ./pyproject.toml ./uv.lock ./alembic.ini ./workspace.yaml /app/
+
+# Create DAGSTER_HOME directory for Dagster metadata storage
+RUN mkdir -p /tmp/dagster_home
+
+# Copy Dagster configuration to DAGSTER_HOME
+COPY ./dagster.yaml /tmp/dagster_home/dagster.yaml
 
 COPY ./app /app/app
 

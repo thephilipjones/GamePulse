@@ -1,8 +1,8 @@
 # Story 2.4: Implement Dagster Data Orchestration and NCAA Game Asset
 
 **Epic:** Epic 2 - Game Data Ingestion (Batch)
-**Status:** TODO
-**Assignee:** TBD
+**Status:** review
+**Assignee:** Claude Code (Amelia)
 **Sprint:** Week 1
 
 ---
@@ -512,3 +512,10 @@ dagster asset materialize -m app.dagster_definitions ncaa_games
 - Use Dagster UI (not logs) as primary observability tool
 - Asset materialization metadata tracked automatically by Dagster
 - For production deployment, ensure both dagster-webserver and dagster-daemon containers are running
+
+---
+
+## Dev Agent Record
+
+### Context Reference
+- Story Context XML: `docs/stories/2-4-implement-polling-worker.context.xml` (generated 2025-11-12)
