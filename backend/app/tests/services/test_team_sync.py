@@ -64,7 +64,7 @@ async def test_preserve_manual_data(db: Session) -> None:
         team_group_name="Atlantic Coast Conference",
     )
     db.add(duke)
-    db.commit()
+    db.flush()  # Make visible within transaction without committing
     db.refresh(duke)
     original_team_key = duke.team_key
 
@@ -115,7 +115,7 @@ async def test_upsert_preserves_surrogate_key(db: Session) -> None:
         team_name="Illinois",
     )
     db.add(team)
-    db.commit()
+    db.flush()  # Make visible within transaction without committing
     db.refresh(team)
     original_team_key = team.team_key
 
@@ -154,7 +154,7 @@ async def test_metadata_counts(db: Session) -> None:
         team_name="Villanova (Old)",
     )
     db.add(existing_team)
-    db.commit()
+    db.flush()  # Make visible within transaction without committing
 
     # Sync with mix of new, updated, and unchanged teams
     games_data = [
@@ -197,7 +197,7 @@ async def test_logging_output(db: Session, caplog: pytest.LogCaptureFixture) -> 
         team_name="Duke (Old)",
     )
     db.add(existing)
-    db.commit()
+    db.flush()  # Make visible within transaction without committing
 
     # Sync with new and updated teams
     games_data = [

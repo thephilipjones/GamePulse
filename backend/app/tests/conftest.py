@@ -2,10 +2,12 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, delete
 
 from app.core.db import engine
 from app.main import app
+from app.models.dim_date import DimDate
+from app.models.dim_team import DimTeam
 
 
 @pytest.fixture(scope="function")
@@ -13,18 +15,24 @@ def db() -> Generator[Session, None, None]:
     """
     Function-scoped database session with transaction rollback for isolation.
 
-    Uses transaction rollback instead of DELETE statements for better performance.
-    Each test gets a fresh transaction that is rolled back after completion.
+    Deletes seed data from Alembic migrations at the start of each test transaction,
+    then uses transaction rollback for cleanup. This ensures tests are isolated from
+    both seed data and each other's changes.
     Safe for parallel execution with pytest-xdist.
     """
     connection = engine.connect()
     transaction = connection.begin()
     session = Session(bind=connection)
 
+    # Delete seed data within this transaction to ensure clean state
+    session.execute(delete(DimTeam))
+    session.execute(delete(DimDate))
+    session.flush()  # Make deletions visible within transaction
+
     yield session
 
     session.close()
-    transaction.rollback()
+    transaction.rollback()  # Rolls back all changes including deletions
     connection.close()
 
 
