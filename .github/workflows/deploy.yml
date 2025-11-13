@@ -367,7 +367,7 @@ jobs:
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "GitHub Actions deployment via OIDC with Parameter Store secrets" \
-            --parameters 'commands=["sudo -u ubuntu bash -c '\''cd /opt/gamepulse && echo \"Pulling latest config from main...\" && git fetch origin main && git reset --hard origin/main && echo \"Loading secrets from Parameter Store...\" && bash backend/scripts/create-env-from-aws-parameters.sh production .env && echo \"Pulling pre-built images from ECR Public...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && echo \"Restarting services...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate && echo \"Cleaning up...\" && docker image prune -f && rm -f .env && echo \"Deployment complete!\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps'\''"]' \
+            --parameters 'commands=["sudo -u ubuntu bash -c '\''cd /opt/gamepulse && echo \"Pulling latest config from main...\" && git fetch origin main && git reset --hard origin/main && echo \"Loading secrets from Parameter Store...\" && bash backend/scripts/create-env-from-aws-parameters.sh production .env && echo \"Pulling pre-built images from ECR Public...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && echo \"Restarting services...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate && echo \"Deployment complete!\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps && echo \"Cleaning up...\" && docker image prune -f && rm -f .env'\''"]' \
             --output text \
             --query "Command.CommandId" > /tmp/command_id.txt
 
