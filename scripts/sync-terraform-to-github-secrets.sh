@@ -81,17 +81,17 @@ update_secret() {
 
     if [ -z "$secret_value" ] || [ "$secret_value" = "null" ]; then
         log_warn "Skipping $secret_name (value is empty or null)"
-        ((SKIPPED_COUNT++))
+        ((SKIPPED_COUNT++)) || true
         return 0
     fi
 
     # Update secret using gh CLI
     if echo "$secret_value" | gh secret set "$secret_name" -R "$REPO" &>/dev/null; then
         log_info "✅ Updated: $secret_name"
-        ((UPDATED_COUNT++))
+        ((UPDATED_COUNT++)) || true
     else
         log_error "❌ Failed to update: $secret_name"
-        ((ERROR_COUNT++))
+        ((ERROR_COUNT++)) || true
     fi
 }
 
