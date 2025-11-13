@@ -105,7 +105,11 @@ map_parameter_name() {
     local param_path=$1
 
     # Remove prefix: /gamepulse/production/ or /gamepulse/shared/
-    local key=$(echo "$param_path" | sed -E "s|/gamepulse/(production|staging|shared)/||")
+    # Using bash parameter expansion (safer than sed - no delimiter issues with special characters)
+    local key="$param_path"
+    key="${key#/gamepulse/production/}"
+    key="${key#/gamepulse/staging/}"
+    key="${key#/gamepulse/shared/}"
 
     # Convert path separators to underscores: database/password → database_password
     key=$(echo "$key" | tr '/' '_')

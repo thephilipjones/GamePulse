@@ -822,6 +822,29 @@ VPC (10.1.0.0/16)
 - GitHub Actions: OIDC authentication (no long-lived credentials)
 - EC2 Instance: Ubuntu 24.04 with Docker, Docker Compose, Tailscale pre-installed
 
+**Memory Management (t2.micro optimization):**
+- **Swap Space:** 4GB swap file automatically created during instance provisioning
+- **Location:** `/swapfile` with 600 permissions (root only)
+- **Persistence:** Configured in `/etc/fstab` for automatic mounting on reboot
+- **Swappiness:** Tuned to `vm.swappiness=10` (optimized for server workloads)
+  - Default is 60 (aggressive swapping)
+  - 10 = only swap when necessary, prioritize RAM for better performance
+- **Why needed:** t2.micro has only 1GB RAM; 4GB swap prevents OOM (Out of Memory) crashes
+- **Automatic setup:** Configured in `terraform/modules/compute/user_data.sh`
+- **Idempotent:** Safe to run multiple times, checks if swap already exists
+
+**Verify swap status:**
+```bash
+# Check swap is enabled
+swapon --show
+
+# View memory and swap usage
+free -h
+
+# Check swappiness setting
+cat /proc/sys/vm/swappiness
+```
+
 **Deployment Process:**
 1. Push to `main` triggers GitHub Actions workflow
 2. Lint (ruff, mypy, biome) → Test (pytest, npm test) → Build (Docker images)
@@ -985,15 +1008,30 @@ Tailscale auth key is stored in Parameter Store and automatically used during EC
 2. `docker-compose.override.yml`: Development overrides (auto-loaded, volume mounts, hot reload)
 3. `docker-compose.prod.yml`: Production overrides (explicit, no dev tools)
 
+**Important: Override File Behavior**
+- Docker Compose **automatically** loads `docker-compose.override.yml` unless you explicitly specify `-f` flags
+- This means `docker compose up` loads both `docker-compose.yml` + `docker-compose.override.yml`
+- The override file configures development mode: `fastapi run --reload` (WatchFiles auto-reloader)
+- In production, this causes high CPU usage as WatchFiles constantly polls the filesystem
+
 **Development:**
 ```bash
-docker compose watch  # Uses base + override
+docker compose watch  # Uses base + override (development mode)
 ```
 
-**Production:**
+**Production (CRITICAL - must use explicit -f flags):**
 ```bash
+# Correct: Explicitly loads prod config, excludes override file
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# WRONG: Auto-loads override file, runs in development mode
+docker compose up -d
 ```
+
+**Production Configuration:**
+- Backend: `fastapi run --workers 1 app/main.py` (no `--reload` flag)
+- Worker count: 1 (optimized for t2.micro single vCPU)
+- Healthchecks: 30-second intervals (vs 10s in development)
 
 ### Git Workflow
 
@@ -1250,3 +1288,63 @@ docker compose exec backend python
   ```bash
   docker compose exec db psql -U postgres -d app -c "\dt" | grep -E "dim_team|fact_game"
   ```
+
+**Issue: High CPU usage / Credit Bankruptcy on t2.micro (28% resting CPU)**
+- **Symptom:** EC2 instance consistently using 25-30% CPU at rest, burning through CPU credits faster than they accumulate
+- **Root cause:** Backend running in development mode with `--reload` flag (WatchFiles auto-reloader) + aggressive 10-second healthchecks
+- **Why this happens:**
+  - `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` automatically loads `docker-compose.override.yml` unless explicitly excluded
+  - Override file sets `command: fastapi run --reload app/main.py` (development mode)
+  - WatchFiles constantly polls filesystem for changes (significant CPU overhead)
+  - Healthchecks running every 10 seconds add 5-10% CPU overhead on t2.micro
+- **Solution:** The production command override in `docker-compose.prod.yml` fixes this by:
+  1. Using `fastapi run --workers 1 app/main.py` (removes `--reload` flag)
+  2. Optimizing worker count for single-vCPU t2.micro
+  3. Relaxing healthcheck intervals from 10s to 30s (70% reduction)
+- **Expected result:** CPU should drop from 28% to 5-10% after redeployment
+- **Verification:**
+  ```bash
+  # On EC2 instance, check current CPU usage
+  top -bn1 | head -15
+
+  # Verify backend is running in production mode (no WatchFiles)
+  docker compose logs backend | grep -i "watch\|reload"
+  # Should see: "Started server process [X]" (NOT "Started reloader process")
+
+  # Check healthcheck intervals
+  docker compose ps --format json | jq '.[].Health'
+  ```
+- **Prevention:** Always use explicit `-f` flags when deploying to production to exclude override file
+
+**Issue: Out of Memory (OOM) errors or containers being killed**
+- **Symptom:** Docker containers randomly exit, `dmesg` shows OOM killer messages, services restart unexpectedly
+- **Root cause:** t2.micro has only 1GB RAM, insufficient for running multiple Docker containers
+- **Solution:** 4GB swap space is automatically configured during instance provisioning via `user_data.sh`
+- **Verify swap is enabled:**
+  ```bash
+  # Check swap status
+  swapon --show
+  # Should show: /swapfile with 4G size
+
+  # View memory and swap usage
+  free -h
+
+  # Check for OOM killer events
+  dmesg | grep -i "killed process"
+  ```
+- **Manual setup (if swap missing):**
+  ```bash
+  # Create 4GB swap file
+  sudo fallocate -l 4G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile
+  sudo swapon /swapfile
+
+  # Make persistent across reboots
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+  # Optimize swappiness for servers
+  echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
+  sudo sysctl -w vm.swappiness=10
+  ```
+- **Prevention:** Swap is automatically configured on new EC2 instances. For existing instances, run manual setup above.

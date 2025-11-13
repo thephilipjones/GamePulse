@@ -14,6 +14,58 @@ echo "=== Updating apt package index ==="
 apt-get update -y
 
 # ============================================================================
+# Configure Swap Space (4GB for t2.micro memory support)
+# ============================================================================
+
+echo "=== Configuring swap space ==="
+
+# Check if swap already exists and is enabled
+if swapon --show | grep -q '/swapfile'; then
+  echo "ℹ️ Swap file already exists and is enabled"
+else
+  if [ -f /swapfile ]; then
+    echo "⚠️ /swapfile exists but not enabled - enabling..."
+    swapon /swapfile
+  else
+    echo "Creating 4GB swap file..."
+
+    # Use fallocate for fast allocation
+    fallocate -l 4G /swapfile
+
+    # Secure permissions (root only)
+    chmod 600 /swapfile
+
+    # Setup swap area
+    mkswap /swapfile
+
+    # Enable swap
+    swapon /swapfile
+
+    # Make persistent across reboots
+    if ! grep -q '/swapfile' /etc/fstab; then
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+
+    echo "✅ 4GB swap file created and enabled"
+  fi
+fi
+
+# Optimize swappiness for server workloads (default is 60, lower = less swapping)
+# Set to 10 for better performance (only swap when necessary)
+if ! grep -q 'vm.swappiness' /etc/sysctl.conf; then
+  echo 'vm.swappiness=10' >> /etc/sysctl.conf
+  sysctl -w vm.swappiness=10
+  echo "✅ Set vm.swappiness=10 for optimized server performance"
+else
+  echo "ℹ️ vm.swappiness already configured"
+fi
+
+# Display current swap status
+echo "Current swap status:"
+swapon --show
+free -h
+
+# ============================================================================
 # Install Prerequisites
 # ============================================================================
 
@@ -228,6 +280,7 @@ echo "AWS CLI version: $(aws --version 2>&1 | head -1)"
 echo "SSM Agent status: $(systemctl is-active snap.amazon-ssm-agent.amazon-ssm-agent.service)"
 echo "Tailscale version: $(tailscale version)"
 echo "Tailscale status: $(tailscale status 2>/dev/null | head -n 1 || echo 'Not connected')"
+echo "Swap status: $(swapon --show | grep -c '/swapfile' || echo '0') swap file(s) active"
 echo "Ubuntu user added to docker group (will take effect on next login)"
 echo ""
 echo "Application setup:"
