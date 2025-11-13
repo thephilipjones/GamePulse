@@ -106,6 +106,24 @@ apt-get install -y \
     docker-compose-plugin
 
 # ============================================================================
+# Configure Docker API Version Compatibility for Traefik
+# ============================================================================
+
+echo "=== Configuring Docker API version compatibility ==="
+
+# Create systemd drop-in directory if it doesn't exist
+mkdir -p /etc/systemd/system/docker.service.d
+
+# Create override file to set minimum API version for Traefik compatibility
+# Traefik 3.0 uses client API v1.24, but Docker Engine defaults to minimum v1.44
+cat > /etc/systemd/system/docker.service.d/override.conf <<EOF
+[Service]
+Environment="DOCKER_MIN_API_VERSION=1.24"
+EOF
+
+echo "✅ Docker API version override configured"
+
+# ============================================================================
 # Configure Docker Permissions
 # ============================================================================
 
@@ -115,6 +133,9 @@ usermod -aG docker ubuntu
 # ============================================================================
 # Enable and Start Docker Service
 # ============================================================================
+
+echo "=== Reloading systemd daemon ==="
+systemctl daemon-reload
 
 echo "=== Enabling Docker service ==="
 systemctl enable docker
@@ -129,6 +150,7 @@ systemctl start docker
 echo "=== Verifying Docker installation ==="
 docker --version
 docker compose version
+echo "Docker API version override: $(grep DOCKER_MIN_API_VERSION /etc/systemd/system/docker.service.d/override.conf 2>/dev/null || echo 'Not configured')"
 
 # ============================================================================
 # Configure Docker Daemon for Production

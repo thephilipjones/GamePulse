@@ -16,7 +16,13 @@ services:
       - "1"
       - app/main.py
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8000/api/v1/utils/health-check/",
+        ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -24,18 +30,19 @@ services:
 
   db:
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-app}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-app}",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 30s
 
   proxy:
-    image: traefik:3.0
+    image: traefik:v3.0
     restart: always
-    environment:
-      # Fix Docker API version compatibility issue with Traefik 3.0
-      - DOCKER_API_VERSION=1.44
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-certificates:/certificates
@@ -43,9 +50,8 @@ services:
       - "80:80"
       - "443:443"
     command:
-      # Enable Docker provider with explicit API version
+      # Enable Docker provider
       - --providers.docker=true
-      - --providers.docker.apiversion=1.44
       - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
       - --providers.docker.exposedbydefault=false
 
