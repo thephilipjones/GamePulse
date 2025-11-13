@@ -26,7 +26,12 @@ run_coordinator:
   module: dagster.core.run_coordinator
   class: QueuedRunCoordinator
   config:
-    max_concurrent_runs: 10
+    #  max_concurrent_runs: 10
+    max_concurrent_runs: 1 # STRICT LIMIT for t2.micro
+    tag_concurrency_limits:
+      - key: "database"
+        value: "main"
+        limit: 1
 
 run_launcher:
   module: dagster.core.launcher
@@ -34,3 +39,12 @@ run_launcher:
 
 telemetry:
   enabled: false
+
+retention:
+  schedule:
+    purge_after_days: 30
+  sensor:
+    purge_after_days: 30
+
+code_servers:
+  local_startup_timeout: 300  # 5 minutes for slow cold starts on t2.micro

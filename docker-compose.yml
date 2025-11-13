@@ -1,5 +1,4 @@
 services:
-
   db:
     # TimescaleDB: PostgreSQL 16 with time-series extension for excitement_scores/betting_odds optimization
     # Using official TimescaleDB image (2.23.0) - backward compatible with standard PostgreSQL
@@ -45,7 +44,7 @@ services:
       - traefik.http.services.${STACK_NAME?Variable not set}-adminer.loadbalancer.server.port=8080
 
   prestart:
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: "${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}"
     build:
       context: ./backend
     networks:
@@ -82,7 +81,7 @@ services:
       - DAGSTER_POSTGRES_DB=${DAGSTER_POSTGRES_DB:-dagster}
 
   backend:
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: "${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}"
     restart: always
     networks:
       - traefik-public
@@ -115,7 +114,13 @@ services:
       - SENTRY_DSN=${SENTRY_DSN}
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8000/api/v1/utils/health-check/",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -141,7 +146,7 @@ services:
       - traefik.http.routers.${STACK_NAME?Variable not set}-backend-http.middlewares=https-redirect
 
   frontend:
-    image: '${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}'
+    image: "${DOCKER_IMAGE_FRONTEND?Variable not set}:${TAG-latest}"
     restart: always
     networks:
       - traefik-public
@@ -171,7 +176,7 @@ services:
 
   dagster-webserver:
     # Dagster UI webserver for asset catalog, lineage graphs, and run history
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: "${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}"
     restart: always
     command: dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml
     networks:
@@ -222,7 +227,7 @@ services:
 
   dagster-daemon:
     # Dagster daemon for running schedules, sensors, and background operations
-    image: '${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}'
+    image: "${DOCKER_IMAGE_BACKEND?Variable not set}:${TAG-latest}"
     restart: always
     command: dagster-daemon run -w /app/workspace.yaml
     networks:
@@ -235,6 +240,9 @@ services:
         condition: service_completed_successfully
     env_file:
       - .env
+    volumes:
+      # FORCE the config to be where Dagster looks
+      - ./dagster.yaml:/tmp/dagster_home/dagster.yaml
     environment:
       - DAGSTER_HOME=/tmp/dagster_home
       - DAGSTER_POSTGRES_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${DAGSTER_POSTGRES_DB:-dagster}

@@ -23,22 +23,56 @@ services:
           "-f",
           "http://localhost:8000/api/v1/utils/health-check/",
         ]
-      interval: 30s
+      interval: 60s
       timeout: 5s
       retries: 5
       start_period: 20s
 
   db:
+    # Tune Postgres for 1GB RAM environment
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=128MB"
+      - "-c"
+      - "max_connections=20"
+      - "-c"
+      - "work_mem=4MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+      - "-c"
+      - "maintenance_work_mem=64MB"
     healthcheck:
       test:
         [
           "CMD-SHELL",
           "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-app}",
         ]
-      interval: 30s
-      timeout: 10s
+      interval: 60s
+      timeout: 5s
       retries: 5
       start_period: 30s
+
+  dagster-daemon:
+    healthcheck:
+      test: ["CMD-SHELL", "dagster instance info || exit 1"]
+      interval: 120s # Check only every 2 mins
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+
+  dagster-webserver:
+    environment:
+      # Increase heartbeat tolerance from 20s to 60s
+      - DAGSTER_GRPC_HEARTBEAT_TTL=60
+      # Increase startup timeout for cold starts on t2.micro
+      - DAGSTER_GRPC_STARTUP_TIMEOUT=180
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/server-info || exit 1"]
+      interval: 120s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
 
   proxy:
     image: traefik:v3.0
@@ -66,9 +100,9 @@ services:
       - --certificatesresolvers.le.acme.httpchallenge.entrypoint=http
 
       # Logging
-      - --accesslog=true
+      - --accesslog=false # reduce CPU usage
       - --log=true
-      - --log.level=INFO
+      - --log.level=ERROR # INFO
 
       # API (disabled for security in production)
       - --api=false
