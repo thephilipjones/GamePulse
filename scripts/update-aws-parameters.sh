@@ -296,7 +296,7 @@ log_info "     aws ssm get-parameters-by-path --path '/gamepulse/$ENVIRONMENT/' 
 log_info ""
 log_info "  2. Test secret loading (on EC2 or locally with AWS credentials):"
 log_info "     cd /opt/gamepulse"
-log_info "     bash backend/scripts/load-secrets.sh $ENVIRONMENT .env"
+log_info "     bash backend/scripts/create-env-from-aws-parameters.sh $ENVIRONMENT .env"
 log_info "     cat .env"
 log_info ""
 log_info "  3. Deploy application (triggers automatic secret loading):"

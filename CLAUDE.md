@@ -978,7 +978,7 @@ GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret ma
 1. **During Deployment (Automated):**
 
    - GitHub Actions triggers deployment on push to `main`
-   - Deployment script runs `backend/scripts/load-secrets.sh production .env` on EC2
+   - Deployment script runs `backend/scripts/create-env-from-aws-parameters.sh production .env` on EC2
    - Script fetches all parameters from `/gamepulse/production/` via AWS CLI
    - Parameters are mapped to `.env` format and written to disk
    - Docker Compose reads `.env` and starts services
@@ -988,7 +988,7 @@ GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret ma
    ```bash
    # On EC2 or locally with AWS credentials
    cd /opt/gamepulse
-   bash backend/scripts/load-secrets.sh production .env
+   bash backend/scripts/create-env-from-aws-parameters.sh production .env
    cat .env  # Verify contents
    docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
    ```
@@ -1047,7 +1047,7 @@ Tailscale auth key is stored in Parameter Store and automatically used during EC
 **Production:**
 
 - Environment variables are stored in AWS Parameter Store
-- Automatically loaded via `backend/scripts/load-secrets.sh` during deployment
+- Automatically loaded via `backend/scripts/create-env-from-aws-parameters.sh` during deployment
 - Never manually create `.env` files in production
 
 ### Testing Patterns

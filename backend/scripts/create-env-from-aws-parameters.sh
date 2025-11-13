@@ -3,11 +3,11 @@
 # Load Secrets from AWS Parameter Store
 # ============================================================================
 # Fetches secrets from Parameter Store and generates .env file
-# Usage: ./scripts/load-secrets.sh [environment] [output_file]
+# Usage: ./backend/scripts/create-env-from-aws-parameters.sh [environment] [output_file]
 #
 # Example:
-#   ./scripts/load-secrets.sh production .env
-#   ./scripts/load-secrets.sh staging ../staging.env
+#   ./backend/scripts/create-env-from-aws-parameters.sh production .env
+#   ./backend/scripts/create-env-from-aws-parameters.sh staging ../staging.env
 
 set -e  # Exit on any error
 
@@ -180,7 +180,7 @@ cat > "$TEMP_FILE" <<'EOF'
 #
 # To update values:
 #   1. Update in Parameter Store: aws ssm put-parameter --name <name> --value <value> --overwrite
-#   2. Re-run this script: ./scripts/load-secrets.sh
+#   2. Re-run this script: ./backend/scripts/create-env-from-aws-parameters.sh
 #
 # Generated at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
 # ============================================================================
