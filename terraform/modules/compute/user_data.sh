@@ -230,7 +230,7 @@ echo "✅ Created /opt/gamepulse with ubuntu:ubuntu ownership"
 # ============================================================================
 
 echo "=== Cloning application repository ==="
-su - ubuntu -c 'git clone https://github.com/PhilipTrauner/gamepulse.git /opt/gamepulse 2>/dev/null || echo "Repository already cloned"'
+su - ubuntu -c 'git clone https://github.com/thephilipjones/GamePulse.git /opt/gamepulse 2>/dev/null || echo "Repository already cloned"'
 
 if [ -d "/opt/gamepulse/.git" ]; then
   echo "✅ Repository cloned successfully"
@@ -302,7 +302,7 @@ else
   echo ""
   echo "Manual setup steps:"
   echo "1. SSH: ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<PUBLIC_IP>"
-  echo "2. Clone: git clone https://github.com/PhilipTrauner/gamepulse.git /opt/gamepulse"
+  echo "2. Clone: git clone https://github.com/thephilipjones/GamePulse.git /opt/gamepulse"
   echo "3. Secrets: cd /opt/gamepulse && bash backend/scripts/load-secrets.sh production .env"
   echo "4. Deploy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
 fi

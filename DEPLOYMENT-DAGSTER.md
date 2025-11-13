@@ -45,6 +45,7 @@ DAGSTER_HOME=/tmp/dagster_home
 ```
 
 **Validation:**
+
 ```bash
 # Verify all variables are set
 grep "DAGSTER" .env
@@ -82,6 +83,7 @@ dig dagster.gamepulse.top
 ```
 
 If DNS not configured:
+
 1. Go to domain registrar (e.g., Namecheap, Route53)
 2. Add A record: `dagster` → `<ELASTIC_IP>`
 3. Wait 5-10 minutes for DNS propagation
@@ -92,12 +94,13 @@ If DNS not configured:
 
 **Action:** Configure separate Dagster database in GitHub Secrets to avoid Alembic conflicts
 
-1. Navigate to: `https://github.com/PhilipTrauner/gamepulse/settings/secrets/actions`
+1. Navigate to: `https://github.com/thephilipjones/GamePulse/settings/secrets/actions`
 2. Add new secret:
    - Name: `DAGSTER_POSTGRES_DB`
    - Value: `dagster`
 
 **Why Separate Database:**
+
 - Prevents conflicts between Alembic migrations (application) and Dagster schema
 - Isolates Dagster metadata from application data
 - Allows independent backup/restore strategies
@@ -111,11 +114,13 @@ If DNS not configured:
 ### **Phase 1: Pre-Push (Local)**
 
 ✅ **Completed:**
+
 - [x] Code committed to `main` branch
 - [x] Pre-commit hooks passed (ruff, mypy)
 - [x] Manual testing completed locally
 
 **Next Action:**
+
 ```bash
 git push origin main
 ```
@@ -127,26 +132,31 @@ git push origin main
 **GitHub Actions will automatically:**
 
 1. **Lint & Type Check** (parallel)
+
    - Backend: `ruff check`, `ruff format`, `mypy`
    - Frontend: `biome`
    - ✅ Expected: PASS (already validated locally)
 
 2. **Test** (parallel)
+
    - Backend: `pytest -v` with PostgreSQL service
    - Frontend: Skipped (no tests configured)
    - ✅ Expected: PASS (new code tested locally)
 
 3. **Generate Client** (TypeScript from OpenAPI)
+
    - Auto-regenerates if schema changed
    - Auto-commits if changes detected
    - ⚠️ Expected: **NO CHANGES** (no API changes in this story)
 
 4. **Build** (Docker images)
+
    - Builds backend image with Dagster dependencies
    - Pushes to ECR Public
    - ⚠️ Expected: **~3-5 minutes** (new dependencies: dagster, asyncpg)
 
 5. **Deploy** (to EC2 via SSM)
+
    - Connects via AWS Systems Manager Session
    - Pulls latest code from GitHub
    - Pulls Docker images from ECR
@@ -158,9 +168,10 @@ git push origin main
    - ✅ Expected: PASS (backend unchanged)
 
 **Monitor Progress:**
+
 ```bash
 # Watch GitHub Actions workflow
-open https://github.com/PhilipTrauner/gamepulse/actions
+open https://github.com/thephilipjones/GamePulse/actions
 ```
 
 ---
@@ -203,6 +214,7 @@ curl -I http://localhost:3000
 ```
 
 **Browser Test:**
+
 1. Open: `https://dagster.gamepulse.top` (or `http://<ELASTIC_IP>:3000`)
 2. ✅ Dagster UI loads
 3. ✅ Navigate to **Assets** tab → See `ncaa_games` asset
@@ -222,6 +234,7 @@ docker compose logs dagster-daemon --tail 50 | grep -E "schedule|SchedulerDaemon
 #### **Step 4: Trigger Manual Materialization (Critical Test)**
 
 **Via Dagster UI:**
+
 1. Navigate to **Assets** → `ncaa_games`
 2. Click **"Materialize"** button
 3. Watch run progress in real-time
@@ -229,6 +242,7 @@ docker compose logs dagster-daemon --tail 50 | grep -E "schedule|SchedulerDaemon
 5. ✅ Expected: Metadata shows `games_processed: <number>`
 
 **Via CLI (alternative):**
+
 ```bash
 docker compose exec dagster-daemon dagster asset materialize -m app.dagster_definitions ncaa_games
 
@@ -237,6 +251,7 @@ docker compose logs -f dagster-daemon | grep ncaa_games
 ```
 
 **Expected Log Events:**
+
 ```
 ncaa_games_asset_started
 ncaa_api_fetch_started
@@ -320,24 +335,30 @@ Mark each item as complete:
 **Symptom:** `docker compose ps` shows dagster-webserver or dagster-daemon as "Exited"
 
 **Diagnosis:**
+
 ```bash
 docker compose logs dagster-webserver --tail 50
 docker compose logs dagster-daemon --tail 50
 ```
 
 **Common Causes:**
+
 1. **Missing environment variables**
+
    - Check: `docker compose config | grep DAGSTER`
-   - Fix: Update `.env` file with all DAGSTER_* variables
+   - Fix: Update `.env` file with all DAGSTER\_\* variables
 
 2. **Database connection failed**
+
    - Check: `docker compose logs db | grep "ready to accept connections"`
    - Fix: Ensure PostgreSQL container is healthy before starting Dagster
 
 3. **Dagster database not initialized**
+
    - Symptom: Connection errors, `relation "runs" does not exist`, or services in restart loop
    - Cause: The `dagster` database exists but schema hasn't been initialized
    - **Fix:** Manually run initialization:
+
      ```bash
      # Create database if missing
      docker compose exec db psql -U postgres -c "CREATE DATABASE dagster;"
@@ -348,6 +369,7 @@ docker compose logs dagster-daemon --tail 50
      # Restart services
      docker compose restart dagster-daemon dagster-webserver
      ```
+
    - **Prevention:** This should be handled automatically by `prestart.sh` in future deployments
 
 4. **High CPU usage from retry loops**
@@ -356,6 +378,7 @@ docker compose logs dagster-daemon --tail 50
    - **Fix:** Follow step 3 above to initialize the database, CPU should normalize within 1-2 minutes
 
 **Recovery:**
+
 ```bash
 # Restart Dagster services
 docker compose restart dagster-webserver dagster-daemon
@@ -372,6 +395,7 @@ docker compose up -d
 **Symptom:** No automatic runs appearing in Dagster UI after 15+ minutes
 
 **Diagnosis:**
+
 ```bash
 # Check daemon is running
 docker compose ps dagster-daemon
@@ -384,10 +408,13 @@ docker compose logs dagster-daemon | grep ncaa_games_schedule
 ```
 
 **Common Causes:**
+
 1. **Schedule not started**
+
    - **Fix:** In Dagster UI → Schedules → Toggle schedule ON
 
 2. **Daemon not processing schedules**
+
    - **Fix:** Restart daemon: `docker compose restart dagster-daemon`
 
 3. **Timezone mismatch**
@@ -401,6 +428,7 @@ docker compose logs dagster-daemon | grep ncaa_games_schedule
 **Symptom:** Run status shows FAILURE in Dagster UI
 
 **Diagnosis:**
+
 ```bash
 # View run logs in Dagster UI
 # Navigate to Runs → Select failed run → View logs
@@ -410,12 +438,15 @@ docker compose logs dagster-daemon | grep -A 10 "ERROR\|Exception"
 ```
 
 **Common Causes:**
+
 1. **NCAA API timeout**
+
    - Symptom: `httpx.HTTPStatusError` or timeout errors
    - **Fix:** Retry policy will automatically retry 3 times
    - **Manual retry:** Click "Re-execute" in Dagster UI
 
 2. **Database FK constraint failure**
+
    - Symptom: `ValueError: Home team not found in dim_team`
    - **Fix:** Ensure dimensional data seeded:
      ```bash
@@ -443,6 +474,7 @@ docker compose logs dagster-daemon | grep -A 10 "ERROR\|Exception"
 **Symptom:** `https://dagster.gamepulse.top` returns 404 or connection refused
 
 **Diagnosis:**
+
 ```bash
 # Check Traefik routing
 docker compose logs proxy | grep dagster
@@ -455,10 +487,13 @@ dig dagster.gamepulse.top
 ```
 
 **Common Causes:**
+
 1. **DNS not configured**
+
    - **Fix:** Add A record: `dagster` → `<ELASTIC_IP>`
 
 2. **Traefik labels not applied**
+
    - **Fix:** Restart proxy: `docker compose restart proxy`
 
 3. **SSL certificate not provisioned**
@@ -466,6 +501,7 @@ dig dagster.gamepulse.top
    - **Check:** `docker compose logs proxy | grep dagster | grep certificate`
 
 **Temporary Workaround:**
+
 ```bash
 # Access via direct port (not HTTPS)
 http://<ELASTIC_IP>:3000
@@ -493,12 +529,14 @@ aws logs filter-pattern /gamepulse/dagster-daemon --filter-pattern "ncaa_games_a
 ### **Metrics to Monitor**
 
 **Key Performance Indicators:**
+
 - Schedule execution frequency: Every 15 minutes ✅
 - Average materialization duration: ~1-3 seconds ✅
 - Games processed per run: 40-60 games (varies by NCAA schedule)
 - Asset success rate: Target 99%+ (with 3 retries)
 
 **Alerting Recommendations (Future):**
+
 - Alert if schedule misses 3+ consecutive executions
 - Alert if materialization fails after all retries
 - Alert if no games processed for 24+ hours (off-season expected)
@@ -556,11 +594,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ### **Performance Expectations**
 
 **First Run:**
+
 - Duration: ~2-5 seconds (53 games on Nov 12, 2025)
 - Team sync: 106 teams discovered and upserted
 - Database inserts: 54 games + 106 teams
 
 **Subsequent Runs:**
+
 - Duration: ~1-2 seconds (mostly UPDATEs)
 - Team sync: 0 discovered, 106 unchanged
 - Database updates: N games updated (live scores)
@@ -568,11 +608,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ### **Data Freshness**
 
 **Schedule:** Every 15 minutes
+
 - Games ingested: Today's NCAA Men's Basketball games only
 - Live score updates: Every 15 minutes during games
 - Historical data: Not backfilled (start date = deployment date)
 
 **Backfill Strategy (Future):**
+
 ```python
 # To backfill historical games (future feature):
 # Option 1: Modify ncaa_games asset to accept date parameter
@@ -583,6 +625,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ### **Cost Considerations**
 
 **AWS Resources:**
+
 - EC2 instance: No additional cost (existing instance)
 - Database: No additional cost (same PostgreSQL)
 - Storage: ~1MB per day for game data
@@ -597,16 +640,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 After successful deployment, consider:
 
 1. **Automated Tests** (Story 2-5 or 2-6)
+
    - Test asset materialization with mocked NCAA API
    - Test rivalry detection logic with sample data
    - Test retry policy behavior with simulated failures
 
 2. **Alerting & Monitoring** (Epic 3 or 4)
+
    - Slack/email alerts for schedule failures
    - CloudWatch metrics for materialization duration
    - Dead letter queue for failed runs
 
 3. **Separate Dagster Database** (Technical Debt)
+
    - Create `dagster` database to avoid Alembic version conflicts
    - Update docker-compose.yml with DAGSTER_POSTGRES_DB=dagster
    - Run Dagster migrations independently
@@ -622,11 +668,13 @@ After successful deployment, consider:
 ## 📞 **Support & Resources**
 
 **Documentation:**
+
 - Dagster Docs: https://docs.dagster.io
 - NCAA API: https://github.com/henrygd/ncaa-api
 - Project README: /Users/Philip/dev/gamepulse/CLAUDE.md
 
 **Logs & Debugging:**
+
 ```bash
 # Dagster daemon
 docker compose logs -f dagster-daemon
@@ -642,6 +690,7 @@ docker compose logs -f
 ```
 
 **Health Checks:**
+
 ```bash
 # Dagster UI
 curl -I http://localhost:3000

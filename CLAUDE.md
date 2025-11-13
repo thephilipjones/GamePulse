@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 GamePulse is a full-stack web application built with FastAPI (backend) and React (frontend), deployed on AWS EC2 via GitHub Actions CI/CD. The project uses Docker Compose for development and production, with infrastructure managed through Terraform.
 
 **Tech Stack:**
+
 - Backend: FastAPI + SQLModel + PostgreSQL (TimescaleDB extension)
 - Orchestration: Dagster (self-hosted) for data pipeline orchestration
 - Frontend: React + TypeScript + Vite + TanStack Query/Router + Chakra UI
@@ -165,15 +166,18 @@ docker compose exec backend bash
 ### Linting & Formatting
 
 **Backend (Python):**
+
 - **Linter:** Ruff (replaces flake8, isort, pyupgrade)
 - **Type Checker:** Mypy
 - **Config:** `backend/pyproject.toml`
 
 **Frontend (JavaScript/TypeScript):**
+
 - **Linter & Formatter:** Biome
 - **Config:** `frontend/biome.json`
 
 **Pre-commit Hooks:**
+
 ```bash
 # Install pre-commit hooks (one-time setup)
 uv run pre-commit install
@@ -183,6 +187,7 @@ uv run pre-commit run --all-files
 ```
 
 Pre-commit automatically runs on every commit:
+
 - Check for large files, valid TOML/YAML
 - Fix end-of-file and trailing whitespace
 - Backend: Ruff lint (`--fix`) + Ruff format
@@ -191,11 +196,13 @@ Pre-commit automatically runs on every commit:
 **VSCode Setup (Recommended):**
 
 Install recommended extensions:
+
 - Python: `ms-python.python`, `charliermarsh.ruff`
 - JavaScript/TypeScript: `biomejs.biome`
 - Docker: `ms-azuretools.vscode-docker`
 
 VSCode settings (`.vscode/settings.json`) are pre-configured for:
+
 - **Format on save** for all file types
 - **Backend:** Ruff as default Python formatter
 - **Frontend:** Biome as default JS/TS formatter
@@ -203,6 +210,7 @@ VSCode settings (`.vscode/settings.json`) are pre-configured for:
 - **Consistent with CI/CD** linting rules
 
 Manual formatting commands:
+
 ```bash
 # Backend
 cd backend
@@ -251,16 +259,20 @@ GamePulse uses GitHub OIDC for zero-secret CI/CD authentication. This eliminates
 **Initial Setup (One-Time):**
 
 1. **Provision OIDC Infrastructure:**
+
    ```bash
    cd terraform
    terraform apply
    ```
+
    This creates:
+
    - OIDC Identity Provider in AWS
    - IAM role for GitHub Actions with trust policy
    - Least-privilege IAM policies (SSM, EC2 describe, CloudWatch)
 
 2. **Configure GitHub Secrets:**
+
    - Navigate to GitHub repository → Settings → Secrets and variables → Actions
    - Add the following secrets:
      - `AWS_GITHUB_ACTIONS_ROLE_ARN`: Get from `terraform output github_actions_role_arn`
@@ -278,6 +290,7 @@ GamePulse uses GitHub OIDC for zero-secret CI/CD authentication. This eliminates
    - Full audit trail captured in CloudTrail
 
 **Security Benefits:**
+
 - ✅ No long-lived credentials in GitHub Secrets
 - ✅ Automatic credential expiry (15 minutes)
 - ✅ Restricted to specific repo and branches
@@ -317,6 +330,7 @@ aws ssm get-command-invocation \
 ```
 
 **SSM Benefits:**
+
 - ✅ No open SSH port to internet
 - ✅ Full CloudTrail audit logging of all sessions
 - ✅ Centralized access management via IAM
@@ -325,6 +339,7 @@ aws ssm get-command-invocation \
 #### Production Deployment
 
 **Deployment Location:**
+
 - Standardized deployment path: `/opt/gamepulse`
 - Repository must be cloned to this location for automated deployments to work
 
@@ -338,7 +353,7 @@ ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<ELASTIC_IP>
 sudo mkdir -p /opt
 sudo chown ubuntu:ubuntu /opt
 cd /opt
-git clone https://github.com/PhilipTrauner/gamepulse.git
+git clone https://github.com/thephilipjones/GamePulse.git
 cd gamepulse
 
 # 3. Create production .env file
@@ -375,6 +390,7 @@ Every push to `main` branch triggers automated deployment (`.github/workflows/de
 6. **Smoke Test** → Health check with retry logic
 
 The deploy job:
+
 - Authenticates via OIDC (no stored credentials)
 - Connects to EC2 via SSM Session Manager
 - Executes deployment commands as ubuntu user
@@ -465,7 +481,7 @@ git revert <bad-commit-sha>
 git push origin main
 
 # Monitor deployment in GitHub Actions
-# https://github.com/PhilipTrauner/gamepulse/actions
+# https://github.com/thephilipjones/GamePulse/actions
 ```
 
 **Option 3: Emergency Manual Restart**
@@ -481,6 +497,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --
 ```
 
 **Emergency Access:**
+
 - Admin SSH access remains available from approved IPs as fallback
 - SSM Session Manager provides additional access path
 - CloudTrail logs all access for audit purposes
@@ -581,6 +598,7 @@ aws ecr-public put-lifecycle-policy \
 ```
 
 **Benefits:**
+
 - Automatic cleanup of old images (saves storage costs)
 - Maintains rollback capability (keeps last 3 tagged versions)
 - Removes build artifacts (untagged images from failed builds)
@@ -619,12 +637,14 @@ aws cloudtrail lookup-events \
 Single consolidated workflow (`.github/workflows/deploy.yml`) replaces 11 legacy FastAPI template workflows.
 
 **Workflow Optimization:**
+
 - **Parallel execution:** Lint and test jobs run concurrently for speed
 - **Dependency caching:** uv (Python) and npm dependencies cached via GitHub Actions
 - **Minimal secrets:** OIDC authentication eliminates long-lived AWS credentials
 - **Auto-generation:** TypeScript client regenerates automatically on OpenAPI changes
 
 **Workflow Phases:**
+
 ```
 Phase 1 (Parallel)
 ├─ lint-backend (ruff, mypy)
@@ -646,6 +666,7 @@ Phase 4 (Sequential, after Phase 3)
 ```
 
 **Key Design Decisions:**
+
 - **Single workflow:** Easier to maintain than multiple independent workflows
 - **Client generation after tests:** Ensures OpenAPI schema is validated before generation
 - **Build after client generation:** Ensures latest client is included in Docker images
@@ -654,6 +675,7 @@ Phase 4 (Sequential, after Phase 3)
 ### Backend Architecture
 
 **Directory Structure:**
+
 ```
 backend/app/
 ├── api/              # API routes organized by resource
@@ -669,12 +691,14 @@ backend/app/
 ```
 
 **Key Patterns:**
+
 - **SQLModel**: Combines Pydantic + SQLAlchemy for unified models
 - **Dependency Injection**: `api/deps.py` provides reusable dependencies (DB sessions, auth)
 - **CRUD Separation**: Database operations in `crud.py`, business logic in routes
 - **Alembic Migrations**: All schema changes go through Alembic (never modify `SQLModel.metadata.create_all`)
 
 **Important Files:**
+
 - `app/main.py`: Application entry point, CORS, middleware setup
 - `app/core/config.py`: Settings management (reads from .env)
 - `app/core/db.py`: Database session management
@@ -685,6 +709,7 @@ backend/app/
 ### Frontend Architecture
 
 **Directory Structure:**
+
 ```
 frontend/src/
 ├── client/          # Auto-generated OpenAPI client (DO NOT EDIT)
@@ -696,12 +721,14 @@ frontend/src/
 ```
 
 **Key Patterns:**
+
 - **TanStack Router**: File-based routing with type-safe navigation
 - **TanStack Query**: Async state management for API calls
 - **Auto-generated Client**: OpenAPI TypeScript client provides type-safe API access
 - **Chakra UI**: Component library with dark mode support
 
 **Important Notes:**
+
 - NEVER manually edit files in `src/client/` - they're auto-generated
 - Always regenerate client after backend API changes
 - Use TanStack Query for all API calls (automatic caching, refetching)
@@ -710,10 +737,12 @@ frontend/src/
 
 **Database Architecture:**
 GamePulse uses **two separate PostgreSQL databases** on the same server:
+
 1. **`app` database** - Application data (teams, games, users) managed by Alembic migrations
 2. **`dagster` database** - Dagster orchestration metadata (runs, schedules, event logs) managed by Dagster
 
 **Why Separate Databases:**
+
 - Prevents conflicts between Alembic migrations (application) and Dagster schema
 - Isolates orchestration metadata from application data
 - Allows independent backup/restore and migration strategies
@@ -722,6 +751,7 @@ GamePulse uses **two separate PostgreSQL databases** on the same server:
 The PostgreSQL database includes the TimescaleDB extension for time-series data capabilities.
 
 **Application Database Migration Workflow (Alembic):**
+
 1. Modify SQLModel models in `backend/app/models.py`
 2. Generate migration: `alembic revision --autogenerate -m "Description"`
 3. Review generated migration in `backend/app/alembic/versions/`
@@ -729,6 +759,7 @@ The PostgreSQL database includes the TimescaleDB extension for time-series data 
 5. Commit migration files to git
 
 **NEVER:**
+
 - Uncomment `SQLModel.metadata.create_all(engine)` in production
 - Manually modify the database schema
 - Skip migrations for schema changes
@@ -806,6 +837,7 @@ with Session(engine) as session:
 ### AWS Deployment Architecture
 
 **Infrastructure (Terraform):**
+
 ```
 VPC (10.1.0.0/16)
 ├── Public Subnet (10.1.1.0/24) - EC2 instance, Elastic IP
@@ -813,16 +845,19 @@ VPC (10.1.0.0/16)
 ```
 
 **Terraform Modules:**
+
 - `modules/vpc/`: VPC, subnets, Internet Gateway, route tables
 - `modules/compute/`: EC2 instance, security groups, IAM roles, CloudWatch
 
 **Security:**
+
 - SSH: Restricted to specific IPs (admin_ip_cidrs + tailscale_device_ips in terraform.tfvars)
 - HTTP/HTTPS: Open to internet (0.0.0.0/0)
 - GitHub Actions: OIDC authentication (no long-lived credentials)
 - EC2 Instance: Ubuntu 24.04 with Docker, Docker Compose, Tailscale pre-installed
 
 **Memory Management (t2.micro optimization):**
+
 - **Swap Space:** 4GB swap file automatically created during instance provisioning
 - **Location:** `/swapfile` with 600 permissions (root only)
 - **Persistence:** Configured in `/etc/fstab` for automatic mounting on reboot
@@ -834,6 +869,7 @@ VPC (10.1.0.0/16)
 - **Idempotent:** Safe to run multiple times, checks if swap already exists
 
 **Verify swap status:**
+
 ```bash
 # Check swap is enabled
 swapon --show
@@ -846,6 +882,7 @@ cat /proc/sys/vm/swappiness
 ```
 
 **Deployment Process:**
+
 1. Push to `main` triggers GitHub Actions workflow
 2. Lint (ruff, mypy, biome) → Test (pytest, npm test) → Build (Docker images)
 3. OIDC auth to AWS → SSM send-command to EC2 instance
@@ -859,6 +896,7 @@ cat /proc/sys/vm/swappiness
 GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret management with the following architecture:
 
 **Benefits:**
+
 - ✅ **FREE** (vs $30-54/year for Secrets Manager)
 - ✅ KMS encryption at rest for sensitive values
 - ✅ CloudTrail audit logging of all parameter access
@@ -867,6 +905,7 @@ GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret ma
 - ✅ No secrets in Terraform state or GitHub
 
 **Parameter Hierarchy:**
+
 ```
 /gamepulse/
 ├── production/
@@ -882,26 +921,33 @@ GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret ma
 **Initial Setup (One-Time):**
 
 1. **Provision infrastructure:**
+
    ```bash
    cd terraform
    terraform apply
    ```
+
    This creates:
+
    - KMS key for encryption (alias: `gamepulse-secrets`)
    - Parameter Store entries with placeholder values
    - IAM policies for EC2 to read parameters
 
 2. **Populate actual secret values:**
+
    ```bash
    ./scripts/populate-parameters.sh production
    ```
+
    This script will:
+
    - Generate secure random values for `SECRET_KEY` and `POSTGRES_PASSWORD`
    - Prompt for admin password and Tailscale auth key
    - Write encrypted secrets to Parameter Store
    - Verify parameters were created successfully
 
 3. **Verify parameters:**
+
    ```bash
    # List all production parameters
    aws ssm get-parameters-by-path \
@@ -919,6 +965,7 @@ GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret ma
 **How Secrets are Loaded:**
 
 1. **During Deployment (Automated):**
+
    - GitHub Actions triggers deployment on push to `main`
    - Deployment script runs `backend/scripts/load-secrets.sh production .env` on EC2
    - Script fetches all parameters from `/gamepulse/production/` via AWS CLI
@@ -956,6 +1003,7 @@ git push origin main  # Or manually restart on EC2
 **Tailscale Auto-Connection:**
 
 Tailscale auth key is stored in Parameter Store and automatically used during EC2 instance provisioning:
+
 - Parameter: `/gamepulse/shared/infrastructure/tailscale_authkey`
 - User data script fetches key and runs `tailscale up --authkey=...`
 - New EC2 instances automatically join Tailscale network on boot
@@ -974,6 +1022,7 @@ Tailscale auth key is stored in Parameter Store and automatically used during EC
 **Note:** In production, environment variables are automatically generated from Parameter Store (see Secret Management section above). For local development, create `.env` manually:
 
 **Required in .env (Local Development):**
+
 - `SECRET_KEY`: Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 - `FIRST_SUPERUSER` / `FIRST_SUPERUSER_PASSWORD`: Initial admin account
 - `POSTGRES_PASSWORD`: Database password
@@ -981,9 +1030,11 @@ Tailscale auth key is stored in Parameter Store and automatically used during EC
 - `ENVIRONMENT`: `local` / `staging` / `production`
 
 **Frontend (.env):**
+
 - `VITE_API_URL`: Backend API URL (defaults to http://localhost:8000)
 
 **Production:**
+
 - Environment variables are stored in AWS Parameter Store
 - Automatically loaded via `backend/scripts/load-secrets.sh` during deployment
 - Never manually create `.env` files in production
@@ -991,12 +1042,14 @@ Tailscale auth key is stored in Parameter Store and automatically used during EC
 ### Testing Patterns
 
 **Backend Tests:**
+
 - Use pytest fixtures from `conftest.py`
 - Test database is automatically created/torn down
 - Use `client` fixture for API endpoint testing
 - Test files mirror app structure: `app/api/routes/items.py` → `app/tests/api/test_items.py`
 
 **Frontend Tests:**
+
 - Playwright for E2E tests
 - Requires backend running (`docker compose up -d --wait backend`)
 - Clean up with `docker compose down -v` after tests
@@ -1004,22 +1057,26 @@ Tailscale auth key is stored in Parameter Store and automatically used during EC
 ### Docker Compose Files
 
 **Three compose files:**
+
 1. `docker-compose.yml`: Base configuration (all environments)
 2. `docker-compose.override.yml`: Development overrides (auto-loaded, volume mounts, hot reload)
 3. `docker-compose.prod.yml`: Production overrides (explicit, no dev tools)
 
 **Important: Override File Behavior**
+
 - Docker Compose **automatically** loads `docker-compose.override.yml` unless you explicitly specify `-f` flags
 - This means `docker compose up` loads both `docker-compose.yml` + `docker-compose.override.yml`
 - The override file configures development mode: `fastapi run --reload` (WatchFiles auto-reloader)
 - In production, this causes high CPU usage as WatchFiles constantly polls the filesystem
 
 **Development:**
+
 ```bash
 docker compose watch  # Uses base + override (development mode)
 ```
 
 **Production (CRITICAL - must use explicit -f flags):**
+
 ```bash
 # Correct: Explicitly loads prod config, excludes override file
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
@@ -1029,6 +1086,7 @@ docker compose up -d
 ```
 
 **Production Configuration:**
+
 - Backend: `fastapi run --workers 1 app/main.py` (no `--reload` flag)
 - Worker count: 1 (optimized for t2.micro single vCPU)
 - Healthchecks: 30-second intervals (vs 10s in development)
@@ -1036,6 +1094,7 @@ docker compose up -d
 ### Git Workflow
 
 **Branches:**
+
 - `main`: Production branch (auto-deploys to EC2 on every push)
 
 **GitHub Actions Workflow:**
@@ -1043,6 +1102,7 @@ docker compose up -d
 Single workflow file: `.github/workflows/deploy.yml`
 
 Every push to `main` triggers:
+
 1. **Parallel Phase 1:**
    - Lint backend (ruff, mypy)
    - Lint frontend (biome)
@@ -1060,6 +1120,7 @@ Every push to `main` triggers:
    - Smoke test health endpoint
 
 **GitHub Secrets Required:**
+
 - `AWS_GITHUB_ACTIONS_ROLE_ARN`: IAM role for OIDC authentication
 - `AWS_EC2_INSTANCE_ID`: Target EC2 instance ID
 - `ECR_BACKEND_URL`: ECR Public URL for backend image
@@ -1079,6 +1140,7 @@ Every push to `main` triggers:
 6. Use generated client in frontend React components
 
 **Manual client generation (for local dev):**
+
 ```bash
 ./scripts/generate-client.sh
 ```
@@ -1095,6 +1157,7 @@ Every push to `main` triggers:
 ### Updating Dependencies
 
 **Backend:**
+
 ```bash
 # Add new package
 uv add <package-name>
@@ -1107,6 +1170,7 @@ docker compose build backend
 ```
 
 **Frontend:**
+
 ```bash
 npm install <package-name>
 npm install <package-name> --save-dev  # Dev dependency
@@ -1118,6 +1182,7 @@ docker compose build frontend
 ### Debugging in Docker
 
 **Backend:**
+
 ```bash
 # Option 1: View logs
 docker compose logs -f backend
@@ -1131,6 +1196,7 @@ docker compose exec backend python
 ```
 
 **Database:**
+
 ```bash
 # Access Adminer UI: http://localhost:8080
 # System: PostgreSQL
@@ -1152,22 +1218,27 @@ docker compose exec backend python
 ## Troubleshooting
 
 **Issue: "Module not found" in backend**
+
 - Solution: Ensure you're in activated venv or use `docker compose exec backend`
 
 **Issue: Frontend can't reach backend**
+
 - Check `VITE_API_URL` in `frontend/.env`
 - Verify backend is running: `curl http://localhost:8000/docs`
 
 **Issue: Database migration conflicts**
+
 - Never manually edit applied migrations
 - Create new migration to fix issues
 - Use `alembic downgrade` cautiously (data loss risk)
 
 **Issue: Docker build fails**
+
 - Clear build cache: `docker compose build --no-cache`
 - Remove old containers: `docker compose down -v`
 
 **Issue: GitHub Actions workflow fails**
+
 - Check GitHub Actions logs for specific error
 - **Linting failures:** Pre-commit hooks should catch these locally
   - Backend: `cd backend && uv run ruff check . && uv run ruff format --check . && uv run mypy .`
@@ -1180,6 +1251,7 @@ docker compose exec backend python
   - SSH to instance and check Docker logs: `docker compose logs`
 
 **Issue: Pre-commit hooks failing**
+
 - Ensure hooks are installed: `uv run pre-commit install`
 - Run manually to see errors: `uv run pre-commit run --all-files`
 - Common fixes:
@@ -1187,6 +1259,7 @@ docker compose exec backend python
   - Fix end-of-file/trailing whitespace issues (auto-fixed by pre-commit)
 
 **Issue: VSCode not formatting on save**
+
 - Install recommended extensions (VSCode will prompt)
   - Python: `charliermarsh.ruff`
   - JavaScript/TypeScript: `biomejs.biome`
@@ -1194,11 +1267,13 @@ docker compose exec backend python
 - Reload VSCode window: Cmd+Shift+P → "Developer: Reload Window"
 
 **Issue: Terraform apply fails**
+
 - Check AWS credentials: `aws sts get-caller-identity`
 - Verify terraform.tfvars has correct IP addresses
 - Check SSH key exists: `ls -l ~/.ssh/gamepulse-key*`
 
 **Issue: Dagster services won't start or in restart loop**
+
 - **Symptom:** Dagster webserver/daemon containers constantly restarting
 - **Common causes:**
   1. Missing `dagster` database - Check if database exists:
@@ -1210,6 +1285,7 @@ docker compose exec backend python
      docker compose exec db psql -U postgres -d dagster -c "\dt" | head -20
      ```
 - **Solution:**
+
   ```bash
   # Create database if missing
   docker compose exec db psql -U postgres -c "CREATE DATABASE dagster;"
@@ -1220,13 +1296,16 @@ docker compose exec backend python
   # Restart services
   docker compose restart dagster-daemon dagster-webserver
   ```
+
 - **Prevention:** The `prestart.sh` script should handle this automatically in future deployments
 
 **Issue: High CPU usage from Dagster or ssm-worker processes**
+
 - **Symptom:** EC2 instance slow, high CPU usage visible in `top` or CloudWatch
 - **Root cause:** Dagster services in infinite retry loop trying to connect to uninitialized database
 - **Solution:** Follow "Dagster services won't start" steps above - CPU should normalize within 1-2 minutes
 - **Verification:**
+
   ```bash
   # Check CPU before fix
   top -bn1 | grep -E "Cpu|dagster|ssm"
@@ -1239,6 +1318,7 @@ docker compose exec backend python
   ```
 
 **Issue: Dagster UI shows "Instance misconfigured" or connection errors**
+
 - **Symptom:** Dagster UI loads but shows configuration errors
 - **Check environment variables:**
   ```bash
@@ -1258,6 +1338,7 @@ docker compose exec backend python
   ```
 
 **Issue: Dagster schedule not running (ncaa_games_schedule)**
+
 - **Check schedule status in Dagster UI:**
   - Navigate to **Schedules** tab
   - Verify `ncaa_games_schedule` shows status **Running** (not **Stopped**)
@@ -1276,6 +1357,7 @@ docker compose exec backend python
   ```
 
 **Issue: Dagster asset materialization fails**
+
 - **Check logs for specific error:**
   ```bash
   docker compose logs dagster-daemon | grep -A 20 "ncaa_games"
@@ -1290,6 +1372,7 @@ docker compose exec backend python
   ```
 
 **Issue: High CPU usage / Credit Bankruptcy on t2.micro (28% resting CPU)**
+
 - **Symptom:** EC2 instance consistently using 25-30% CPU at rest, burning through CPU credits faster than they accumulate
 - **Root cause:** Backend running in development mode with `--reload` flag (WatchFiles auto-reloader) + aggressive 10-second healthchecks
 - **Why this happens:**
@@ -1303,6 +1386,7 @@ docker compose exec backend python
   3. Relaxing healthcheck intervals from 10s to 30s (70% reduction)
 - **Expected result:** CPU should drop from 28% to 5-10% after redeployment
 - **Verification:**
+
   ```bash
   # On EC2 instance, check current CPU usage
   top -bn1 | head -15
@@ -1314,13 +1398,16 @@ docker compose exec backend python
   # Check healthcheck intervals
   docker compose ps --format json | jq '.[].Health'
   ```
+
 - **Prevention:** Always use explicit `-f` flags when deploying to production to exclude override file
 
 **Issue: Out of Memory (OOM) errors or containers being killed**
+
 - **Symptom:** Docker containers randomly exit, `dmesg` shows OOM killer messages, services restart unexpectedly
 - **Root cause:** t2.micro has only 1GB RAM, insufficient for running multiple Docker containers
 - **Solution:** 4GB swap space is automatically configured during instance provisioning via `user_data.sh`
 - **Verify swap is enabled:**
+
   ```bash
   # Check swap status
   swapon --show
@@ -1332,7 +1419,9 @@ docker compose exec backend python
   # Check for OOM killer events
   dmesg | grep -i "killed process"
   ```
+
 - **Manual setup (if swap missing):**
+
   ```bash
   # Create 4GB swap file
   sudo fallocate -l 4G /swapfile
@@ -1347,4 +1436,5 @@ docker compose exec backend python
   echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf
   sudo sysctl -w vm.swappiness=10
   ```
+
 - **Prevention:** Swap is automatically configured on new EC2 instances. For existing instances, run manual setup above.
