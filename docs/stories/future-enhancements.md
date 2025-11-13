@@ -341,6 +341,60 @@ class DimTeam(SQLModel, table=True):
 
 ---
 
+## Testing & Infrastructure Enhancements
+
+### 7. Fix DimTeam Timestamp Timezone Handling
+
+**Context**: DimTeam model uses timezone-aware datetime defaults (`datetime.now(timezone.utc)`), but the database schema uses `TIMESTAMP WITHOUT TIME ZONE` columns. This mismatch causes test failures when tests create DimTeam instances directly in Python.
+
+**Current Behavior**:
+- Production code works fine (uses raw SQL INSERT that bypasses Python defaults)
+- Tests that manually create DimTeam instances fail with timezone comparison errors
+- FactGame model correctly uses `DateTime(timezone=True)` in sa_column definitions
+
+**Gap**: Architectural inconsistency between DimTeam and FactGame timestamp handling.
+
+**Root Cause**:
+- Migration `d115685a3652` created columns with plain `sa.TIMESTAMP()` (naive)
+- Model defaults create timezone-aware datetimes
+- Python model defaults and database schema don't match
+
+**Fix Required**:
+1. Update DimTeam model to use `sa_column=Column(DateTime(timezone=True))` for:
+   - `valid_from`
+   - `valid_to`
+   - `created_at`
+   - `updated_at`
+2. Create Alembic migration to convert `TIMESTAMP` → `TIMESTAMP WITH TIME ZONE`
+3. Re-enable full test suite (currently using simplified subset)
+
+**Impact**:
+- **Low Production Risk**: Production code bypasses Python defaults entirely
+- **Medium Maintenance Risk**: Developers may be confused by timezone mismatch
+- **Low Urgency**: Current simplified tests validate core business logic
+
+**Recommendation**:
+- Fix during next infrastructure improvement sprint
+- Align DimTeam with FactGame architecture patterns
+- Migration is straightforward column type conversion
+
+**Priority**: Low (technical debt, not blocking functionality)
+
+**Estimated Effort**: 2-3 hours
+- Update model definitions: 30 minutes
+- Create and test migration: 1 hour
+- Validate full test suite: 1 hour
+- Deploy and verify: 30 minutes
+
+**Related Story**: Story 2-4 (Dagster orchestration)
+
+**Notes**:
+- Story 2-4 uses simplified test suite (2 passing tests) to validate core logic
+- Full test suite (6 tests) blocked by timezone issue
+- Manual Dagster UI validation confirms asset works correctly
+
+---
+
 ## Implementation Priority
 
 | Enhancement | Priority | Estimated Effort | Recommended Approach | Epic Target |
@@ -351,6 +405,7 @@ class DimTeam(SQLModel, table=True):
 | Conferences | Low | 8-12 hours | Manual Curation (status quo) | Epic 5+ |
 | Historical Backfill | Low | 6-10 hours | Defer | Epic 6+ |
 | Player Rosters | Low | 10-15 hours | Defer | Epic 7+ |
+| DimTeam Timezone Fix | Low | 2-3 hours | Update model + migration | Infrastructure Sprint |
 
 ## Notes
 - All enhancements are **optional** for MVP
