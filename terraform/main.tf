@@ -30,6 +30,22 @@ module "vpc" {
 }
 
 # ============================================================================
+# Secrets Module - Parameter Store for Application Secrets
+# ============================================================================
+
+module "secrets" {
+  source = "./modules/secrets"
+
+  project_name           = var.project_name
+  environment            = var.environment
+  domain                 = var.domain
+  first_superuser_email  = var.first_superuser_email
+  ecr_backend_url        = module.ecr.backend_repository_url
+  ecr_frontend_url       = module.ecr.frontend_repository_url
+  tags                   = local.common_tags
+}
+
+# ============================================================================
 # Compute Module - Application Server
 # ============================================================================
 
@@ -37,6 +53,8 @@ module "compute" {
   source = "./modules/compute"
 
   project_name         = var.project_name
+  environment          = var.environment
+  aws_region           = var.aws_region
   vpc_id               = module.vpc.vpc_id
   subnet_id            = module.vpc.public_subnet_id
   instance_type        = var.instance_type
@@ -44,6 +62,7 @@ module "compute" {
   admin_ip_cidrs       = var.admin_ip_cidrs
   tailscale_device_ips = var.tailscale_device_ips
   log_retention_days   = var.log_retention_days
+  secrets_kms_key_arn  = module.secrets.kms_key_arn
   tags                 = local.common_tags
 }
 

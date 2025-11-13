@@ -315,11 +315,12 @@ jobs:
           # Send deployment script via SSM and execute
           # Note: SSM runs as ssm-user by default, so we use sudo to run as ubuntu user
           # Note: Pulls pre-built images from ECR Public (no authentication required for public repos)
+          # Secrets are fetched from Parameter Store during deployment
           aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --comment "GitHub Actions deployment via OIDC (ECR-based)" \
-            --parameters 'commands=["sudo -u ubuntu bash -c '\''cd /opt/gamepulse && echo \"Pulling latest config from main...\" && git fetch origin main && git reset --hard origin/main && echo \"Pulling pre-built images from ECR Public...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && echo \"Restarting services...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate && echo \"Cleaning up old images...\" && docker image prune -f && echo \"Deployment complete!\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps'\''"]' \
+            --comment "GitHub Actions deployment via OIDC with Parameter Store secrets" \
+            --parameters 'commands=["sudo -u ubuntu bash -c '\''cd /opt/gamepulse && echo \"Pulling latest config from main...\" && git fetch origin main && git reset --hard origin/main && echo \"Loading secrets from Parameter Store...\" && bash backend/scripts/load-secrets.sh production .env && echo \"Pulling pre-built images from ECR Public...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml pull && echo \"Restarting services...\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate && echo \"Cleaning up...\" && docker image prune -f && rm -f .env && echo \"Deployment complete!\" && docker compose -f docker-compose.yml -f docker-compose.prod.yml ps'\''"]' \
             --output text \
             --query "Command.CommandId" > /tmp/command_id.txt
 

@@ -74,6 +74,16 @@ github_repo = "GamePulse"
 allowed_branch_patterns = ["main", "staging"]
 
 # ============================================================================
+# Application Configuration (for Parameter Store)
+# ============================================================================
+
+# Production domain name
+domain = "yourdomain.com"
+
+# Admin user email address
+first_superuser_email = "admin@yourdomain.com"
+
+# ============================================================================
 # Configuration Instructions
 # ============================================================================
 

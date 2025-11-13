@@ -42,6 +42,23 @@ variable "log_retention_days" {
   default     = 7
 }
 
+variable "environment" {
+  description = "Environment name (production, staging, etc.)"
+  type        = string
+  default     = "production"
+}
+
+variable "aws_region" {
+  description = "AWS region for Parameter Store access"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "secrets_kms_key_arn" {
+  description = "KMS key ARN for secrets decryption"
+  type        = string
+}
+
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)

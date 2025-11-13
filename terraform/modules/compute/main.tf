@@ -62,6 +62,39 @@ resource "aws_iam_role_policy_attachment" "ssm_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Inline policy for Parameter Store access (least privilege)
+resource "aws_iam_role_policy" "parameter_store_access" {
+  name = "${var.project_name}-parameter-store-access"
+  role = aws_iam_role.ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowParameterStoreRead"
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/gamepulse/${var.environment}/*",
+          "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/gamepulse/shared/*"
+        ]
+      },
+      {
+        Sid    = "AllowKMSDecryption"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = var.secrets_kms_key_arn
+      }
+    ]
+  })
+}
+
 # IAM instance profile to attach role to EC2 instance
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "${var.project_name}-instance-profile"

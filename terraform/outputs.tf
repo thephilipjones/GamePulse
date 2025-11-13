@@ -100,6 +100,25 @@ output "ecr_registry_id" {
 }
 
 # ============================================================================
+# Secrets Module Outputs
+# ============================================================================
+
+output "secrets_kms_key_id" {
+  description = "KMS key ID for secrets encryption"
+  value       = module.secrets.kms_key_id
+}
+
+output "secrets_kms_key_alias" {
+  description = "KMS key alias for secrets encryption"
+  value       = module.secrets.kms_key_alias
+}
+
+output "parameter_base_path" {
+  description = "Base path for all parameters in Parameter Store"
+  value       = module.secrets.parameter_base_path
+}
+
+# ============================================================================
 # Connection Information
 # ============================================================================
 

@@ -113,19 +113,42 @@ echo "=== Verifying SSM Agent status ==="
 systemctl status snap.amazon-ssm-agent.amazon-ssm-agent.service --no-pager
 
 # ============================================================================
-# Install Tailscale (Optional - requires auth key to connect)
+# Install and Configure Tailscale (Automatic auth via Parameter Store)
 # ============================================================================
 
 echo "=== Installing Tailscale ==="
 curl -fsSL https://tailscale.com/install.sh | sh
 
-# Note: To connect to Tailscale network, run after SSH login:
-# sudo tailscale up --authkey=<your-auth-key>
-# Or set TAILSCALE_AUTHKEY environment variable before terraform apply
+echo "=== Connecting to Tailscale network ==="
 
-echo "=== Tailscale installed but not connected ==="
-echo "To connect: sudo tailscale up --authkey=YOUR_KEY"
-echo "Get auth key: https://login.tailscale.com/admin/settings/keys"
+# Fetch Tailscale auth key from Parameter Store
+TAILSCALE_AUTHKEY=$(aws ssm get-parameter \
+  --name "/gamepulse/shared/infrastructure/tailscale_authkey" \
+  --with-decryption \
+  --region us-east-1 \
+  --query 'Parameter.Value' \
+  --output text 2>/dev/null)
+
+if [ -n "$TAILSCALE_AUTHKEY" ] && [ "$TAILSCALE_AUTHKEY" != "PLACEHOLDER-UPDATE-VIA-AWS-CLI" ]; then
+  echo "✅ Fetched Tailscale auth key from Parameter Store"
+
+  # Connect to Tailscale with hostname
+  if tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname=gamepulse-prod --ssh; then
+    echo "✅ Connected to Tailscale network"
+    tailscale status
+  else
+    echo "⚠️ Failed to connect to Tailscale"
+  fi
+else
+  echo "⚠️ Tailscale auth key not found or is placeholder in Parameter Store"
+  echo "To connect manually: sudo tailscale up --authkey=YOUR_KEY"
+  echo ""
+  echo "To enable automatic connection:"
+  echo "1. Generate auth key: https://login.tailscale.com/admin/settings/keys"
+  echo "2. Store in Parameter Store:"
+  echo "   aws ssm put-parameter --name '/gamepulse/shared/infrastructure/tailscale_authkey' \\"
+  echo "     --value 'YOUR_KEY' --type SecureString --overwrite"
+fi
 
 # ============================================================================
 # Completion
@@ -136,10 +159,11 @@ echo "Docker version: $(docker --version)"
 echo "Docker Compose version: $(docker compose version)"
 echo "SSM Agent status: $(systemctl is-active snap.amazon-ssm-agent.amazon-ssm-agent.service)"
 echo "Tailscale version: $(tailscale version)"
+echo "Tailscale status: $(tailscale status 2>/dev/null | head -n 1 || echo 'Not connected')"
 echo "Ubuntu user added to docker group (will take effect on next login)"
 echo ""
 echo "Next steps:"
 echo "1. SSH to instance: ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<PUBLIC_IP>"
 echo "   OR use SSM Session Manager: aws ssm start-session --target <INSTANCE_ID>"
-echo "2. Connect to Tailscale: sudo tailscale up --authkey=YOUR_KEY"
-echo "3. Verify: tailscale status"
+echo "2. Clone repository: git clone https://github.com/PhilipTrauner/gamepulse.git /opt/gamepulse"
+echo "3. Deploy application: cd /opt/gamepulse && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"

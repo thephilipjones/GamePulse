@@ -147,3 +147,19 @@ variable "allowed_branch_patterns" {
     error_message = "At least one branch pattern must be specified for OIDC authentication."
   }
 }
+
+# ============================================================================
+# Application Configuration (for Parameter Store)
+# ============================================================================
+
+variable "domain" {
+  description = "Production domain name (e.g., gamepulse.top)"
+  type        = string
+  default     = "gamepulse.top"
+}
+
+variable "first_superuser_email" {
+  description = "Admin user email address"
+  type        = string
+  default     = "admin@gamepulse.top"
+}

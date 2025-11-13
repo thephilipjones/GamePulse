@@ -831,9 +831,126 @@ VPC (10.1.0.0/16)
 
 ## Important Conventions
 
+### Secret Management
+
+GamePulse uses **AWS Systems Manager Parameter Store** for centralized secret management with the following architecture:
+
+**Benefits:**
+- ✅ **FREE** (vs $30-54/year for Secrets Manager)
+- ✅ KMS encryption at rest for sensitive values
+- ✅ CloudTrail audit logging of all parameter access
+- ✅ Automated secret injection during deployment
+- ✅ Version tracking and rollback capability
+- ✅ No secrets in Terraform state or GitHub
+
+**Parameter Hierarchy:**
+```
+/gamepulse/
+├── production/
+│   ├── app/ (secret_key, first_superuser, domain, etc.)
+│   ├── database/ (password, name, user, server, port)
+│   ├── docker/ (backend_image, frontend_image, tag)
+│   └── email/ (smtp credentials - optional)
+└── shared/
+    └── infrastructure/
+        └── tailscale_authkey
+```
+
+**Initial Setup (One-Time):**
+
+1. **Provision infrastructure:**
+   ```bash
+   cd terraform
+   terraform apply
+   ```
+   This creates:
+   - KMS key for encryption (alias: `gamepulse-secrets`)
+   - Parameter Store entries with placeholder values
+   - IAM policies for EC2 to read parameters
+
+2. **Populate actual secret values:**
+   ```bash
+   ./scripts/populate-parameters.sh production
+   ```
+   This script will:
+   - Generate secure random values for `SECRET_KEY` and `POSTGRES_PASSWORD`
+   - Prompt for admin password and Tailscale auth key
+   - Write encrypted secrets to Parameter Store
+   - Verify parameters were created successfully
+
+3. **Verify parameters:**
+   ```bash
+   # List all production parameters
+   aws ssm get-parameters-by-path \
+     --path '/gamepulse/production/' \
+     --recursive \
+     --region us-east-1
+
+   # Get specific parameter (with decryption)
+   aws ssm get-parameter \
+     --name '/gamepulse/production/app/secret_key' \
+     --with-decryption \
+     --region us-east-1
+   ```
+
+**How Secrets are Loaded:**
+
+1. **During Deployment (Automated):**
+   - GitHub Actions triggers deployment on push to `main`
+   - Deployment script runs `backend/scripts/load-secrets.sh production .env` on EC2
+   - Script fetches all parameters from `/gamepulse/production/` via AWS CLI
+   - Parameters are mapped to `.env` format and written to disk
+   - Docker Compose reads `.env` and starts services
+   - `.env` is deleted after deployment for security
+
+2. **Local Testing (Manual):**
+   ```bash
+   # On EC2 or locally with AWS credentials
+   cd /opt/gamepulse
+   bash backend/scripts/load-secrets.sh production .env
+   cat .env  # Verify contents
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+   ```
+
+**Rotating Secrets:**
+
+```bash
+# Rotate a specific secret
+aws ssm put-parameter \
+  --name '/gamepulse/production/database/password' \
+  --value 'new-secure-password' \
+  --type SecureString \
+  --overwrite
+
+# View parameter history
+aws ssm get-parameter-history \
+  --name '/gamepulse/production/database/password'
+
+# Trigger redeployment to apply new secrets
+git push origin main  # Or manually restart on EC2
+```
+
+**Tailscale Auto-Connection:**
+
+Tailscale auth key is stored in Parameter Store and automatically used during EC2 instance provisioning:
+- Parameter: `/gamepulse/shared/infrastructure/tailscale_authkey`
+- User data script fetches key and runs `tailscale up --authkey=...`
+- New EC2 instances automatically join Tailscale network on boot
+
+**Security Best Practices:**
+
+1. **Never commit secrets to git** - Use Parameter Store instead
+2. **Rotate secrets regularly** - Use `aws ssm put-parameter --overwrite`
+3. **Delete .env files** - After deployment, remove local copies
+4. **Use SecureString** - All sensitive parameters encrypted with KMS
+5. **Audit access** - Review CloudTrail logs for parameter access
+6. **Least privilege** - EC2 can only read, not write parameters
+
 ### Environment Variables
 
-**Required in .env:**
+**Note:** In production, environment variables are automatically generated from Parameter Store (see Secret Management section above). For local development, create `.env` manually:
+
+**Required in .env (Local Development):**
 - `SECRET_KEY`: Generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
 - `FIRST_SUPERUSER` / `FIRST_SUPERUSER_PASSWORD`: Initial admin account
 - `POSTGRES_PASSWORD`: Database password
@@ -842,6 +959,11 @@ VPC (10.1.0.0/16)
 
 **Frontend (.env):**
 - `VITE_API_URL`: Backend API URL (defaults to http://localhost:8000)
+
+**Production:**
+- Environment variables are stored in AWS Parameter Store
+- Automatically loaded via `backend/scripts/load-secrets.sh` during deployment
+- Never manually create `.env` files in production
 
 ### Testing Patterns
 
@@ -904,7 +1026,8 @@ Every push to `main` triggers:
 - `AWS_EC2_INSTANCE_ID`: Target EC2 instance ID
 - `ECR_BACKEND_URL`: ECR Public URL for backend image
 - `ECR_FRONTEND_URL`: ECR Public URL for frontend image
-- Deployment secrets: `DOMAIN_PRODUCTION`, `SECRET_KEY`, `POSTGRES_PASSWORD`, etc.
+
+**Note:** Application secrets (passwords, keys) are stored in Parameter Store, not GitHub Secrets. See Secret Management section for details.
 
 ## Common Development Tasks
 
