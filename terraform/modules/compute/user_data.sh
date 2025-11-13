@@ -246,20 +246,20 @@ fi
 # ============================================================================
 
 echo "=== Generating .env file from Parameter Store ==="
-if [ -f "/opt/gamepulse/backend/scripts/load-secrets.sh" ]; then
+if [ -f "/opt/gamepulse/backend/scripts/create-env-from-aws-parameters.sh" ]; then
   cd /opt/gamepulse
-  su - ubuntu -c "cd /opt/gamepulse && bash backend/scripts/load-secrets.sh production .env 2>&1" > /var/log/load-secrets.log
+  su - ubuntu -c "cd /opt/gamepulse && bash backend/scripts/create-env-from-aws-parameters.sh production .env 2>&1" > /var/log/create-env.log
 
   if [ -f "/opt/gamepulse/.env" ]; then
     echo "✅ Environment file generated successfully"
     chown ubuntu:ubuntu /opt/gamepulse/.env
     chmod 600 /opt/gamepulse/.env
   else
-    echo "⚠️ Failed to generate .env file - check /var/log/load-secrets.log"
+    echo "⚠️ Failed to generate .env file - check /var/log/create-env.log"
     echo "Secrets must be populated in Parameter Store before deployment"
   fi
 else
-  echo "⚠️ load-secrets.sh script not found - .env must be created manually"
+  echo "⚠️ create-env-from-aws-parameters.sh script not found - .env must be created manually"
 fi
 
 # ============================================================================
@@ -295,7 +295,7 @@ if [ -d "/opt/gamepulse/.git" ]; then
     echo "  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
   else
     echo "⚠️ Environment file not created - populate Parameter Store secrets"
-    echo "  Then run: bash backend/scripts/load-secrets.sh production .env"
+    echo "  Then run: bash backend/scripts/create-env-from-aws-parameters.sh production .env"
   fi
 else
   echo "⚠️ Repository not cloned - manual setup required"
@@ -303,6 +303,6 @@ else
   echo "Manual setup steps:"
   echo "1. SSH: ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<PUBLIC_IP>"
   echo "2. Clone: git clone https://github.com/thephilipjones/GamePulse.git /opt/gamepulse"
-  echo "3. Secrets: cd /opt/gamepulse && bash backend/scripts/load-secrets.sh production .env"
+  echo "3. Secrets: cd /opt/gamepulse && bash backend/scripts/create-env-from-aws-parameters.sh production .env"
   echo "4. Deploy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
 fi
