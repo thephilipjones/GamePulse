@@ -1,0 +1,10 @@
+# Ignore Dagster runtime files
+history/
+schedules/
+storage/
+*.db
+*.db-shm
+*.db-wal
+
+# Keep dagster.yaml config
+!dagster.yaml
