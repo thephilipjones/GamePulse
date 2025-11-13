@@ -45,7 +45,7 @@ So that game data is continuously updated with full observability and lineage tr
 
 **And** I can verify the asset is working:
 - Check Dagster logs for "ncaa_games_asset_started" events every 15 min
-- Check database: `SELECT COUNT(*) FROM games WHERE game_date = CURRENT_DATE` returns results
+- Check database: `SELECT COUNT(*) FROM fact_game WHERE game_date = CURRENT_DATE` returns results
 - Check Dagster UI: Asset shows recent successful materialization timestamp
 
 ---
@@ -166,7 +166,8 @@ database_resource = DatabaseResource()
 from dagster import asset, RetryPolicy, AssetExecutionContext
 from app.services.ncaa_client import NCAAClient
 from app.services.rivalry_detector import calculate_rivalry_factor
-from app.models.game import Game
+from app.models.fact_game import FactGame
+from app.models.dim_team import DimTeam
 from datetime import datetime
 from sqlmodel import select
 import structlog
@@ -213,20 +214,33 @@ async def ncaa_games(context: AssetExecutionContext) -> dict:
                 # Transform API response to Game model
                 game = await transform_game_data(game_data, session)
 
-                # Upsert (insert or update existing game)
-                existing = await session.get(Game, game.game_id)
-                if existing:
-                    # Update scores and status for existing game
-                    existing.home_score = game.home_score
-                    existing.away_score = game.away_score
-                    existing.game_status = game.game_status
-                    existing.game_clock = game.game_clock
-                    existing.updated_at = datetime.utcnow()
-                    context.log.debug(f"Updated game {game.game_id}")
+                # Upsert using PostgreSQL INSERT ... ON CONFLICT
+                # Check if game exists (for insert/update tracking)
+                existing_game = await session.execute(
+                    select(FactGame).where(FactGame.game_id == fact_game["game_id"])
+                )
+                is_update = existing_game.scalar_one_or_none() is not None
+
+                # Upsert with ON CONFLICT DO UPDATE
+                stmt = insert(FactGame).values(fact_game)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["game_id"],  # Natural key
+                    set_={
+                        "home_score": stmt.excluded.home_score,
+                        "away_score": stmt.excluded.away_score,
+                        "game_status": stmt.excluded.game_status,
+                        "game_clock": stmt.excluded.game_clock,
+                        "updated_at": stmt.excluded.updated_at,
+                    },
+                )
+                await session.execute(stmt)
+
+                if is_update:
+                    games_updated += 1
+                    context.log.debug(f"Updated game {fact_game['game_id']}")
                 else:
-                    # Insert new game
-                    session.add(game)
-                    context.log.debug(f"Inserted game {game.game_id}")
+                    games_inserted += 1
+                    context.log.debug(f"Inserted game {fact_game['game_id']}")
 
             await session.commit()
 
@@ -247,38 +261,66 @@ async def ncaa_games(context: AssetExecutionContext) -> dict:
         await client.close()
 
 
-async def transform_game_data(game_data: dict, session) -> Game:
+async def transform_game_data(game_data: dict, session) -> dict:
     """
-    Transform NCAA API response to Game SQLModel.
+    Transform NCAA API response to FactGame dimensional model dictionary.
+
+    Dimensional Model Transformations:
+    1. Lookup home_team_key and away_team_key via dim_team natural keys
+    2. Derive game_date_key from game_date timestamp (YYYYMMDD integer)
+    3. Calculate rivalry_factor based on conference matching
+    4. Build game_id natural key: "sport_apiid"
 
     Args:
         game_data: Raw game data from NCAA API
-        session: Database session for rivalry detection
+        session: Database session for FK lookups and rivalry detection
 
     Returns:
-        Game model instance ready for upsert
+        Dictionary ready for FactGame upsert (game_key auto-generated)
     """
-    home_team_id = f"ncaam_{game_data['home']['id']}"
-    away_team_id = f"ncaam_{game_data['away']['id']}"
+    # Unwrap nested game object
+    game = game_data.get("game", {})
+    home_espn_id = game.get("home", {}).get("names", {}).get("seo")
+    away_espn_id = game.get("away", {}).get("names", {}).get("seo")
 
-    # Detect rivalries based on conference matching
-    rivalry_factor = await calculate_rivalry_factor(
-        home_team_id, away_team_id, session
-    )
+    # Build team_id natural keys
+    home_team_id = f"ncaam_{home_espn_id}"
+    away_team_id = f"ncaam_{away_espn_id}"
 
-    return Game(
-        game_id=f"ncaam_{game_data['id']}",
-        sport="ncaam",
-        game_date=datetime.fromisoformat(game_data['date']),
-        home_team_id=home_team_id,
-        away_team_id=away_team_id,
-        home_score=int(game_data['home'].get('score', 0)),
-        away_score=int(game_data['away'].get('score', 0)),
-        game_status=map_status(game_data['status']['state']),
-        game_clock=game_data['status'].get('clock'),
-        venue=game_data.get('venue', {}).get('fullName'),
-        rivalry_factor=rivalry_factor,
+    # Lookup surrogate keys (team_key) via dim_team
+    home_team = await session.execute(
+        select(DimTeam).where(DimTeam.team_id == home_team_id, DimTeam.is_current == True)
     )
+    away_team = await session.execute(
+        select(DimTeam).where(DimTeam.team_id == away_team_id, DimTeam.is_current == True)
+    )
+    home_team_obj = home_team.scalar_one()
+    away_team_obj = away_team.scalar_one()
+
+    # Derive game_date_key from timestamp
+    game_date_str = game.get("startDate", "")
+    game_date = datetime.strptime(game_date_str, "%m/%d/%Y")
+    game_date_key = int(game_date.strftime("%Y%m%d"))
+
+    # Calculate rivalry factor
+    rivalry_factor = await calculate_rivalry_factor(home_team_id, away_team_id, session)
+
+    return {
+        "game_id": f"ncaam_{game.get('gameID')}",
+        "sport": "ncaam",
+        "game_date": game_date,
+        "game_date_key": game_date_key,
+        "home_team_key": home_team_obj.team_key,
+        "away_team_key": away_team_obj.team_key,
+        "home_score": int(game.get("home", {}).get("score", 0) or 0),
+        "away_score": int(game.get("away", {}).get("score", 0) or 0),
+        "game_status": game.get("gameState", "scheduled"),
+        "game_clock": game.get("contestClock"),
+        "venue": game.get("title"),
+        "rivalry_factor": rivalry_factor,
+        "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
+        "updated_at": datetime.now(timezone.utc).replace(tzinfo=None),
+    }
 
 
 def map_status(api_status: str) -> str:
@@ -428,11 +470,11 @@ docker compose up -d dagster-webserver dagster-daemon
 **Verify database updates:**
 ```sql
 -- Check games were inserted
-SELECT COUNT(*) FROM games WHERE game_date = CURRENT_DATE;
+SELECT COUNT(*) FROM fact_game WHERE game_date = CURRENT_DATE;
 
--- Check recent updates
-SELECT game_id, home_team_id, away_team_id, game_status, updated_at
-FROM games
+-- Check recent updates (with dimensional model foreign keys)
+SELECT game_id, home_team_key, away_team_key, game_status, rivalry_factor, updated_at
+FROM fact_game
 ORDER BY updated_at DESC
 LIMIT 10;
 ```
@@ -493,8 +535,8 @@ dagster asset materialize -m app.dagster_definitions ncaa_games
 - [ ] Schedule active and shows next run time
 - [ ] Manual materialization works from UI
 - [ ] Asset lineage graph displays correctly
-- [ ] Games upserted to database after materialization
-- [ ] Rivalry factors correct: 1.2 for same-conference matchups
+- [ ] Games upserted to fact_game table after materialization (dimensional model)
+- [ ] Rivalry factors correct: 1.2 for same-conference matchups (Decimal type)
 - [ ] Structured logging with `structlog` events
 - [ ] Logs show "ncaa_games_asset_started" and "ncaa_games_asset_completed"
 - [ ] Failed materializations show retry attempts in Dagster UI
@@ -507,11 +549,13 @@ dagster asset materialize -m app.dagster_definitions ncaa_games
 ## Notes
 
 - **No FastAPI lifecycle integration needed** - Dagster daemon is an independent service
-- Dagster uses the same PostgreSQL database but creates its own schema for metadata
-- The schedule activates automatically when dagster-daemon starts
-- Use Dagster UI (not logs) as primary observability tool
-- Asset materialization metadata tracked automatically by Dagster
+- **Dimensional Model:** Uses `fact_game` table with surrogate keys (`game_key`, `home_team_key`, `away_team_key`) and dimensional foreign keys
+- **Database Schema:** Dagster uses the same PostgreSQL database but creates its own `dagster` schema for metadata
+- **Schedule Auto-Start:** The schedule activates automatically when dagster-daemon starts (default_status=RUNNING)
+- Use Dagster UI (not logs) as primary observability tool - provides asset lineage graph
+- Asset materialization metadata tracked automatically by Dagster (games_processed, games_inserted, games_updated)
 - For production deployment, ensure both dagster-webserver and dagster-daemon containers are running
+- **Story 2-3b Integration:** Team sync automatically discovers and upserts teams from API before game insertion
 
 ---
 
