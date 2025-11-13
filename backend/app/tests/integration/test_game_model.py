@@ -5,7 +5,6 @@ Tests database insertion, querying, foreign key constraints, indexes,
 and updates with actual PostgreSQL database using dimensional model.
 """
 
-from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,32 +12,12 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select, text
 
-from app.core.db import engine
 from app.models.dim_team import DimTeam
 from app.models.fact_game import FactGame
 
 
 @pytest.fixture(scope="function")
-def db_session() -> Generator[Session, None, None]:
-    """
-    Provide a database session with transaction rollback for test isolation.
-
-    Each test gets a fresh transaction that is rolled back after the test,
-    ensuring no test data persists in the database.
-    """
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection)
-
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
-
-
-@pytest.fixture(scope="function")
-def sample_teams(db_session: Session) -> dict[str, Any]:
+def sample_teams(db: Session) -> dict[str, Any]:
     """
     Create sample teams for testing FactGame foreign key relationships.
 
@@ -46,10 +25,10 @@ def sample_teams(db_session: Session) -> dict[str, Any]:
     or creates test DimTeam records. Returns teams with surrogate keys (team_key).
     """
     # Check if Duke and UNC exist from Story 2.1 seed data (use is_current for SCD Type 2)
-    duke = db_session.exec(
+    duke = db.exec(
         select(DimTeam).where(DimTeam.team_id == "ncaam_duke", DimTeam.is_current)
     ).first()
-    unc = db_session.exec(
+    unc = db.exec(
         select(DimTeam).where(DimTeam.team_id == "ncaam_unc", DimTeam.is_current)
     ).first()
 
@@ -81,11 +60,11 @@ def sample_teams(db_session: Session) -> dict[str, Any]:
         aliases=["UNC", "Tar Heels", "Carolina"],  # PostgreSQL ARRAY field
     )
 
-    db_session.add(test_duke)
-    db_session.add(test_unc)
-    db_session.commit()
-    db_session.refresh(test_duke)  # Get auto-generated team_key
-    db_session.refresh(test_unc)  # Get auto-generated team_key
+    db.add(test_duke)
+    db.add(test_unc)
+    db.commit()
+    db.refresh(test_duke)  # Get auto-generated team_key
+    db.refresh(test_unc)  # Get auto-generated team_key
 
     return {"duke": test_duke, "unc": test_unc}
 
@@ -94,7 +73,7 @@ class TestGameDatabaseOperations:
     """Integration tests for FactGame model database operations."""
 
     def test_insert_game_to_database(
-        self, db_session: Session, sample_teams: dict[str, Any]
+        self, db: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test inserting a game with valid foreign keys and querying it back."""
         game_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
@@ -112,12 +91,12 @@ class TestGameDatabaseOperations:
         )
 
         # Insert game
-        db_session.add(game)
-        db_session.commit()
-        db_session.refresh(game)  # Get auto-generated game_key
+        db.add(game)
+        db.commit()
+        db.refresh(game)  # Get auto-generated game_key
 
         # Query back by natural key (game_id)
-        retrieved_game = db_session.exec(
+        retrieved_game = db.exec(
             select(FactGame).where(FactGame.game_id == "ncaam_401234567")
         ).first()
 
@@ -138,7 +117,7 @@ class TestGameDatabaseOperations:
         assert retrieved_game.created_at is not None
         assert retrieved_game.updated_at is not None
 
-    def test_foreign_key_constraint_enforcement(self, db_session: Session) -> None:
+    def test_foreign_key_constraint_enforcement(self, db: Session) -> None:
         """Test that database enforces foreign key constraints on team_key."""
         game = FactGame(
             game_id="ncaam_401999999",
@@ -148,20 +127,20 @@ class TestGameDatabaseOperations:
             away_team_key=999998,  # Invalid team_key (surrogate key not in dim_team)
         )
 
-        db_session.add(game)
+        db.add(game)
 
         # Should raise IntegrityError due to foreign key violation
         with pytest.raises(IntegrityError) as exc_info:
-            db_session.commit()
+            db.commit()
 
         # Verify error message mentions foreign key constraint
         assert "foreign key constraint" in str(exc_info.value).lower()
 
         # Rollback the failed transaction
-        db_session.rollback()
+        db.rollback()
 
     def test_query_games_by_date(
-        self, db_session: Session, sample_teams: dict[str, Any]
+        self, db: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test querying games by date with index usage."""
         # Insert games with different dates
@@ -187,16 +166,14 @@ class TestGameDatabaseOperations:
             away_team_key=sample_teams["unc"].team_key,
         )
 
-        db_session.add(game1)
-        db_session.add(game2)
-        db_session.add(game3)
-        db_session.commit()
+        db.add(game1)
+        db.add(game2)
+        db.add(game3)
+        db.commit()
 
         # Query games on specific date
         target_date = datetime(2024, 3, 15, 19, 0, 0, tzinfo=timezone.utc)
-        games = db_session.exec(
-            select(FactGame).where(FactGame.game_date == target_date)
-        ).all()
+        games = db.exec(select(FactGame).where(FactGame.game_date == target_date)).all()
 
         # Verify correct filtering
         assert len(games) == 1
@@ -205,7 +182,7 @@ class TestGameDatabaseOperations:
         # Query games within date range
         start_date = datetime(2024, 3, 12, 0, 0, 0, tzinfo=timezone.utc)
         end_date = datetime(2024, 3, 22, 0, 0, 0, tzinfo=timezone.utc)
-        games_in_range = db_session.exec(
+        games_in_range = db.exec(
             select(FactGame).where(
                 FactGame.game_date >= start_date, FactGame.game_date <= end_date
             )
@@ -216,7 +193,7 @@ class TestGameDatabaseOperations:
         assert game_ids == {"ncaam_401000002", "ncaam_401000003"}
 
     def test_query_games_by_status(
-        self, db_session: Session, sample_teams: dict[str, Any]
+        self, db: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test querying games by status with index usage."""
         # Insert games with different statuses
@@ -245,26 +222,26 @@ class TestGameDatabaseOperations:
             game_status="final",
         )
 
-        db_session.add(scheduled_game)
-        db_session.add(live_game)
-        db_session.add(final_game)
-        db_session.commit()
+        db.add(scheduled_game)
+        db.add(live_game)
+        db.add(final_game)
+        db.commit()
 
         # Query by status
-        live_games = db_session.exec(
+        live_games = db.exec(
             select(FactGame).where(FactGame.game_status == "live")
         ).all()
         assert len(live_games) == 1
         assert live_games[0].game_id == "ncaam_402000002"
 
-        final_games = db_session.exec(
+        final_games = db.exec(
             select(FactGame).where(FactGame.game_status == "final")
         ).all()
         assert len(final_games) == 1
         assert final_games[0].game_id == "ncaam_402000003"
 
     def test_query_games_by_sport(
-        self, db_session: Session, sample_teams: dict[str, Any]
+        self, db: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test querying games by sport with index usage."""
         # Insert NCAAM game
@@ -276,13 +253,11 @@ class TestGameDatabaseOperations:
             away_team_key=sample_teams["unc"].team_key,
         )
 
-        db_session.add(ncaam_game)
-        db_session.commit()
+        db.add(ncaam_game)
+        db.commit()
 
         # Query by sport
-        ncaam_games = db_session.exec(
-            select(FactGame).where(FactGame.sport == "ncaam")
-        ).all()
+        ncaam_games = db.exec(select(FactGame).where(FactGame.sport == "ncaam")).all()
 
         # Should find at least the one we just inserted
         assert len(ncaam_games) >= 1
@@ -290,7 +265,7 @@ class TestGameDatabaseOperations:
         assert "ncaam_403000001" in game_ids
 
     def test_update_game_scores(
-        self, db_session: Session, sample_teams: dict[str, Any]
+        self, db: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test updating game scores and verifying updated_at timestamp changes."""
         # Insert game with initial scores
@@ -305,9 +280,9 @@ class TestGameDatabaseOperations:
             game_status="live",
         )
 
-        db_session.add(game)
-        db_session.commit()
-        db_session.refresh(game)
+        db.add(game)
+        db.commit()
+        db.refresh(game)
 
         original_updated_at = game.updated_at
 
@@ -315,9 +290,9 @@ class TestGameDatabaseOperations:
         game.home_score = 42
         game.away_score = 38
         game.updated_at = datetime.now(timezone.utc)
-        db_session.add(game)
-        db_session.commit()
-        db_session.refresh(game)
+        db.add(game)
+        db.commit()
+        db.refresh(game)
 
         # Verify scores updated
         assert game.home_score == 42
@@ -326,7 +301,7 @@ class TestGameDatabaseOperations:
         # Verify updated_at changed
         assert game.updated_at > original_updated_at
 
-    def test_database_indexes_exist(self, db_session: Session) -> None:
+    def test_database_indexes_exist(self, db: Session) -> None:
         """Test that all required indexes exist in pg_indexes."""
         # Query PostgreSQL system catalog for fact_game table indexes
         index_query = text(
@@ -338,7 +313,7 @@ class TestGameDatabaseOperations:
             """
         )
 
-        result = db_session.execute(index_query)
+        result = db.execute(index_query)
         index_names = [row[0] for row in result]
 
         # Verify required indexes exist (dimensional model indexes)
@@ -356,7 +331,7 @@ class TestGameDatabaseOperations:
             assert required_index in index_names, f"Missing: {required_index}"
 
     def test_game_type_filtering(
-        self, db_session: Session, sample_teams: dict[str, Any]
+        self, db: Session, sample_teams: dict[str, Any]
     ) -> None:
         """Test querying games by game_type (regular_season vs postseason)."""
         # Insert games with different types
@@ -377,12 +352,12 @@ class TestGameDatabaseOperations:
             game_type="postseason",
         )
 
-        db_session.add(regular_game)
-        db_session.add(postseason_game)
-        db_session.commit()
+        db.add(regular_game)
+        db.add(postseason_game)
+        db.commit()
 
         # Query by game_type
-        postseason_games = db_session.exec(
+        postseason_games = db.exec(
             select(FactGame).where(FactGame.game_type == "postseason")
         ).all()
 

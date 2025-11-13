@@ -90,7 +90,7 @@ jobs:
         run: |
           uv sync --frozen
           uv run alembic upgrade head
-          uv run coverage run -m pytest -v
+          uv run coverage run -m pytest -v -n 2
           uv run coverage report
 
   # Frontend pipeline - runs in parallel with backend

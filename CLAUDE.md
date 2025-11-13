@@ -49,14 +49,25 @@ source .venv/bin/activate
 # Run local development server (without Docker)
 fastapi dev app/main.py
 
-# Run tests
+# Run tests (parallel execution for speed)
+uv run pytest -v -n auto
+
+# Run tests sequentially (for debugging)
 uv run pytest -v
 
-# Run specific test
+# Run specific test file
 uv run pytest app/tests/api/test_items.py -v
 
-# Run tests with coverage
-uv run coverage run -m pytest
+# Run tests by category
+uv run pytest -m unit -v           # Unit tests only (fast, no database)
+uv run pytest -m integration -v    # Integration tests only (requires database)
+
+# Run tests with coverage (parallel)
+uv run coverage run -m pytest -v -n auto
+uv run coverage report
+
+# Run tests with coverage (sequential for debugging)
+uv run coverage run -m pytest -v
 uv run coverage report
 
 # Lint and type check

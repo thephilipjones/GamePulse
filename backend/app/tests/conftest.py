@@ -2,35 +2,30 @@ from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session, delete
+from sqlmodel import Session
 
 from app.core.db import engine
 from app.main import app
-from app.models.dim_date import DimDate
-from app.models.dim_team import DimTeam
 
 
-@pytest.fixture(scope="function", autouse=True)
+@pytest.fixture(scope="function")
 def db() -> Generator[Session, None, None]:
     """
-    Function-scoped database session that cleans up test data after each test.
+    Function-scoped database session with transaction rollback for isolation.
 
-    Changed from session-scoped to function-scoped to ensure proper isolation
-    between tests, especially for team_sync tests that create/modify teams.
+    Uses transaction rollback instead of DELETE statements for better performance.
+    Each test gets a fresh transaction that is rolled back after completion.
+    Safe for parallel execution with pytest-xdist.
     """
-    with Session(engine) as session:
-        # Clean up before test (remove any leftover data)
-        session.execute(delete(DimDate))
-        session.execute(delete(DimTeam))
-        session.commit()
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = Session(bind=connection)
 
-        yield session
+    yield session
 
-        # Clean up after test
-        session.rollback()  # Rollback any uncommitted changes
-        session.execute(delete(DimDate))
-        session.execute(delete(DimTeam))
-        session.commit()
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 
 @pytest.fixture(scope="module")
