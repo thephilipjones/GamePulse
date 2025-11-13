@@ -32,8 +32,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 ENV PYTHONPATH=/app
 
-COPY ./scripts /app/scripts
-
+# Copy configuration files (change less frequently than app code)
 COPY ./pyproject.toml ./uv.lock ./alembic.ini ./workspace.yaml /app/
 
 # Create DAGSTER_HOME directory for Dagster metadata storage
@@ -42,7 +41,11 @@ RUN mkdir -p /tmp/dagster_home
 # Copy Dagster configuration to DAGSTER_HOME
 COPY ./dagster.yaml /tmp/dagster_home/dagster.yaml
 
+# Copy application code (changes most frequently)
 COPY ./app /app/app
+
+# Copy scripts (change rarely, placed after app for better layer caching)
+COPY ./scripts /app/scripts
 
 # Sync the project
 # Ref: https://docs.astral.sh/uv/guides/integration/docker/#intermediate-layers
