@@ -251,7 +251,7 @@ fi
 # ============================================================================
 
 # List of optional parameters that should have empty defaults
-OPTIONAL_PARAMS=("SMTP_HOST" "SMTP_USER" "SMTP_PASSWORD" "SMTP_PORT" "SENTRY_DSN")
+OPTIONAL_PARAMS=("CI" "SMTP_HOST" "SMTP_USER" "SMTP_PASSWORD" "SMTP_PORT" "SENTRY_DSN")
 
 for param in "${OPTIONAL_PARAMS[@]}"; do
     if ! grep -q "^$param=" "$OUTPUT_FILE"; then
