@@ -124,39 +124,71 @@ put_parameter() {
 }
 
 # ============================================================================
-# Generate Secure Random Values
+# Helper: Prompt for Secret (existing or generate)
 # ============================================================================
 
-log_info "Generating secure random values..."
+prompt_secret() {
+    local var_name=$1
+    local display_name=$2
+    local generate_func=$3
 
-# Generate SECRET_KEY (40 characters, URL-safe)
-SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || openssl rand -base64 32 | tr -d "=+/" | cut -c1-40)
-log_info "  Generated SECRET_KEY: ${SECRET_KEY:0:10}... (40 chars)"
+    # Redirect prompts to stderr so they display even when output is captured
+    log_prompt "$display_name:" >&2
+    echo "  [1] Use existing value (you'll enter it)" >&2
+    echo "  [2] Generate new secure random value" >&2
+    echo -n "  Choice (1 or 2): " >&2
+    read -r choice </dev/tty
 
-# Generate POSTGRES_PASSWORD (32 characters)
-POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-32)
-log_info "  Generated POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:0:10}... (32 chars)"
-
-echo ""
+    if [ "$choice" = "2" ]; then
+        # Generate new value
+        local generated_value=$($generate_func)
+        log_info "  Generated: ${generated_value:0:10}... (${#generated_value} chars)" >&2
+        echo "$generated_value"
+    else
+        # Use existing value
+        echo -n "  Enter existing value: " >&2
+        read -s existing_value </dev/tty
+        echo "" >&2
+        if [ -z "$existing_value" ]; then
+            log_error "Value cannot be empty" >&2
+            exit 1
+        fi
+        echo "$existing_value"
+    fi
+}
 
 # ============================================================================
-# Prompt for User-Provided Values
+# Secret Generation Functions
 # ============================================================================
 
-log_info "Please provide the following values:"
+generate_secret_key() {
+    python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || openssl rand -base64 32 | tr -d "=+/" | cut -c1-40
+}
+
+generate_postgres_password() {
+    openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
+}
+
+# ============================================================================
+# Prompt for All Secret Values
+# ============================================================================
+
+log_info "Configure secrets for Parameter Store:"
 echo ""
 
-# First superuser password
-log_prompt "Admin user password (FIRST_SUPERUSER_PASSWORD):"
-echo -n "  > "
-read -s FIRST_SUPERUSER_PASSWORD
+# SECRET_KEY
+SECRET_KEY=$(prompt_secret "SECRET_KEY" "FastAPI JWT secret key (SECRET_KEY)" "generate_secret_key")
 echo ""
-if [ -z "$FIRST_SUPERUSER_PASSWORD" ]; then
-    log_error "Admin password cannot be empty"
-    exit 1
-fi
 
-# Tailscale auth key
+# POSTGRES_PASSWORD
+POSTGRES_PASSWORD=$(prompt_secret "POSTGRES_PASSWORD" "PostgreSQL database password (POSTGRES_PASSWORD)" "generate_postgres_password")
+echo ""
+
+# FIRST_SUPERUSER_PASSWORD
+FIRST_SUPERUSER_PASSWORD=$(prompt_secret "FIRST_SUPERUSER_PASSWORD" "Admin user password (FIRST_SUPERUSER_PASSWORD)" "generate_postgres_password")
+echo ""
+
+# Tailscale auth key (optional)
 log_prompt "Tailscale auth key (leave empty to skip):"
 echo -n "  > "
 read -s TAILSCALE_AUTHKEY
