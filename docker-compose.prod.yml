@@ -9,6 +9,9 @@ services:
   proxy:
     image: traefik:3.0
     restart: always
+    environment:
+      # Fix Docker API version compatibility issue with Traefik 3.0
+      - DOCKER_API_VERSION=1.44
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik-certificates:/certificates
