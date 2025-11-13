@@ -207,7 +207,7 @@ while IFS=$'\t' read -r name value; do
 
     # Write to .env file
     echo "$env_var=$value" >> "$TEMP_FILE"
-    ((param_count++))
+    ((param_count++)) || true
 done <<< "$ALL_PARAMS"
 
 # ============================================================================
