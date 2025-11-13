@@ -43,8 +43,9 @@ services:
       - "80:80"
       - "443:443"
     command:
-      # Enable Docker provider
+      # Enable Docker provider with explicit API version
       - --providers.docker=true
+      - --providers.docker.apiversion=1.44
       - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
       - --providers.docker.exposedbydefault=false
 
