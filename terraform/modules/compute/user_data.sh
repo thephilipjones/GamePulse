@@ -97,6 +97,20 @@ EOF
 systemctl restart docker
 
 # ============================================================================
+# Install AWS CLI v2
+# ============================================================================
+
+echo "=== Installing AWS CLI v2 ==="
+apt-get install -y unzip
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install
+rm -rf /tmp/aws /tmp/awscliv2.zip
+
+echo "=== Verifying AWS CLI installation ==="
+aws --version
+
+# ============================================================================
 # Install AWS SSM Agent (for Session Manager access)
 # ============================================================================
 
@@ -151,19 +165,91 @@ else
 fi
 
 # ============================================================================
+# Prepare Application Deployment Directory
+# ============================================================================
+
+echo "=== Creating application deployment directory ==="
+mkdir -p /opt/gamepulse
+chown ubuntu:ubuntu /opt/gamepulse
+echo "✅ Created /opt/gamepulse with ubuntu:ubuntu ownership"
+
+# ============================================================================
+# Clone Application Repository
+# ============================================================================
+
+echo "=== Cloning application repository ==="
+su - ubuntu -c 'git clone https://github.com/PhilipTrauner/gamepulse.git /opt/gamepulse 2>/dev/null || echo "Repository already cloned"'
+
+if [ -d "/opt/gamepulse/.git" ]; then
+  echo "✅ Repository cloned successfully"
+  cd /opt/gamepulse
+  echo "Current branch: $(git branch --show-current)"
+  echo "Latest commit: $(git log -1 --oneline)"
+else
+  echo "⚠️ Repository clone skipped or failed"
+fi
+
+# ============================================================================
+# Generate Environment File from Parameter Store
+# ============================================================================
+
+echo "=== Generating .env file from Parameter Store ==="
+if [ -f "/opt/gamepulse/backend/scripts/load-secrets.sh" ]; then
+  cd /opt/gamepulse
+  su - ubuntu -c "cd /opt/gamepulse && bash backend/scripts/load-secrets.sh production .env 2>&1" > /var/log/load-secrets.log
+
+  if [ -f "/opt/gamepulse/.env" ]; then
+    echo "✅ Environment file generated successfully"
+    chown ubuntu:ubuntu /opt/gamepulse/.env
+    chmod 600 /opt/gamepulse/.env
+  else
+    echo "⚠️ Failed to generate .env file - check /var/log/load-secrets.log"
+    echo "Secrets must be populated in Parameter Store before deployment"
+  fi
+else
+  echo "⚠️ load-secrets.sh script not found - .env must be created manually"
+fi
+
+# ============================================================================
+# Create Docker External Network
+# ============================================================================
+
+echo "=== Creating Traefik external network ==="
+docker network create traefik-public 2>/dev/null && echo "✅ Network created" || echo "ℹ️ Network already exists"
+
+# ============================================================================
 # Completion
 # ============================================================================
 
 echo "=== Bootstrap complete! ==="
 echo "Docker version: $(docker --version)"
 echo "Docker Compose version: $(docker compose version)"
+echo "AWS CLI version: $(aws --version 2>&1 | head -1)"
 echo "SSM Agent status: $(systemctl is-active snap.amazon-ssm-agent.amazon-ssm-agent.service)"
 echo "Tailscale version: $(tailscale version)"
 echo "Tailscale status: $(tailscale status 2>/dev/null | head -n 1 || echo 'Not connected')"
 echo "Ubuntu user added to docker group (will take effect on next login)"
 echo ""
-echo "Next steps:"
-echo "1. SSH to instance: ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<PUBLIC_IP>"
-echo "   OR use SSM Session Manager: aws ssm start-session --target <INSTANCE_ID>"
-echo "2. Clone repository: git clone https://github.com/PhilipTrauner/gamepulse.git /opt/gamepulse"
-echo "3. Deploy application: cd /opt/gamepulse && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
+echo "Application setup:"
+if [ -d "/opt/gamepulse/.git" ]; then
+  echo "✅ Repository cloned to /opt/gamepulse"
+  echo "✅ Directory owned by ubuntu:ubuntu"
+  if [ -f "/opt/gamepulse/.env" ]; then
+    echo "✅ Environment file generated from Parameter Store"
+    echo ""
+    echo "Ready to deploy! Run:"
+    echo "  cd /opt/gamepulse"
+    echo "  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
+  else
+    echo "⚠️ Environment file not created - populate Parameter Store secrets"
+    echo "  Then run: bash backend/scripts/load-secrets.sh production .env"
+  fi
+else
+  echo "⚠️ Repository not cloned - manual setup required"
+  echo ""
+  echo "Manual setup steps:"
+  echo "1. SSH: ssh -i ~/.ssh/gamepulse-key.pem ubuntu@<PUBLIC_IP>"
+  echo "2. Clone: git clone https://github.com/PhilipTrauner/gamepulse.git /opt/gamepulse"
+  echo "3. Secrets: cd /opt/gamepulse && bash backend/scripts/load-secrets.sh production .env"
+  echo "4. Deploy: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d"
+fi
