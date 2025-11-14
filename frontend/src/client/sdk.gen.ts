@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { GamesGetGamesData, GamesGetGamesResponse, GamesGetGamesTodayResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { GamesGetGamesData, GamesGetGamesResponse, GamesGetGamesTodayResponse, HealthGetHealthResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class GamesService {
     /**
@@ -62,6 +62,34 @@ export class GamesService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/games/today'
+        });
+    }
+    
+}
+
+export class HealthService {
+    /**
+     * Get Health
+     * System health check endpoint.
+     *
+     * Validates database connectivity and returns system status.
+     * Used by GitHub Actions smoke test and future monitoring.
+     *
+     * Returns:
+     * HealthCheckResponse: System health status with database connectivity
+     *
+     * Raises:
+     * HTTPException: 503 if database unreachable
+     * @returns HealthCheckResponse Successful Response
+     * @throws ApiError
+     */
+    public static getHealth(): CancelablePromise<HealthGetHealthResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/health',
+            errors: {
+                422: 'Validation Error'
+            }
         });
     }
     
