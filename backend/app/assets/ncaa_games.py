@@ -117,12 +117,14 @@ async def ncaa_games(
 
                 except ValueError as e:
                     context.log.error(
-                        f"game_transform_failed: game_id={game_data.get('id')}, error={str(e)}"
+                        f"game_transform_failed: game_id={game_data.get('id')}, error={str(e)}",
+                        exc_info=True,
                     )
                     continue
                 except Exception as e:
                     context.log.error(
-                        f"game_upsert_failed: game_id={game_data.get('id')}, error={str(e)}"
+                        f"game_upsert_failed: game_id={game_data.get('id')}, error={str(e)}",
+                        exc_info=True,
                     )
                     continue
 

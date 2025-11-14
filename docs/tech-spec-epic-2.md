@@ -677,6 +677,94 @@ Graceful shutdown complete
 | Invalid API response | Log error, skip invalid game, process others | Partial success (good games saved) |
 | Dagster daemon crash | Docker restart policy auto-recovers daemon | Lost cycle, resumes in 15 min |
 
+**Retry Strategy Architecture (Story 2-5):**
+
+GamePulse implements a **two-layer retry architecture** that provides ~30 seconds of retry resilience for transient NCAA API failures:
+
+| Layer | Technology | Configuration | Retry Timing | Purpose |
+|-------|-----------|---------------|--------------|---------|
+| **Layer 1: HTTP Client** | tenacity @retry decorator | max_retries=3, wait_exponential(multiplier=1, min=2, max=10) | 2s, 4s, 8s (total ~14s) | Handle transient HTTP errors (503, timeouts) |
+| **Layer 2: Dagster Asset** | RetryPolicy(max_retries=3, delay=2, backoff=EXPONENTIAL) | max_retries=3, delay=2, backoff=EXPONENTIAL | 2s, 4s, 8s (total ~14s) | Handle asset-level failures (DB errors, data transforms) |
+
+**Retry Behavior by Error Type:**
+
+```python
+# Layer 1 (NCAA Client) - tenacity retry logic
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    reraise=True,
+)
+async def fetch_todays_games(self) -> list[dict[str, Any]]:
+    # Retries on: HTTPStatusError (5xx), TimeoutException
+    # Does NOT retry on: 4xx client errors (401, 404)
+```
+
+| Error Type | HTTP Status | Retryable? | Retry Layer | Rationale |
+|-----------|-------------|-----------|-------------|-----------|
+| **Service Unavailable** | 503 | ✅ Yes | Layer 1 (tenacity) | Transient API outage, likely recovers within seconds |
+| **Internal Server Error** | 500 | ✅ Yes | Layer 1 (tenacity) | Temporary API bug, may recover on retry |
+| **Timeout (>10s)** | N/A | ✅ Yes | Layer 1 (tenacity) | Network congestion or slow API, retry may succeed |
+| **Not Found** | 404 | ❌ No | N/A | Client error, retrying won't fix |
+| **Unauthorized** | 401 | ❌ No | N/A | Authentication error, retrying won't fix |
+| **Database Error** | N/A | ✅ Yes | Layer 2 (Dagster) | Connection pool exhaustion, may recover |
+| **Transform Error** | N/A | ❌ No | N/A | Invalid data structure, logged and skipped |
+
+**Combined Retry Timeline:**
+
+When both layers retry (worst case: API 503 + asset failure):
+
+```
+Attempt 1 → 503 Error → wait 2s
+Attempt 2 → 503 Error → wait 4s
+Attempt 3 → 503 Error → wait 8s
+Layer 1 Exhausted → Propagate to Layer 2
+  ↓
+Layer 2 Attempt 1 → Asset Retry → wait 2s
+Layer 2 Attempt 2 → Asset Retry → wait 4s
+Layer 2 Attempt 3 → Asset Retry → wait 8s
+Layer 2 Exhausted → Job FAILED
+  ↓
+15-minute schedule → Auto-recovery window
+```
+
+**Total Retry Window:** ~30 seconds (14s Layer 1 + 14s Layer 2)
+**Auto-Recovery Window:** 15 minutes (next scheduled run)
+
+**Partial Failure Handling:**
+
+The asset implements **graceful degradation** via exception handling within the game processing loop:
+
+```python
+# Story 2-5: Partial failure handling
+for game_data in raw_games:
+    try:
+        fact_game = await transform_to_fact_game(game_data, session, context)
+        await session.execute(insert_stmt)  # Upsert individual game
+        games_inserted += 1
+    except ValueError as e:
+        # Story 2-5: Log with exc_info=True for stack traces
+        context.log.error(
+            f"game_transform_failed: game_id={game_data.get('id')}, error={str(e)}",
+            exc_info=True,
+        )
+        continue  # Skip invalid game, process remaining games
+```
+
+**Key Behaviors:**
+- ✅ **Save valid games** even if some games fail transformation
+- ✅ **Preserve cached data** on API failure (no database rollback)
+- ✅ **Structured logging** with full stack traces (exc_info=True)
+- ✅ **No daemon crashes** on network failures (verified via Story 2-5 AC6)
+
+**Observability:**
+
+Dagster UI provides visual retry timeline:
+- Each retry attempt shows timestamp and delay
+- Exponential backoff clearly visible in timeline
+- Failed runs display error logs with stack traces
+- Auto-recovery tracked via next scheduled run success
+
 **Data Consistency:**
 
 - **Upsert pattern**: INSERT or UPDATE ensures no duplicate game_id entries
