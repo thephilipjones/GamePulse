@@ -3,7 +3,69 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { GamesGetGamesData, GamesGetGamesResponse, GamesGetGamesTodayResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+
+export class GamesService {
+    /**
+     * Get Games
+     * Get NCAA Men's Basketball games for a specific date.
+     *
+     * Note: When date parameter is omitted, uses current date in UTC timezone.
+     * Frontend should handle timezone conversion for user display.
+     *
+     * Args:
+     * session: Database session (injected)
+     * date_param: Optional date in YYYY-MM-DD format (defaults to today in UTC)
+     *
+     * Returns:
+     * GameListResponse with list of games and metadata
+     *
+     * Raises:
+     * HTTPException 400: Invalid date format
+     * HTTPException 500: Database error
+     * @param data The data for the request.
+     * @param data.date Date in YYYY-MM-DD format (defaults to today in UTC)
+     * @returns GameListResponse Successful Response
+     * @throws ApiError
+     */
+    public static getGames(data: GamesGetGamesData = {}): CancelablePromise<GamesGetGamesResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/games',
+            query: {
+                date: data.date
+            },
+            errors: {
+                422: 'Validation Error'
+            }
+        });
+    }
+    
+    /**
+     * Get Games Today
+     * Get today's NCAA Men's Basketball games (convenience endpoint).
+     *
+     * Note: "Today" is determined using UTC timezone. Frontend should handle
+     * timezone conversion for user display.
+     *
+     * This endpoint is equivalent to calling GET /games without a date parameter.
+     *
+     * Args:
+     * session: Database session (injected)
+     *
+     * Returns:
+     * GameListResponse with list of today's games (UTC) and metadata
+     * @returns GameListResponse Successful Response
+     * @throws ApiError
+     */
+    public static getGamesToday(): CancelablePromise<GamesGetGamesTodayResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/games/today'
+        });
+    }
+    
+}
 
 export class UtilsService {
     /**
