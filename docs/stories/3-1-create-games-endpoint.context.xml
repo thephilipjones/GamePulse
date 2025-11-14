@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<story-context version="6.0" generated="2025-11-13">
+  <metadata>
+    <epic-id>3</epic-id>
+    <story-id>1</story-id>
+    <story-key>3-1-create-games-endpoint</story-key>
+    <story-title>Create Basic /api/games/today Endpoint</story-title>
+    <story-status>ready-for-dev</story-status>
+    <sprint>Week 1</sprint>
+    <story-points>5</story-points>
+    <dependencies>Epic 2 (dim_team, fact_game schema)</dependencies>
+  </metadata>
+
+  <story>
+    <as-a>GamePulse frontend developer</as-a>
+    <i-want>a REST API endpoint that returns today's NCAA Men's Basketball games with team details</i-want>
+    <so-that>I can display live game data on the web dashboard with team colors and scores</so-that>
+  </story>
+
+  <acceptance-criteria>
+    <ac id="3.1" title="Games Today Endpoint Functionality">
+      <given>fact_game table populated with games from Dagster ncaa_games asset (Epic 2)</given>
+      <when>I send GET request to /api/games/today</when>
+      <then>
+        - Response returns HTTP 200 with valid JSON
+        - Response contains games array and total_count integer
+        - Each game includes fields: game_key, game_id, game_date, game_time, game_status, home_team, away_team, home_score, away_score
+        - Games filtered by today's date (game_date_key = YYYYMMDD format of current date)
+        - Games ordered chronologically by game_time ascending
+        - Empty array returned if no games scheduled today (valid response, not error)
+      </then>
+    </ac>
+
+    <ac id="3.2" title="Dimensional Model Integration">
+      <given>dim_team table with team names, colors, conference names (Epic 2)</given>
+      <when>endpoint executes database query</when>
+      <then>
+        - Query performs JOINs on fact_game with dim_team twice (home and away)
+        - Uses surrogate key relationships (home_team_key, away_team_key → team_key)
+        - Filters dim_team.is_current = TRUE to respect SCD Type 2 pattern
+        - Team colors (primary_color, secondary_color) retrieved from dim_team, not hardcoded
+        - Conference names (team_group_name) included from flattened dim_team fields
+      </then>
+    </ac>
+
+    <ac id="3.3" title="CORS Configuration">
+      <given>frontend served from separate origin (localhost:5173 dev, gamepulse.top prod)</given>
+      <when>browser sends preflight OPTIONS request</when>
+      <then>
+        - Response includes Access-Control-Allow-Origin header matching request origin
+        - Allowed origins include: http://localhost:5173, https://gamepulse.top, https://api.gamepulse.top
+        - Preflight OPTIONS requests return HTTP 204 with proper headers
+        - Cross-origin requests from non-whitelisted domains blocked by CORS middleware
+      </then>
+    </ac>
+
+    <ac id="3.4" title="Pydantic Response Schema Validation">
+      <given>Pydantic schemas defined for GamePublic and GameListResponse</given>
+      <when>endpoint returns data</when>
+      <then>
+        - FastAPI automatically validates response against Pydantic schema
+        - Invalid data raises HTTP 422 Unprocessable Entity (schema violation)
+        - OpenAPI schema auto-generated at /docs endpoint
+        - TypeScript client can be generated from OpenAPI schema without errors
+      </then>
+    </ac>
+
+    <ac id="3.5" title="Error Handling and Logging">
+      <given>database connection failure or query error</given>
+      <when>endpoint attempts to fetch games</when>
+      <then>
+        - Structured error logged with exc_info=True (full stack trace)
+        - Response returns HTTP 500 with {"detail": "Database connection failed"}
+        - Error log includes context: endpoint="/api/games/today", request_id=(uuid)
+        - No stack traces exposed to API clients (security best practice)
+      </then>
+    </ac>
+
+    <ac id="3.6" title="Performance Requirements">
+      <given>typical workload of 20-50 games per day</given>
+      <when>endpoint executes query and returns response</when>
+      <then>
+        - P95 response time &lt;500ms (measured via structlog response_time_ms field)
+        - Database query execution time &lt;200ms (measured via PostgreSQL EXPLAIN ANALYZE)
+        - Pydantic serialization time &lt;100ms for 50-game result set
+      </then>
+    </ac>
+  </acceptance-criteria>
+
+  <tasks>
+    <task id="1" title="Create Pydantic Response Schemas" ac-ref="3.4">
+      <subtask>Create backend/app/schemas/game.py file</subtask>
+      <subtask>Define TeamInfo schema with team_key, team_id, team_name, team_group_name, primary_color, secondary_color</subtask>
+      <subtask>Define GamePublic schema with all game fields + nested TeamInfo for home/away</subtask>
+      <subtask>Define GameListResponse schema with games array, total_count, generated_at</subtask>
+      <subtask>Add unit tests for Pydantic schema validation</subtask>
+    </task>
+
+    <task id="2" title="Implement API Route Handler" ac-ref="3.1, 3.2, 3.5">
+      <subtask>Create backend/app/api/routes/games.py file</subtask>
+      <subtask>Implement get_games_today() function with dimensional query pattern</subtask>
+      <subtask>Use aliased() for home/away team JOINs</subtask>
+      <subtask>Filter by game_date_key (today's date in YYYYMMDD format)</subtask>
+      <subtask>Filter by is_current = TRUE for SCD Type 2</subtask>
+      <subtask>Order by game_time ascending</subtask>
+      <subtask>Transform query results to GamePublic schemas</subtask>
+      <subtask>Add structured logging (info on success, error with exc_info=True on failure)</subtask>
+      <subtask>Add error handling with HTTP 500 response</subtask>
+    </task>
+
+    <task id="3" title="Configure CORS Middleware" ac-ref="3.3">
+      <subtask>Edit backend/app/main.py</subtask>
+      <subtask>Add CORS middleware with allow_origins=settings.BACKEND_CORS_ORIGINS.split(",")</subtask>
+      <subtask>Set allow_credentials=False, allow_methods=["GET"], allow_headers=["*"]</subtask>
+      <subtask>Verify BACKEND_CORS_ORIGINS environment variable in .env</subtask>
+      <subtask>Test CORS preflight from allowed origin</subtask>
+    </task>
+
+    <task id="4" title="Register Router in Main App" ac-ref="3.1">
+      <subtask>Edit backend/app/main.py</subtask>
+      <subtask>Import games.router from app.api.routes.games</subtask>
+      <subtask>Add app.include_router(games.router, prefix="/api/games", tags=["games"])</subtask>
+      <subtask>Verify endpoint accessible at /api/games/today</subtask>
+    </task>
+
+    <task id="5" title="Testing and Validation" ac-ref="All">
+      <subtask>Write integration test: test_get_games_today_empty_result()</subtask>
+      <subtask>Write integration test: test_get_games_today_with_games() with dimensional data</subtask>
+      <subtask>Write integration test: test_cors_headers_allowed_origin()</subtask>
+      <subtask>Write integration test: test_database_error_handling()</subtask>
+      <subtask>Manual test: curl http://localhost:8000/api/games/today</subtask>
+      <subtask>Manual test: Verify OpenAPI docs at /docs</subtask>
+      <subtask>Performance test: ab load test (P95 &lt;500ms)</subtask>
+      <subtask>Verify TypeScript client generation works</subtask>
+    </task>
+
+    <task id="6" title="Documentation and Deployment" ac-ref="All">
+      <subtask>Add docstring to get_games_today() function</subtask>
+      <subtask>Document BACKEND_CORS_ORIGINS in .env.example</subtask>
+      <subtask>Update story file with completion notes</subtask>
+      <subtask>Run pre-commit hooks (ruff, mypy)</subtask>
+      <subtask>Commit changes to git</subtask>
+      <subtask>Update sprint-status.yaml: 3-1-create-games-endpoint = "done"</subtask>
+    </task>
+  </tasks>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>APIs and Interfaces</section>
+        <snippet>Defines GET /api/games/today endpoint with GamePublic and GameListResponse schemas, CORS configuration, and dimensional query patterns using surrogate keys.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Data Models and Contracts</section>
+        <snippet>Specifies Pydantic schemas (TeamInfo, GamePublic, GameListResponse) and dimensional query pattern with surrogate key JOINs, SCD Type 2 filtering (is_current=TRUE), and performance targets (&lt;200ms query execution).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Security</section>
+        <snippet>CORS middleware configuration: whitelist specific origins (http://localhost:5173, https://gamepulse.top, https://api.gamepulse.top), allow_credentials=False, allow_methods=["GET"], environment variable BACKEND_CORS_ORIGINS comma-separated list.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Performance</section>
+        <snippet>Target P95 &lt;500ms (database &lt;200ms, serialization &lt;100ms, network &lt;200ms). Use indexed surrogate keys for JOINs (integer comparison faster than string). Single query with JOINs (avoid N+1 problem).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Workflows and Sequencing</section>
+        <snippet>Workflow 1 (Initial Page Load): Browser → Dashboard.tsx → useGamesQuery() → fetch("/api/games/today") → Traefik → CORS Middleware → games.py route → SQLModel query → Pydantic serialization → JSON response.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document - GamePulse</title>
+        <section>FR-6: Backend API</section>
+        <snippet>Backend API must provide REST endpoints for game data retrieval with sub-500ms response time (P95). Endpoints must support CORS for frontend access and return type-safe JSON validated against schemas.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document - GamePulse</title>
+        <section>NFR-1: Performance</section>
+        <snippet>API response time &lt;500ms (P95), frontend initial load &lt;2 seconds (P95). Database query performance &lt;200ms for today's games query.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document - GamePulse</title>
+        <section>NFR-3: Security</section>
+        <snippet>CORS protection with explicit origin whitelist. SQL injection prevention via SQLModel parameterized queries. No authentication required (public read-only portfolio demo).</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Backend API Layer</section>
+        <snippet>FastAPI framework with Pydantic validation, automatic OpenAPI documentation, CORS middleware. SQLModel ORM for type-safe database queries. Dependency injection pattern for database sessions.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown</title>
+        <section>Epic 3: Basic API + Dashboard MVP</section>
+        <snippet>Story 3.1: Create Basic /api/games/today Endpoint - Includes CORS configuration. Goal: Create minimal working demo with live NCAA games displayed on web dashboard achievable by end of Week 1.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>backend/app/models/fact_game.py</path>
+        <kind>SQLModel database model</kind>
+        <symbol>FactGame</symbol>
+        <reason>Existing game fact table model with surrogate keys (game_key, home_team_key, away_team_key, game_date_key) that the endpoint will query</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/dim_team.py</path>
+        <kind>SQLModel database model</kind>
+        <symbol>DimTeam</symbol>
+        <reason>Existing team dimension model with team_key (surrogate), team_name, primary_color, secondary_color, team_group_name, is_current fields needed for dimensional JOINs</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/deps.py</path>
+        <kind>dependency injection module</kind>
+        <symbol>get_session</symbol>
+        <reason>Existing database session dependency that the route handler will use via Depends()</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/main.py</path>
+        <kind>API router aggregation</kind>
+        <symbol>app</symbol>
+        <reason>Existing file where games router will be registered via app.include_router()</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/main.py</path>
+        <kind>FastAPI application entry point</kind>
+        <symbol>app</symbol>
+        <reason>Existing file where CORS middleware will be added via app.add_middleware()</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/services/test_ncaa_client_retry.py</path>
+        <kind>test module</kind>
+        <symbol>test_api_500_error_retry_backoff</symbol>
+        <reason>Example test pattern for error handling with structured logging (exc_info=True) from Story 2-5</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <backend ecosystem="Python">
+        <package name="fastapi[standard]" version=">=0.115.0,&lt;1.0.0" />
+        <package name="pydantic" version=">=2.9.0,&lt;3.0.0" />
+        <package name="sqlmodel" version=">=0.0.22,&lt;1.0.0" />
+        <package name="structlog" version=">=24.0.0,&lt;25.0.0" />
+        <package name="httpx" version=">=0.27.0,&lt;1.0.0" />
+        <package name="alembic" version=">=1.13.0,&lt;2.0.0" />
+        <package name="psycopg[binary]" version=">=3.2.0,&lt;4.0.0" />
+        <package name="pytest" version=">=8.3.0,&lt;9.0.0" dev="true" />
+        <package name="mypy" version=">=1.11.0,&lt;2.0.0" dev="true" />
+        <package name="ruff" version=">=0.7.0,&lt;1.0.0" dev="true" />
+        <package name="coverage" version=">=7.6.0,&lt;8.0.0" dev="true" />
+      </backend>
+    </dependencies>
+  </artifacts>
+
+  <interfaces>
+    <interface>
+      <name>GET /api/games/today</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /api/games/today → GameListResponse (200 OK) | {"detail": str} (500 Internal Server Error)</signature>
+      <path>backend/app/api/routes/games.py</path>
+      <notes>New endpoint to be created by this story. Returns today's games with team details from dimensional model.</notes>
+    </interface>
+    <interface>
+      <name>get_session</name>
+      <kind>FastAPI dependency</kind>
+      <signature>def get_session() → Generator[Session, None, None]</signature>
+      <path>backend/app/api/deps.py</path>
+      <notes>Existing dependency injection for database session. Use via Depends(get_session) in route handler.</notes>
+    </interface>
+    <interface>
+      <name>FactGame (SQLModel)</name>
+      <kind>Database table model</kind>
+      <signature>FactGame(game_key: int, game_id: str, game_date_key: int, home_team_key: int, away_team_key: int, ...)</signature>
+      <path>backend/app/models/fact_game.py</path>
+      <notes>Existing model representing fact table for games. Query with JOINs to dim_team for team details.</notes>
+    </interface>
+    <interface>
+      <name>DimTeam (SQLModel)</name>
+      <kind>Database table model</kind>
+      <signature>DimTeam(team_key: int, team_id: str, team_name: str, primary_color: str, team_group_name: str, is_current: bool, ...)</signature>
+      <path>backend/app/models/dim_team.py</path>
+      <notes>Existing model representing team dimension. Filter by is_current=TRUE for SCD Type 2. Alias twice for home/away teams.</notes>
+    </interface>
+  </interfaces>
+
+  <constraints>
+    <constraint type="architecture">
+      <title>Dimensional Query Pattern</title>
+      <description>Use surrogate keys (team_key, game_key, date_key) for JOINs. Filter dim_team.is_current=TRUE to respect SCD Type 2 pattern. Alias dim_team twice for home/away teams using SQLAlchemy aliased(). Calculate game_date_key as int(date.today().strftime("%Y%m%d")).</description>
+    </constraint>
+    <constraint type="architecture">
+      <title>File Structure Convention</title>
+      <description>Pydantic API schemas in schemas/game.py (not in models/ which is for SQLModel). API routes in api/routes/games.py. Use dependency injection from api/deps.py.</description>
+    </constraint>
+    <constraint type="coding-standard">
+      <title>Error Handling Pattern</title>
+      <description>Structured logging with structlog (JSON output). Context binding: endpoint, games_count, response_time_ms. Stack traces in logs (exc_info=True), not exposed to clients. HTTP 500 with generic message: {"detail": "Database connection failed"}.</description>
+    </constraint>
+    <constraint type="coding-standard">
+      <title>CORS Configuration</title>
+      <description>Whitelist specific origins (no wildcard *). Environment variable BACKEND_CORS_ORIGINS comma-separated list. Read-only endpoints: allow_methods=["GET"]. No cookies/auth: allow_credentials=False.</description>
+    </constraint>
+    <constraint type="performance">
+      <title>Query Performance</title>
+      <description>Target P95 &lt;500ms total (database &lt;200ms, serialization &lt;100ms, network &lt;200ms). Use indexed surrogate keys for JOINs. Single query with JOINs (avoid N+1 problem).</description>
+    </constraint>
+    <constraint type="security">
+      <title>SQL Injection Prevention</title>
+      <description>SQLModel parameterized queries only. ORM prevents raw SQL injection via Pydantic validation. All query inputs type-checked (date_key: int, no string interpolation).</description>
+    </constraint>
+  </constraints>
+
+  <tests>
+    <standards>
+      <paragraph>
+        Testing framework: pytest with FastAPI TestClient for integration tests. Test structure mirrors app structure (app/tests/api/test_games.py for app/api/routes/games.py). Use pytest fixtures for database session and test data seeding. Integration tests preferred over mocking deep database calls (lesson from Story 2-5). Avoid greenlet dependency for CI stability. Test markers: @pytest.mark.unit (no database), @pytest.mark.integration (requires database). Coverage target: 80% code coverage measured by pytest-cov.
+      </paragraph>
+    </standards>
+    <locations>
+      <location>backend/app/tests/api/test_games.py</location>
+      <location>backend/app/tests/api/routes/test_games.py</location>
+    </locations>
+    <ideas>
+      <test-idea ac-ref="3.1">
+        <title>test_get_games_today_empty_result</title>
+        <description>Verify empty array returned when no games scheduled. Assert response status 200, games=[], total_count=0.</description>
+      </test-idea>
+      <test-idea ac-ref="3.1, 3.2">
+        <title>test_get_games_today_with_games</title>
+        <description>Seed test data (DimTeam + FactGame with today's date_key), call endpoint, verify 200 response with games array containing team details (team_name, primary_color from dim_team).</description>
+      </test-idea>
+      <test-idea ac-ref="3.3">
+        <title>test_cors_headers_allowed_origin</title>
+        <description>Send OPTIONS request with Origin: http://localhost:5173, assert Access-Control-Allow-Origin header present in response.</description>
+      </test-idea>
+      <test-idea ac-ref="3.5">
+        <title>test_database_error_handling</title>
+        <description>Mock get_session to raise OperationalError, call endpoint, assert 500 status with {"detail": "Database connection failed"}, verify structured log emitted with exc_info=True.</description>
+      </test-idea>
+      <test-idea ac-ref="3.4">
+        <title>test_game_public_schema_validation</title>
+        <description>Unit test for Pydantic schema. Try to create GamePublic with invalid data (e.g., game_date="not-a-date"), assert ValidationError raised.</description>
+      </test-idea>
+      <test-idea ac-ref="3.6">
+        <title>performance_test_api_latency</title>
+        <description>Load test with Apache Bench: ab -n 1000 -c 100 http://localhost:8000/api/games/today. Verify P95 latency &lt;500ms from ab output.</description>
+      </test-idea>
+    </ideas>
+  </tests>
+</story-context>

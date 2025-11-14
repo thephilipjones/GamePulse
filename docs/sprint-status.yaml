@@ -61,11 +61,11 @@ development_status:
   2-3c-create-dim-date: done
   2-4-implement-polling-worker: done
   2-5-add-retry-logic: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: completed
 
   # Epic 3: Basic API + Dashboard MVP (5 stories)
-  epic-3: backlog
-  3-1-create-games-endpoint: drafted
+  epic-3: contexted
+  3-1-create-games-endpoint: ready-for-dev
   3-2-add-health-endpoint: drafted
   3-3-initialize-react-dashboard: drafted
   3-4-build-game-list: drafted
