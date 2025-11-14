@@ -1,0 +1,340 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>5</storyId>
+    <title>Add Auto-Refresh Polling with React Query</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/3-5-add-auto-refresh.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user visiting the GamePulse dashboard</asA>
+    <iWant>the game list to automatically refresh every 15 minutes</iWant>
+    <soThat>I can see updated scores and game statuses without manually reloading the page</soThat>
+    <tasks>
+- [x] Task 1: Update useGames Hook with Polling Configuration (AC: 3.28)
+  - [x] Open frontend/src/hooks/useGames.ts
+  - [x] Add refetchInterval: 900000 to useQuery options
+  - [x] Add staleTime: 900000 to match refetch interval
+  - [x] Verify TypeScript compilation passes
+  - [x] Test hook executes refetch after interval
+
+- [x] Task 2: Add Background Refetch Indicator (AC: 3.30)
+  - [x] Open frontend/src/components/GameList.tsx
+  - [x] Destructure isFetching from useGames hook result
+  - [x] Add conditional rendering for background refresh indicator
+  - [x] Use Chakra UI HStack for horizontal layout (Spinner + Text)
+  - [x] Style with subtle colors (gray.500) for non-intrusive indicator
+  - [x] Verify indicator appears during background refetch only (not initial load)
+
+- [x] Task 3: Install date-fns Dependency (AC: 3.31)
+  - [x] Run: cd frontend and npm install date-fns
+  - [x] Verify package added to package.json dependencies
+  - [x] Update package-lock.json
+
+- [x] Task 4: Add Last Updated Timestamp (AC: 3.31)
+  - [x] Open frontend/src/routes/_layout/index.tsx
+  - [x] Import formatDistanceToNow from date-fns
+  - [x] Destructure data from useGames hook
+  - [x] Add conditional Text component above GameList
+  - [x] Format timestamp using formatDistanceToNow function
+  - [x] Style appropriately with centered text and gray color
+  - [x] Verify timestamp displays correctly
+
+- [x] Task 5: Enhance Error Handling with Stale Data Warning (AC: 3.32)
+  - [x] Open frontend/src/components/GameList.tsx
+  - [x] Update error condition to check both isError and data presence
+  - [x] Change Alert status from "error" to "warning" (less alarming)
+  - [x] Update message: "Unable to fetch latest data. Showing cached results."
+  - [x] Verify existing error state still works (no data + error = error alert)
+
+- [x] Task 6: Testing and Validation (AC: 3.33)
+  - [x] Fast Polling Test: Set refetchInterval to 30 seconds temporarily
+  - [x] Stale-While-Revalidate Test: Verify no loading skeleton during refetch
+  - [x] Error Recovery Test: Stop backend, verify cached data with warning
+  - [x] Tab Visibility Test: Switch tabs, verify polling pauses
+
+- [x] Task 7: Code Quality and Documentation (AC: All)
+  - [x] Run TypeScript compiler checks
+  - [x] Run linter and fix warnings
+  - [x] Add JSDoc comments to hook changes
+  - [x] Remove temporary test configurations
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### AC-3.28: Auto-Refresh Configuration
+
+**Given** the React Query client is configured in Story 3.3
+**When** the useGames hook is updated with polling configuration
+**Then** the hook:
+- Includes refetchInterval: 900000 (15 minutes in milliseconds)
+- Includes staleTime: 900000 to match refetch interval
+- Continues polling while the page remains open and visible
+- Stops polling when user navigates away or closes tab
+
+### AC-3.29: Stale-While-Revalidate Behavior
+
+**Given** the dashboard is displaying cached game data
+**When** the 15-minute refetch interval triggers
+**Then** the UI:
+- Does NOT show loading skeleton (existing data remains visible)
+- Fetches new data in the background
+- Updates display only when new data arrives
+- Provides smooth user experience without interruption
+
+### AC-3.30: Background Refetch Indicator (Optional Enhancement)
+
+**Given** the application is fetching updated data in the background
+**When** the refetch is in progress
+**Then** the UI:
+- Shows subtle indicator (small spinner or "Updating..." text)
+- Does NOT block or replace existing content
+- Distinguishes between initial load (isLoading) and background refetch (isFetching)
+
+### AC-3.31: Last Updated Timestamp Display
+
+**Given** the backend API includes generated_at timestamp in GameListResponse
+**When** the GameList component renders
+**Then** the display:
+- Shows "Last updated X minutes ago" timestamp
+- Updates timestamp based on data.generated_at from API response
+- Uses date-fns library for relative time formatting
+- Provides user context on data freshness
+
+### AC-3.32: Error Handling with Stale Data
+
+**Given** the auto-refresh triggers but the API request fails
+**When** the error occurs
+**Then** the behavior:
+- React Query keeps last successful data in cache (no data loss)
+- GameList displays cached games with warning banner
+- User sees: "Unable to fetch latest data. Showing cached results."
+- Automatic retry logic continues (3 attempts per request)
+
+### AC-3.33: Polling Verification Testing
+
+**Given** the need to verify auto-refresh functionality
+**When** testing the polling behavior
+**Then** verification methods:
+- Production Test: Open dashboard, wait 15 minutes, verify new network request in DevTools
+- Fast Test: Temporarily change refetchInterval to 30000ms (30 seconds), verify quick polling
+- Network Throttling: Use DevTools throttling to simulate slow connection, verify stale-while-revalidate
+- Tab Visibility: Switch to different tab, verify polling stops (React Query default behavior)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>State Management - React Query Configuration</section>
+        <snippet>TanStack Query (React Query) 5.90.7 for API data caching, stale-while-revalidate, and automatic 10-15 min polling. Cache Strategy: React Query caches responses for 15 minutes (staleTime: 900000ms), matches Dagster ingestion cadence. Includes retry: 3 with exponential backoff.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Workflows and Sequencing - Workflow 2: Automatic Polling Refresh</section>
+        <snippet>TanStack Query starts refetchInterval timer (900000ms = 15 min). React Query triggers background refetch using stale-while-revalidate (displays cached data during refetch). Timer resets, will refetch again in 15 minutes. Polling matches Dagster NCAA game ingestion cadence.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Workflows and Sequencing - Workflow 3: Error Handling</section>
+        <snippet>Frontend displays cached data during backend outages (graceful degradation). TanStack Query automatic retry (3 attempts, exponential backoff: 1s, 2s, 4s). React Query keeps last successful data in cache (no data loss).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic Technical Specification: Basic API + Dashboard MVP</title>
+        <section>APIs and Interfaces - useGamesQuery Hook Configuration</section>
+        <snippet>refetchInterval: 900000 (15 minutes = 900000ms), staleTime: 900000 (cache fresh for 15 min), retry: 3 (retry failed requests with exponential backoff). Hook returns Query result with data/loading/error states.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>GamePulse Product Requirements Document</title>
+        <section>FR-7: Web Dashboard</section>
+        <snippet>Game List View displays today's NCAA Men's Basketball games sorted by excitement score, with team colors, current scores, game status (live/final/scheduled), and auto-refresh updates. Top Moments Display shows recent exciting plays and key game moments with timestamps.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>GamePulse Product Requirements Document</title>
+        <section>NFR-1.4: Data Freshness</section>
+        <snippet>Dashboard data updates automatically within 15 minutes of source changes. Acceptable staleness window of 10-15 minutes for portfolio demo, balancing API rate limits and user experience expectations.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse System Architecture</title>
+        <section>Technology Stack - Frontend State</section>
+        <snippet>React Query (TanStack Query) 5.90.7 for API data caching, auto-refresh, stale-while-revalidate. Already included in starter template. Perfect for 10-15 min polling. Handles background refetch without blocking UI.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>frontend/src/hooks/useGames.ts</path>
+        <kind>hook</kind>
+        <symbol>useGames</symbol>
+        <lines>25-39</lines>
+        <reason>Custom React Query hook for fetching games. Already configured with refetchInterval: 900000 (15 min), refetchIntervalInBackground: true, and staleTime: 900000. Polling auto-refresh is ALREADY IMPLEMENTED.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/GameList.tsx</path>
+        <kind>component</kind>
+        <symbol>GameList</symbol>
+        <lines>106-111</lines>
+        <reason>Background refetch indicator using isFetching flag. Shows subtle Spinner with "Updating..." text during background polling. Feature ALREADY IMPLEMENTED.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/GameList.tsx</path>
+        <kind>component</kind>
+        <symbol>GameList</symbol>
+        <lines>56-91</lines>
+        <reason>Error handling with stale data warning. Shows cached data with warning banner when isError and data exists. Message: "Unable to fetch latest data. Showing cached results." Feature ALREADY IMPLEMENTED.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>component</kind>
+        <symbol>Dashboard</symbol>
+        <lines>38-45</lines>
+        <reason>Last updated timestamp display using formatDistanceToNow from date-fns. Shows "Last updated X ago" with live-updating relative time (refreshes every 30 seconds). Feature ALREADY IMPLEMENTED.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>component</kind>
+        <symbol>Dashboard</symbol>
+        <lines>24-31</lines>
+        <reason>useEffect hook that updates timestamp display every 30 seconds for live relative time without full page refresh. Demonstrates React best practices for interval-based updates.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/main.tsx</path>
+        <kind>config</kind>
+        <symbol>queryClient</symbol>
+        <lines>12-20</lines>
+        <reason>Global QueryClient configuration with staleTime: 900000 (15 min), retry: 3 attempts, refetchOnWindowFocus: false. Provides base configuration for all queries in the application.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/package.json</path>
+        <kind>config</kind>
+        <symbol>dependencies</symbol>
+        <lines>20</lines>
+        <reason>date-fns v4.1.0 already installed. Provides formatDistanceToNow for relative time formatting.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <npm>
+        <package name="@tanstack/react-query" version="^5.28.14">TanStack Query for server state management, caching, auto-refresh polling</package>
+        <package name="@tanstack/react-query-devtools" version="^5.28.14">Development tools for inspecting React Query cache and queries</package>
+        <package name="date-fns" version="^4.1.0">Modern JavaScript date utility library for formatDistanceToNow</package>
+        <package name="@chakra-ui/react" version="^3.8.0">Component library for UI elements (Alert, Spinner, HStack, Text)</package>
+        <package name="react" version="^18.2.0">React framework with hooks (useState, useEffect)</package>
+        <package name="@tanstack/react-router" version="1.19.1">Type-safe routing with file-based route generation</package>
+      </npm>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+- **CRITICAL**: All Story 3.5 features are ALREADY IMPLEMENTED in the codebase. Polling, background refetch indicator, error handling with stale data, and last updated timestamp are all complete and functional.
+- **No New Files**: Story 3.5 enhances existing components from Story 3.3 and 3.4. All modifications are in-place edits to useGames.ts, GameList.tsx, and index.tsx.
+- **Chakra UI v3 Compatibility**: Must use v3 API (gap prop instead of spacing, Alert.Root/Alert.Indicator structure). Do not use deprecated Chakra v2 patterns.
+- **React Query Configuration**: Global defaults already set in main.tsx (staleTime: 900000, retry: 3). Hook-level configuration can override these defaults.
+- **Polling Strategy**: 15-minute interval (900000ms) matches Dagster NCAA game ingestion cadence. Do not modify this interval without coordinating backend data refresh rate.
+- **Stale-While-Revalidate Pattern**: Must maintain existing behavior where cached data remains visible during background refetch (no loading skeleton on polling refresh).
+- **Error Handling**: Graceful degradation required - show cached data with warning banner when API fails, never show blank screen if data exists in cache.
+- **Tab Visibility**: React Query default behavior pauses polling when tab is hidden (refetchIntervalInBackground: true overrides this in useGames hook).
+- **Type Safety**: All API responses use auto-generated TypeScript types from OpenAPI schema. Do not manually define types that conflict with generated client.
+- **Project Structure**: Frontend uses Vite build tool, TypeScript strict mode, and file-based routing. Follow existing patterns for imports and component organization.
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>useGames Hook Return Type</name>
+      <kind>React Query Hook</kind>
+      <signature>
+{
+  data: GameListResponse | undefined,
+  isLoading: boolean,
+  isError: boolean,
+  isFetching: boolean,
+  error: Error | null
+}
+      </signature>
+      <path>frontend/src/hooks/useGames.ts</path>
+    </interface>
+    <interface>
+      <name>GameListResponse</name>
+      <kind>TypeScript Interface</kind>
+      <signature>
+interface GameListResponse {
+  games: Game[];
+  generated_at: string; // ISO 8601 timestamp
+  count: number;
+}
+      </signature>
+      <path>frontend/src/client/types.gen.ts</path>
+    </interface>
+    <interface>
+      <name>formatDistanceToNow</name>
+      <kind>Function Signature</kind>
+      <signature>
+formatDistanceToNow(date: Date, options?: { addSuffix?: boolean }): string
+// Returns: "5 minutes ago", "about 1 hour ago", etc.
+      </signature>
+      <path>node_modules/date-fns/formatDistanceToNow</path>
+    </interface>
+    <interface>
+      <name>React Query useQuery</name>
+      <kind>Hook Configuration</kind>
+      <signature>
+useQuery&lt;TData&gt;({
+  queryKey: string[],
+  queryFn: () => Promise&lt;TData&gt;,
+  refetchInterval?: number | false,
+  refetchIntervalInBackground?: boolean,
+  staleTime?: number,
+  retry?: number
+})
+      </signature>
+      <path>node_modules/@tanstack/react-query</path>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+Frontend testing uses Playwright for end-to-end browser testing with Chromium browser (Desktop Chrome device emulation). Tests located in frontend/tests/ directory run against http://localhost:5173 development server with automatic server startup in test mode. Backend testing uses pytest with organized test structure (api/, services/, models/ subdirectories) and conftest.py for fixtures. Manual testing procedures documented in story Dev Notes for polling verification (AC-3.33) including fast polling tests, network throttling, and tab visibility behavior. No unit tests for React components currently - focus on E2E integration tests and manual verification.
+    </standards>
+    <locations>
+- frontend/tests/*.spec.ts - Playwright E2E tests
+- backend/app/tests/api/ - Backend API endpoint tests
+- backend/app/tests/services/ - Service layer tests
+- Manual testing procedures in story Dev Notes section
+    </locations>
+    <ideas>
+**AC-3.28 (Auto-Refresh Configuration):**
+- Manual verification: Open React Query DevTools, inspect query ['games', 'today'], verify refetchInterval: 900000 and staleTime: 900000 are configured
+- Network tab test: Observe new API request appears every 15 minutes automatically (or 30 seconds with temporary config change for faster testing)
+
+**AC-3.29 (Stale-While-Revalidate Behavior):**
+- Playwright test: Load dashboard, wait for initial render, trigger manual refetch (via DevTools or wait for interval), assert NO loading skeleton visible, assert existing game cards remain on screen
+- Visual regression: Capture screenshots before/during/after background refetch to verify smooth transition without UI disruption
+
+**AC-3.30 (Background Refetch Indicator):**
+- Playwright test: Locate Spinner element with text "Updating...", verify visible ONLY when isFetching=true AND isLoading=false
+- CSS test: Verify indicator uses subtle styling (fontSize="sm", color="gray.500") and does not block content
+
+**AC-3.31 (Last Updated Timestamp):**
+- Playwright test: Locate timestamp text, verify format matches "Last updated X ago" pattern, verify updates after data refresh
+- Edge case test: Verify timestamp displays correctly for various time ranges (seconds, minutes, hours) using mock generated_at values
+- Accessibility test: Verify timestamp is readable with screen reader
+
+**AC-3.32 (Error Handling with Stale Data):**
+- Integration test: Start backend, load dashboard (initial data cached), stop backend, trigger refetch, assert warning banner visible, assert cached data still displayed
+- Recovery test: Restart backend after error, verify warning clears on next successful refetch
+
+**AC-3.33 (Polling Verification):**
+- Fast polling test: Temporarily set refetchInterval: 30000, verify rapid polling in Network tab (manual test documented in Dev Notes)
+- Tab visibility test: Switch to different browser tab, verify polling pauses (check Network tab shows no requests while hidden), return to tab, verify polling resumes
+- React Query cache inspection: Use DevTools to verify query status transitions (fresh → stale → fetching → fresh cycle)
+
+**Note:** All features are already implemented. Tests would verify existing functionality rather than guide new development.
+    </ideas>
+  </tests>
+</story-context>
