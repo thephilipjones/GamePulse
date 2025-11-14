@@ -64,6 +64,32 @@ export type GamePublic = {
     away_score?: number;
 };
 
+/**
+ * Health check response with system status and database connectivity.
+ */
+export type HealthCheckResponse = {
+    /**
+     * Overall system health: healthy, degraded, unhealthy
+     */
+    status: string;
+    /**
+     * API version string
+     */
+    version: string;
+    /**
+     * Database connectivity: connected, disconnected
+     */
+    database: string;
+    /**
+     * Process uptime in seconds
+     */
+    uptime_seconds: number;
+    /**
+     * Health check timestamp (UTC)
+     */
+    timestamp: string;
+};
+
 export type HTTPValidationError = {
     detail?: Array<ValidationError>;
 };
@@ -121,6 +147,8 @@ export type GamesGetGamesData = {
 export type GamesGetGamesResponse = (GameListResponse);
 
 export type GamesGetGamesTodayResponse = (GameListResponse);
+
+export type HealthGetHealthResponse = (HealthCheckResponse);
 
 export type UtilsTestEmailData = {
     emailTo: string;
