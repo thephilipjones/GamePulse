@@ -20,10 +20,7 @@ export default defineConfig({
           // Split Chakra UI into separate chunk (large dependency)
           "chakra-ui": ["@chakra-ui/react", "@emotion/react"],
           // Split TanStack packages (Query + Router)
-          "tanstack": [
-            "@tanstack/react-query",
-            "@tanstack/react-router",
-          ],
+          tanstack: ["@tanstack/react-query", "@tanstack/react-router"],
         },
       },
     },

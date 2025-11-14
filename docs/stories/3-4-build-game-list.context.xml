@@ -1,0 +1,289 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>4</storyId>
+    <title>Build Simple Game List Component</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/3-4-build-game-list.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a user visiting the GamePulse dashboard</asA>
+    <iWant>to see today's NCAA basketball games displayed in a simple list</iWant>
+    <soThat>I can quickly browse live games and their current scores</soThat>
+    <tasks>
+      - Create useGames custom hook with TanStack Query (queryKey: ['games', 'today'])
+      - Create GameList component file with Chakra UI imports
+      - Implement loading state with 5 skeleton placeholders
+      - Implement error state with user-friendly Alert component
+      - Implement empty state message for off-season
+      - Implement game cards with team names, scores, and status badges
+      - Add team color accent (borderLeftColor with primary_color)
+      - Implement score display logic (show dash when null)
+      - Test responsive mobile layout (Chrome DevTools device mode)
+      - Integrate GameList into Dashboard page
+      - Run TypeScript type checking (tsc --noEmit)
+      - Run manual testing: loading/error/empty states
+      - Run code quality checks (npm run lint)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC-3.18: Custom React Query Hook (useGames)
+    - Uses TanStack Query's useQuery hook with queryKey ['games', 'today']
+    - Fetches from ${API_BASE_URL}/api/games/today endpoint
+    - Returns { data, isLoading, isError, error } standard React Query result
+    - Has proper TypeScript interfaces (Game, TeamInfo, GamesResponse)
+    - Handles fetch errors gracefully
+
+    AC-3.19: GameList Component Structure
+    - Imports and calls useGames() hook
+    - Handles three states: loading, error, success
+    - Uses Chakra UI components (Box, Stack, Skeleton, Alert)
+    - Named export: export function GameList()
+    - Located at frontend/src/components/GameList.tsx
+
+    AC-3.20: Loading State with Skeleton Screens
+    - Displays 5 skeleton placeholder cards
+    - Uses Chakra UI Skeleton component with height="60px"
+    - Stacks skeletons vertically with spacing={4}
+
+    AC-3.21: Error State Handling
+    - Displays Chakra UI Alert with status="error"
+    - Shows user-friendly message: "Unable to load games. Please try again later."
+    - Does NOT display technical error details
+
+    AC-3.22: Empty State Message
+    - Displays when API returns empty games array
+    - Shows Text component: "No games scheduled for today."
+    - Uses subdued color (gray.500)
+
+    AC-3.23: Game Card Display Structure
+    - Uses Chakra UI Box with border, padding, borderRadius
+    - Displays home team name and away team name
+    - Shows scores when available (home_score, away_score)
+    - Displays game status badge (scheduled, live, final)
+    - Maps over data.games array with unique game_key as React key
+
+    AC-3.24: Team Colors Integration
+    - Uses team colors as visual accent (border-left)
+    - Applies borderLeftWidth="4px" and borderLeftColor={away_team.primary_color || 'gray.500'}
+    - Handles null/missing colors gracefully
+
+    AC-3.25: Score Display Logic
+    - Shows scores as numbers when available
+    - Shows dash placeholder when null: {game.home_score ?? '-'}
+    - Uses bold font weight for scores
+
+    AC-3.26: Responsive Mobile Layout
+    - Game cards stack vertically (no horizontal scroll)
+    - Text remains readable (minimum 14px)
+    - Uses Chakra UI responsive props
+
+    AC-3.27: Integration with Dashboard Page
+    - Dashboard imports { GameList } from '../components/GameList'
+    - Renders GameList inside existing Box wrapper
+    - Replaces placeholder "Loading games..." text
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Services and Modules - GameList Component</section>
+        <snippet>GameList component displays list of games with team info at frontend/src/components/GameList.tsx. Uses useGamesQuery Hook (TanStack Query hook for fetching games) which implements refetchInterval: 900000ms (15 min) for automatic polling.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Data Models and Contracts - GamePublic Schema</section>
+        <snippet>API response includes GamePublic with nested TeamInfo (team_key, team_id, team_name, team_group_name, primary_color, secondary_color). Scores are nullable (int | None). GameListResponse envelope contains games array, total_count, and generated_at timestamp.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>APIs and Interfaces - GET /api/games/today</section>
+        <snippet>Backend endpoint returns 200 OK with JSON games array. Each game includes home_team and away_team nested objects with team colors. CORS configured for http://localhost:5173 (dev) and https://gamepulse.top (prod).</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Acceptance Criteria - AC-3.5 Frontend Game List Display</section>
+        <snippet>GameList component displays all games returned from API. Each game card shows home/away team names, team colors as background or border styling, game status badge (scheduled|live|final), scores when available or "vs" when null. Loading skeleton displayed during initial request.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Decision Summary - Frontend State</section>
+        <snippet>React Query (TanStack Query) 5.90.7 for API data caching, auto-refresh, stale-while-revalidate. Already included in starter template. Perfect for 10-15 min polling.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Project Structure - Frontend</section>
+        <snippet>Frontend structure: src/components/ for reusable UI components, src/hooks/ for React Query hooks (useGames.ts), src/pages/ for Dashboard.tsx. Uses Chakra UI 3.8+ component library with dark mode support.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/3-3-initialize-react-dashboard.md</path>
+        <title>Story 3.3: Initialize React Dashboard</title>
+        <section>Dev Notes - Learnings from Story 3-3</section>
+        <snippet>React Query Configuration: staleTime: 900000ms (15 min), retry: 3 already configured. Environment Variables: VITE_API_URL configured in .env files. Development: http://localhost:8000, Production: https://api.gamepulse.top. Docker Rebuild: New files require container rebuild with docker compose build frontend.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>component</kind>
+        <symbol>Dashboard</symbol>
+        <lines>15-28</lines>
+        <reason>Integration point - GameList component will replace the placeholder Box content (lines 21-25)</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/main.tsx</path>
+        <kind>config</kind>
+        <symbol>queryClient</symbol>
+        <lines>12-20</lines>
+        <reason>React Query configuration - staleTime: 900000ms (15 min), retry: 3 already configured globally</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/ui/skeleton.tsx</path>
+        <kind>component</kind>
+        <symbol>Skeleton</symbol>
+        <lines>1-48</lines>
+        <reason>Existing Skeleton component pattern - import from "@chakra-ui/react" and use with height prop</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/client/types.gen.ts</path>
+        <kind>types</kind>
+        <symbol>GameListResponse, GamePublic, TeamInfo</symbol>
+        <lines>5-106</lines>
+        <reason>Auto-generated TypeScript interfaces for API response - use these types for hook return values</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/main.tsx</path>
+        <kind>config</kind>
+        <symbol>OpenAPI.BASE</symbol>
+        <lines>10</lines>
+        <reason>API base URL configured from VITE_API_URL environment variable</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="npm">
+        <package name="react" version="^18.2.0" />
+        <package name="@chakra-ui/react" version="^3.8.0" />
+        <package name="@tanstack/react-query" version="^5.28.14" />
+        <package name="@tanstack/react-router" version="1.19.1" />
+        <package name="typescript" version="^5.2.2" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    1. Component Separation: Data fetching logic (useGames hook) must be separate from presentation logic (GameList component)
+    2. No manual API client edits: Use auto-generated types from frontend/src/client/types.gen.ts - NEVER manually edit client directory
+    3. Chakra UI imports: Import from "@chakra-ui/react" not from ui components directory
+    4. File structure: Hooks in frontend/src/hooks/, Components in frontend/src/components/
+    5. Import paths: Use relative paths (e.g., '../hooks/useGames') not absolute paths
+    6. TypeScript strict mode: All components and hooks must have proper TypeScript types
+    7. React Query patterns: Use existing queryClient config (staleTime: 900000ms already set globally)
+    8. Docker rebuild: After creating new files, rebuild container: docker compose build frontend
+    9. Error handling: Display user-friendly messages only - no stack traces or technical details in UI
+    10. Team color fallback: Always provide fallback color (gray.500) when primary_color is null
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>GET /api/games/today</name>
+      <kind>REST endpoint</kind>
+      <signature>GET ${VITE_API_URL}/api/games/today → GameListResponse</signature>
+      <path>backend/app/api/routes/games.py</path>
+      <description>Backend API endpoint that returns today's games. Response includes games array with nested team info including primary_color for visual accent</description>
+    </interface>
+    <interface>
+      <name>GameListResponse</name>
+      <kind>TypeScript interface</kind>
+      <signature>{ games: GamePublic[], total_count: number, generated_at: string, requested_date: string }</signature>
+      <path>frontend/src/client/types.gen.ts</path>
+      <description>Auto-generated TypeScript interface for API response envelope</description>
+    </interface>
+    <interface>
+      <name>GamePublic</name>
+      <kind>TypeScript interface</kind>
+      <signature>{ game_key: number, game_id: string, game_date: string, game_start_time?: string | null, game_status?: string | null, home_team: TeamInfo, away_team: TeamInfo, home_score?: number, away_score?: number }</signature>
+      <path>frontend/src/client/types.gen.ts</path>
+      <description>Individual game object with nested team information and nullable scores</description>
+    </interface>
+    <interface>
+      <name>TeamInfo</name>
+      <kind>TypeScript interface</kind>
+      <signature>{ team_key: number, team_id: string, team_name: string, team_group_name?: string | null, primary_color?: string | null, secondary_color?: string | null }</signature>
+      <path>frontend/src/client/types.gen.ts</path>
+      <description>Team details including nullable hex color codes for visual styling</description>
+    </interface>
+    <interface>
+      <name>useQuery</name>
+      <kind>React Query hook</kind>
+      <signature>useQuery&lt;TData&gt;({ queryKey: unknown[], queryFn: () =&gt; Promise&lt;TData&gt; })</signature>
+      <path>@tanstack/react-query</path>
+      <description>TanStack Query hook for data fetching - returns { data, isLoading, isError, error }</description>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+      Frontend testing uses React Testing Library for component tests and Playwright for E2E tests.
+      TypeScript type checking via tsc --noEmit ensures compile-time safety.
+      Code quality enforced by Biome linter (npm run lint).
+      Manual testing checklist includes loading states, error handling, empty states, and responsive layout verification.
+    </standards>
+    <locations>
+      - frontend/src/components/**/*.test.tsx (unit tests for components)
+      - frontend/src/hooks/**/*.test.ts (unit tests for hooks)
+      - frontend/tests/e2e/*.spec.ts (Playwright E2E tests)
+      - Test commands: npm test, npx playwright test, npm run lint, tsc --noEmit
+    </locations>
+    <ideas>
+      <test id="AC-3.18" desc="useGames Hook">
+        - Unit test: Mock fetch, verify queryKey is ['games', 'today']
+        - Unit test: Verify hook returns { data, isLoading, isError, error }
+        - Unit test: Mock API failure, assert error state handled gracefully
+        - Type check: tsc --noEmit verifies TypeScript interfaces correct
+      </test>
+      <test id="AC-3.19-3.20" desc="GameList Loading State">
+        - Unit test: Render GameList with mocked isLoading=true, verify 5 Skeleton components rendered
+        - Visual test: Manual browser check - hard refresh page, observe skeleton animation briefly
+      </test>
+      <test id="AC-3.21" desc="Error State Handling">
+        - Unit test: Mock isError=true, verify Alert component with status="error" rendered
+        - Unit test: Verify error message is user-friendly, no stack traces
+        - E2E test: Stop backend container, reload page, verify error alert displays
+      </test>
+      <test id="AC-3.22" desc="Empty State">
+        - Unit test: Mock data with empty games array, verify "No games scheduled" message
+        - Manual test: Set system date to off-season (June-August), verify empty state message
+      </test>
+      <test id="AC-3.23-3.25" desc="Game Cards Display">
+        - Unit test: Mock data with 3 games, verify 3 Box components rendered
+        - Unit test: Verify team names displayed correctly (home_team.team_name, away_team.team_name)
+        - Unit test: Verify scores display with null handling ({score ?? '-'})
+        - E2E test: Load page, verify game cards visible with team names and scores
+      </test>
+      <test id="AC-3.24" desc="Team Colors">
+        - Unit test: Mock game with primary_color="#00539B", verify borderLeftColor applied
+        - Unit test: Mock game with null primary_color, verify fallback gray.500
+        - Visual test: Manual browser check - Duke games have blue left border
+      </test>
+      <test id="AC-3.26" desc="Responsive Mobile">
+        - Manual test: Chrome DevTools device mode, select iPhone 12 Pro, verify vertical stacking
+        - Manual test: Check font sizes remain readable (minimum 14px)
+        - Manual test: Verify no horizontal scroll on mobile viewport
+      </test>
+      <test id="AC-3.27" desc="Dashboard Integration">
+        - E2E test: Load dashboard, verify GameList component renders inside Container
+        - E2E test: Verify placeholder "Loading games..." text replaced
+        - Type check: Verify import path '../components/GameList' resolves correctly
+      </test>
+    </ideas>
+  </tests>
+</story-context>

@@ -1,5 +1,6 @@
-import { Box, Container, Heading, Text } from "@chakra-ui/react";
+import { Box, Container, Heading } from "@chakra-ui/react";
 import { createFileRoute } from "@tanstack/react-router";
+import { GameList } from "../../components/GameList";
 
 export const Route = createFileRoute("/_layout/")({
   component: Dashboard,
@@ -19,9 +20,7 @@ function Dashboard() {
         GamePulse
       </Heading>
       <Box>
-        <Text fontSize="lg" color="gray.500" textAlign="center">
-          Loading games...
-        </Text>
+        <GameList />
       </Box>
     </Container>
   );
