@@ -427,7 +427,7 @@ jobs:
 
       - name: Health check with retry logic
         run: |
-          echo "Starting health check for https://api.gamepulse.top/api/v1/utils/health-check/"
+          echo "Starting health check for https://api.gamepulse.top/api/v1/health"
           echo "Note: First deployment may take 2-5 minutes for Let's Encrypt certificate provisioning"
 
           MAX_ATTEMPTS=12
@@ -440,16 +440,16 @@ jobs:
             RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
               --connect-timeout 10 \
               --max-time 30 \
-              "https://api.gamepulse.top/api/v1/utils/health-check/" || echo "000")
+              "https://api.gamepulse.top/api/v1/health" || echo "000")
 
             if [ "$RESPONSE" = "200" ]; then
               echo "✅ Health check passed! HTTP $RESPONSE"
 
-              BODY=$(curl -s "https://api.gamepulse.top/api/v1/utils/health-check/")
+              BODY=$(curl -s "https://api.gamepulse.top/api/v1/health")
               echo "Response body: $BODY"
 
-              if echo "$BODY" | grep -q "true"; then
-                echo "✅ Health endpoint returned healthy status"
+              if echo "$BODY" | jq -e '.status == "healthy" and .database == "connected"' > /dev/null 2>&1; then
+                echo "✅ Health endpoint returned healthy status with database connected"
                 echo "Total wait time: $((($i - 1) * $RETRY_DELAY + 30)) seconds"
                 exit 0
               else

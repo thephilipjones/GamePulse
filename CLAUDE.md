@@ -379,13 +379,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # 6. Verify deployment
 docker compose ps
-curl http://localhost:8000/api/v1/utils/health-check/
+curl http://localhost:8000/api/v1/health
 
 # 7. Wait for Traefik to provision SSL certificate (~2 minutes)
 # Check logs: docker compose logs proxy
 
 # 8. Verify HTTPS access
-curl https://api.gamepulse.top/api/v1/utils/health-check/
+curl https://api.gamepulse.top/api/v1/health
 ```
 
 **Automated GitHub Actions Deployment:**
@@ -479,7 +479,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-re
 
 # Verify services
 docker compose ps
-curl http://localhost:8000/api/v1/utils/health-check/
+curl http://localhost:8000/api/v1/health
 ```
 
 **Option 2: Rollback via GitHub Actions**
@@ -1140,6 +1140,48 @@ Every push to `main` triggers:
 **Note:** Application secrets (passwords, keys) are stored in Parameter Store, not GitHub Secrets. See Secret Management section for details.
 
 ## Common Development Tasks
+
+### Health Check Endpoint
+
+GamePulse provides a comprehensive health check endpoint for deployment validation and monitoring:
+
+**Endpoint:** `GET /api/v1/health`
+
+**Response (Healthy):**
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "database": "connected",
+  "uptime_seconds": 3600.5,
+  "timestamp": "2025-11-14T18:45:00Z"
+}
+```
+
+**Response (Unhealthy):** HTTP 503
+
+```json
+{
+  "detail": "Service unavailable - database connection failed"
+}
+```
+
+**Usage:**
+
+```bash
+# Local development
+curl http://localhost:8000/api/v1/health | jq .
+
+# Production
+curl https://api.gamepulse.top/api/v1/health | jq .
+```
+
+**Integration:**
+
+- **GitHub Actions:** Automated smoke test after each deployment
+- **Monitoring:** Foundation for future CloudWatch health checks (Epic 9)
+- **Deployment Validation:** Verifies application and database connectivity
 
 ### Adding a New API Endpoint
 
