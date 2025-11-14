@@ -18,6 +18,7 @@ Usage:
 import logging
 from datetime import date, timedelta
 
+from sqlalchemy import Engine
 from sqlmodel import Session, create_engine, func, select
 
 from app.core.config import settings
@@ -96,7 +97,7 @@ def calculate_tournament_round(dt: date) -> tuple[bool, str | None]:
     return (True, tournament_round)
 
 
-def get_existing_date_range(engine) -> tuple[date | None, date | None]:
+def get_existing_date_range(engine: Engine) -> tuple[date | None, date | None]:
     """
     Detect existing date range in dim_date table.
 
