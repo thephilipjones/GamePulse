@@ -2,6 +2,7 @@
 
 from datetime import date
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -200,3 +201,88 @@ class TestGamesEndpoint:
             # game_times should be sorted (earlier times first)
             if game_times:
                 assert game_times == sorted(game_times)
+
+    def test_database_error_handling(self, client: TestClient) -> None:
+        """Test that database errors are handled gracefully with proper logging."""
+        from unittest.mock import Mock
+
+        from sqlalchemy.exc import OperationalError
+
+        # Create a mock session that raises OperationalError on exec
+        mock_session = Mock()
+        mock_session.exec.side_effect = OperationalError(
+            "connection failed", params=None, orig=Exception("DB down")
+        )
+
+        # Override the get_db dependency
+        from app.api.deps import get_db
+        from app.main import app
+
+        def mock_get_db():
+            yield mock_session
+
+        app.dependency_overrides[get_db] = mock_get_db
+
+        try:
+            # Make request - should return HTTP 500
+            response = client.get("/api/v1/games/today")
+
+            assert response.status_code == 500
+            data = response.json()
+            assert "detail" in data
+            assert "Database connection failed" in data["detail"]
+        finally:
+            # Clean up dependency override
+            app.dependency_overrides.clear()
+
+    def test_game_public_schema_validation(self) -> None:
+        """Test that Pydantic schemas validate data correctly."""
+        from datetime import datetime
+
+        from pydantic import ValidationError
+
+        from app.schemas.game import GamePublic, TeamInfo
+
+        # Valid data should work
+        valid_team = TeamInfo(
+            team_key=1,
+            team_id="ncaam_150",
+            team_name="Duke",
+            team_group_name="ACC",
+            primary_color="#00539B",
+            secondary_color="#FFFFFF",
+        )
+
+        valid_game = GamePublic(
+            game_key=1,
+            game_id="ncaam_401234567",
+            game_date=datetime(2025, 11, 14),
+            game_start_time=datetime(2025, 11, 14, 19, 0, 0),
+            game_status="scheduled",
+            home_team=valid_team,
+            away_team=valid_team,
+            home_score=0,
+            away_score=0,
+        )
+
+        assert valid_game.game_key == 1
+        assert valid_game.game_id == "ncaam_401234567"
+
+        # Invalid data should raise ValidationError
+        with pytest.raises(ValidationError) as exc_info:
+            GamePublic(
+                game_key="not-an-int",  # Should be int
+                game_id=123,  # Should be str
+                game_date="not-a-date",  # Should be datetime
+                game_start_time="invalid",  # Should be datetime
+                game_status="scheduled",
+                home_team=valid_team,
+                away_team=valid_team,
+            )
+
+        # Verify validation errors were raised
+        assert exc_info.value.error_count() > 0
+
+        # Test missing required fields
+        with pytest.raises(ValidationError):
+            GamePublic()  # Missing all required fields

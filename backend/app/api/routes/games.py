@@ -4,6 +4,7 @@ import logging
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy.exc import DatabaseError, OperationalError
 from sqlalchemy.orm import aliased
 from sqlmodel import and_, select
 
@@ -25,6 +26,7 @@ async def get_games(
         alias="date",
         description="Date in YYYY-MM-DD format (defaults to today in UTC)",
     ),
+    request_id: str | None = Query(None, alias="X-Request-ID", include_in_schema=False),
 ) -> GameListResponse:
     """
     Get NCAA Men's Basketball games for a specific date.
@@ -151,12 +153,14 @@ async def get_games(
 
         return response
 
-    except Exception as e:
-        # Log error with full context
+    except (OperationalError, DatabaseError) as e:
+        # Log database errors with full context
         logger.error(
             "Database error in games endpoint",
             exc_info=True,
             extra={
+                "endpoint": "/api/v1/games",
+                "request_id": request_id or "unknown",
                 "requested_date": target_date.isoformat(),
                 "error": str(e),
             },
