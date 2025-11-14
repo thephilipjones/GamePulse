@@ -8,6 +8,7 @@ from app.core.db import engine
 from app.main import app
 from app.models.dim_date import DimDate
 from app.models.dim_team import DimTeam
+from app.models.fact_game import FactGame
 
 
 @pytest.fixture(scope="function")
@@ -25,6 +26,8 @@ def db() -> Generator[Session, None, None]:
     session = Session(bind=connection)
 
     # Delete seed data within this transaction to ensure clean state
+    # Order matters: delete child tables (FactGame) before parent tables (DimTeam, DimDate)
+    session.execute(delete(FactGame))
     session.execute(delete(DimTeam))
     session.execute(delete(DimDate))
     session.flush()  # Make deletions visible within transaction

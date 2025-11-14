@@ -25,8 +25,10 @@ if settings.all_cors_origins:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.all_cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_credentials=False,  # Public read-only API, no cookies needed
+        allow_methods=[
+            "GET"
+        ],  # Read-only operations only (expand when write ops added)
         allow_headers=["*"],
     )
 
