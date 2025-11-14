@@ -44,7 +44,7 @@ echo "$AB_OUTPUT"
 echo ""
 
 # Extract timing percentiles (check if test completed)
-if echo "$AB_OUTPUT" | grep -q "Total of $REQUESTS requests completed"; then
+if echo "$AB_OUTPUT" | grep -q "Complete requests:"; then
     P50=$(echo "$AB_OUTPUT" | grep "50%" | awk '{print $2}')
     P95=$(echo "$AB_OUTPUT" | grep "95%" | awk '{print $2}')
     P99=$(echo "$AB_OUTPUT" | grep "99%" | awk '{print $2}')
