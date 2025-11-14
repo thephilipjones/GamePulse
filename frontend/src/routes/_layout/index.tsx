@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_layout/")({
 /**
  * Main dashboard page for GamePulse.
  * Displays NCAA Men's Basketball games with excitement scores.
- * Auto-refreshes every 15 minutes with live-updating "last updated" timestamp.
+ * Auto-refreshes every 1 minute with live-updating "last updated" timestamp.
  *
  * Future expansion (Epic 8):
  * - Individual game detail route: /game/:id
