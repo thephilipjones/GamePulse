@@ -39,7 +39,7 @@ COPY ./pyproject.toml ./uv.lock ./alembic.ini ./workspace.yaml /app/
 RUN mkdir -p /tmp/dagster_home
 
 # Copy Dagster configuration to DAGSTER_HOME
-COPY ./dagster.yaml /tmp/dagster_home/dagster.yaml
+COPY ./dagster_home/dagster.yaml /tmp/dagster_home/dagster.yaml
 
 # Copy application code (changes most frequently)
 COPY ./app /app/app
