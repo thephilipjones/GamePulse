@@ -2,9 +2,7 @@ import { Box, Flex, Icon, Text } from "@chakra-ui/react";
 import { Link as RouterLink } from "@tanstack/react-router";
 import { FiHome } from "react-icons/fi";
 
-const items = [
-  { icon: FiHome, title: "Dashboard", path: "/" },
-];
+const items = [{ icon: FiHome, title: "Dashboard", path: "/" }];
 
 interface SidebarItemsProps {
   onClose?: () => void;

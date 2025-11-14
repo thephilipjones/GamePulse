@@ -1,9 +1,7 @@
-import { Flex, IconButton, Image, useBreakpointValue } from "@chakra-ui/react";
+import { Flex, IconButton, Text, useBreakpointValue } from "@chakra-ui/react";
 import { Link } from "@tanstack/react-router";
 import { useTheme } from "next-themes";
 import { FiMoon, FiSun } from "react-icons/fi";
-
-import Logo from "/assets/images/fastapi-logo.svg";
 
 function Navbar() {
   const display = useBreakpointValue({ base: "none", md: "flex" });
@@ -26,7 +24,9 @@ function Navbar() {
       p={4}
     >
       <Link to="/">
-        <Image src={Logo} alt="Logo" w="180px" maxW="2xs" px={2} />
+        <Text fontSize="xl" fontWeight="bold" color="ui.main">
+          GamePulse
+        </Text>
       </Link>
       <Flex gap={2} alignItems="center">
         <IconButton
