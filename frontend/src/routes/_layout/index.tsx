@@ -8,6 +8,9 @@ export const Route = createFileRoute("/_layout/")({
 /**
  * Main dashboard page for GamePulse.
  * Displays NCAA Men's Basketball games with excitement scores.
+ *
+ * Future expansion (Epic 8):
+ * - Individual game detail route: /game/:id
  */
 function Dashboard() {
   return (

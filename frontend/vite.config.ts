@@ -11,4 +11,21 @@ export default defineConfig({
     },
   },
   plugins: [react(), TanStackRouterVite()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split React/React-DOM into separate chunk
+          "react-vendor": ["react", "react-dom"],
+          // Split Chakra UI into separate chunk (large dependency)
+          "chakra-ui": ["@chakra-ui/react", "@emotion/react"],
+          // Split TanStack packages (Query + Router)
+          "tanstack": [
+            "@tanstack/react-query",
+            "@tanstack/react-router",
+          ],
+        },
+      },
+    },
+  },
 });
