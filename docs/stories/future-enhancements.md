@@ -395,6 +395,182 @@ class DimTeam(SQLModel, table=True):
 
 ---
 
+### 8. Docker Layer Caching to ECR Registry
+
+**Context**: After Phase 1-3 pipeline optimizations (parallel builds, parallel tests, shallow clones), additional performance gains can be achieved through persistent Docker layer caching.
+
+**Current State**:
+- Using GitHub Actions cache (`cache-from: type=gha`)
+- GHA cache has 10GB limit per repository
+- Cache can be evicted, causing rebuild from scratch
+- Cache is scoped to workflows/branches
+
+**Gap**: No persistent cache layer beyond GitHub Actions lifetime (7-day retention).
+
+**Proposed Enhancement**:
+Store Docker build cache layers in ECR registry for more persistent caching.
+
+**Implementation**:
+```yaml
+- name: Build and push backend image
+  uses: docker/build-push-action@v5
+  with:
+    context: ./backend
+    push: true
+    tags: |
+      ${{ secrets.ECR_BACKEND_URL }}:${{ github.sha }}
+      ${{ secrets.ECR_BACKEND_URL }}:latest
+    cache-from: |
+      type=gha
+      type=registry,ref=${{ secrets.ECR_BACKEND_URL }}:buildcache
+    cache-to: |
+      type=gha,mode=max
+      type=registry,ref=${{ secrets.ECR_BACKEND_URL }}:buildcache,mode=max
+```
+
+**Benefits**:
+- **Persistent cache**: Survives GitHub Actions cache evictions
+- **Cross-branch caching**: Cache layers shared across all branches
+- **Faster cold builds**: ~20-30 seconds faster when GHA cache misses
+- **Redundancy**: Falls back to GHA cache if ECR unavailable
+
+**Considerations**:
+- **ECR storage costs**: ~$0.10/GB/month (estimate ~2-3GB per image = ~$0.20-$0.30/month)
+- **Network costs**: Minimal (same AWS region as EC2)
+- **Complexity**: Adds another cache source to manage
+- **Cache invalidation**: Need lifecycle policy to clean old cache layers
+
+**Estimated Effort**: 1-2 hours
+- Update workflow cache configuration: 30 minutes
+- Add ECR lifecycle policy for buildcache: 30 minutes
+- Test and validate: 30-60 minutes
+
+**Priority**: Low (incremental gain after Phases 1-3)
+
+**Estimated Savings**: 20-30 seconds on builds when GHA cache is cold
+
+**When to Implement**: After validating Phase 1-3 optimizations in production for 2-4 weeks
+
+---
+
+### 9. Path-Based Conditional Job Execution
+
+**Context**: Currently, every push to `main` rebuilds and deploys everything, even if changes only affect documentation or single modules.
+
+**Current Behavior**:
+- Doc-only changes trigger full pipeline (6-7 jobs, ~3 minutes)
+- Backend-only changes rebuild frontend unnecessarily
+- Frontend-only changes rebuild backend unnecessarily
+
+**Gap**: No intelligent job skipping based on changed files.
+
+**Proposed Enhancement**:
+Use path filters to conditionally execute jobs based on which files changed.
+
+**Implementation**:
+```yaml
+jobs:
+  # Detect what changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Need previous commit for diff
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy.yml'
+            infra:
+              - 'terraform/**'
+              - 'docker-compose*.yml'
+            docs:
+              - '**.md'
+              - 'docs/**'
+
+  lint-backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    # ... rest of job
+
+  lint-frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    # ... rest of job
+
+  build-backend:
+    needs: [changes, test-backend, validate-docker]
+    if: needs.changes.outputs.backend == 'true'
+    # ... rest of job
+
+  build-frontend:
+    needs: [changes, generate-client]
+    if: needs.changes.outputs.frontend == 'true'
+    # ... rest of job
+
+  deploy:
+    needs: [changes, build-backend, build-frontend]
+    # Always deploy if either backend or frontend was built
+    if: |
+      always() &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true')
+    # ... rest of job
+```
+
+**Benefits**:
+- **Doc-only changes**: Skip all builds/tests (~3 minutes saved)
+- **Backend-only changes**: Skip frontend lint/test/build (~40-50s saved)
+- **Frontend-only changes**: Skip backend lint/test/build (~60-70s saved)
+- **Faster iteration**: Developers get faster feedback on focused changes
+
+**Considerations**:
+- **Complexity**: More complex workflow logic, harder to debug
+- **Edge cases**: Must handle "always deploy" logic correctly
+- **Testing**: Requires thorough testing of all path combinations
+- **Maintenance**: Path filters must be updated when repo structure changes
+- **Risk**: Incorrect path filters could skip critical jobs
+
+**Examples of Time Savings**:
+
+| Change Type | Current | Optimized | Savings |
+|-------------|---------|-----------|---------|
+| Docs only (CLAUDE.md) | 3 min | 10s (change detection only) | 2m 50s |
+| Backend only (app/*.py) | 3 min | 2m 20s (skip frontend) | 40s |
+| Frontend only (src/*.tsx) | 3 min | 2m (skip backend) | 1m |
+| Both modified | 3 min | 3 min | 0s |
+
+**Estimated Effort**: 2 hours
+- Implement path filter logic: 1 hour
+- Test all path combinations: 45 minutes
+- Document path filter rules: 15 minutes
+
+**Priority**: Low (optimization for high-frequency development, less valuable for low-frequency deployments)
+
+**Estimated Savings**: Variable (0-170s depending on change type)
+
+**When to Implement**:
+- After validating Phase 1-3 in production
+- When team is making frequent doc/single-module changes
+- Consider if deployment frequency increases significantly
+
+**Risks**:
+- Medium risk: Incorrect filters could skip critical jobs
+- Requires extensive testing matrix
+- May need "force full rebuild" mechanism for edge cases
+
+---
+
 ## Implementation Priority
 
 | Enhancement | Priority | Estimated Effort | Recommended Approach | Epic Target |
@@ -406,6 +582,8 @@ class DimTeam(SQLModel, table=True):
 | Historical Backfill | Low | 6-10 hours | Defer | Epic 6+ |
 | Player Rosters | Low | 10-15 hours | Defer | Epic 7+ |
 | DimTeam Timezone Fix | Low | 2-3 hours | Update model + migration | Infrastructure Sprint |
+| Docker ECR Caching | Low | 1-2 hours | ECR buildcache with lifecycle policy | After Phase 1-3 validation |
+| Path-Based Job Skipping | Low | 2 hours | Path filters with dorny/paths-filter | High-frequency development periods |
 
 ## Notes
 - All enhancements are **optional** for MVP
