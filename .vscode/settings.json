@@ -17,10 +17,42 @@
 
   // Python extension settings
   "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
-  "python.analysis.typeCheckingMode": "strict",
+  "python.languageServer": "Pylance",
+  "python.analysis.typeCheckingMode": "basic",
   "python.analysis.autoImportCompletions": true,
   "python.analysis.inlayHints.variableTypes": true,
   "python.analysis.inlayHints.functionReturnTypes": true,
+
+  // Tell Pylance where to find Python source code (backend subdirectory)
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend"
+  ],
+
+  // Reduce noise from third-party libraries and type stub issues
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportMissingTypeStubs": "none",
+    "reportUnknownMemberType": "none",
+    "reportGeneralTypeIssues": "warning"
+  },
+
+  // Exclude non-Python directories from analysis
+  "python.analysis.exclude": [
+    "**/node_modules",
+    "**/.venv",
+    "**/__pycache__",
+    "**/frontend/**",
+    "**/terraform/**",
+    "**/backend/htmlcov/**",
+    "**/backend/.pytest_cache/**",
+    "**/backend/.mypy_cache/**",
+    "**/backend/.ruff_cache/**"
+  ],
+
+  // Ignore frontend and infrastructure code
+  "python.analysis.ignore": [
+    "frontend/**",
+    "terraform/**"
+  ],
 
   // Ruff extension settings (native server)
   "ruff.enable": true,
