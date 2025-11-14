@@ -8,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
  *
  * Uses TanStack Query for efficient data fetching with automatic caching,
  * retry logic, and stale-while-revalidate behavior. Automatically polls
- * for fresh data every 15 minutes while the page is visible.
+ * for fresh data every 1 minute while the page is visible.
  *
  * @returns React Query result with { data, isLoading, isError, isFetching, error }
  *
@@ -32,8 +32,8 @@ export function useGames() {
       }
       return res.json();
     },
-    refetchInterval: 900000, // Poll every 15 minutes (900,000ms)
+    refetchInterval: 60000, // Poll every 1 minute (60,000ms)
     refetchIntervalInBackground: true, // Keep polling even when tab is hidden
-    staleTime: 900000, // Consider data fresh for 15 minutes
+    staleTime: 60000, // Consider data fresh for 1 minute
   });
 }

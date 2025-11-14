@@ -1,0 +1,529 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>6</storyId>
+    <title>Increase Refresh Cadence to 1 Minute</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>/Users/Philip/dev/gamepulse/docs/stories/3-6-increase-refresh-cadence.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>user watching a live game</asA>
+    <iWant>scores and game status to update within 1-2 minutes</iWant>
+    <soThat>the dashboard feels like a real sports app instead of a delayed summary</soThat>
+    <tasks>
+      <task id="1">Update Dagster Schedule to 1-Minute Polling (AC: 3.34)
+        <subtask id="1.1">Open backend/app/dagster_definitions.py</subtask>
+        <subtask id="1.2">Locate ncaa_games_schedule definition</subtask>
+        <subtask id="1.3">Change cron_schedule from "*/15 * * * *" to "* * * * *"</subtask>
+        <subtask id="1.4">Add comment explaining change: "# Every 1 minute - real-time feel for live sports"</subtask>
+        <subtask id="1.5">Verify syntax: Dagster supports standard cron expressions</subtask>
+        <subtask id="1.6">Save file</subtask>
+      </task>
+      <task id="2">Update Frontend Polling Interval (AC: 3.35)
+        <subtask id="2.1">Open frontend/src/hooks/useGames.ts</subtask>
+        <subtask id="2.2">Update refetchInterval: 900000 to refetchInterval: 60000</subtask>
+        <subtask id="2.3">Update staleTime: 900000 to staleTime: 60000</subtask>
+        <subtask id="2.4">Verify refetchIntervalInBackground: true is present (from Story 3.5)</subtask>
+        <subtask id="2.5">Add/update JSDoc comment explaining 1-minute polling interval</subtask>
+        <subtask id="2.6">Save file</subtask>
+        <subtask id="2.7">Run TypeScript compiler: npx tsc --noEmit</subtask>
+        <subtask id="2.8">Verify no type errors introduced</subtask>
+      </task>
+      <task id="3">Local Testing and Validation (AC: 3.34, 3.35, 3.37)
+        <subtask id="3.1">Backend Testing: Restart Dagster services</subtask>
+        <subtask id="3.2">Backend Testing: Open Dagster UI and verify schedule is Running</subtask>
+        <subtask id="3.3">Backend Testing: Wait 3 minutes and verify 3 new runs appeared</subtask>
+        <subtask id="3.4">Backend Testing: Check run logs for errors</subtask>
+        <subtask id="3.5">Frontend Testing: Rebuild and restart frontend container</subtask>
+        <subtask id="3.6">Frontend Testing: Open dashboard and monitor Network tab</subtask>
+        <subtask id="3.7">Frontend Testing: Verify ~5 API requests in 5 minutes</subtask>
+        <subtask id="3.8">Error Handling Test: Stop backend and verify cached data display</subtask>
+        <subtask id="3.9">Error Handling Test: Restart backend and verify warning clears</subtask>
+      </task>
+      <task id="4">Code Quality and Linting (AC: All)
+        <subtask id="4.1">Backend: Run Ruff linter and fix issues</subtask>
+        <subtask id="4.2">Backend: Run Mypy type checker and fix errors</subtask>
+        <subtask id="4.3">Frontend: Run Biome linter and fix issues</subtask>
+        <subtask id="4.4">Frontend: Verify TypeScript compilation</subtask>
+        <subtask id="4.5">Run pre-commit hooks on all files</subtask>
+      </task>
+      <task id="5">Deployment and Production Validation (AC: 3.37)
+        <subtask id="5.1">Commit changes to git with descriptive message</subtask>
+        <subtask id="5.2">Push to main branch</subtask>
+        <subtask id="5.3">Wait for GitHub Actions deployment to complete</subtask>
+        <subtask id="5.4">Open production dashboard and verify deployment</subtask>
+        <subtask id="5.5">Monitor production for 24 hours (Dagster UI, CPU, rate limit errors)</subtask>
+      </task>
+      <task id="6">Gradual Rollout Testing (Optional - Recommended) (AC: 3.37)
+        <subtask id="6.1">Choose deployment strategy: Direct 1-minute or staged rollout</subtask>
+        <subtask id="6.2">If staged: Deploy 5-minute polling first, monitor 24-48 hours</subtask>
+        <subtask id="6.3">If staged successful: Deploy 1-minute polling</subtask>
+      </task>
+      <task id="7">Documentation and Retrospective (AC: All)
+        <subtask id="7.1">Update story status in sprint-status.yaml through workflow stages</subtask>
+        <subtask id="7.2">Document any issues in Dev Agent Record Debug Log</subtask>
+        <subtask id="7.3">Update Completion Notes with actual results (API rate limit status, CPU usage, user feedback)</subtask>
+        <subtask id="7.4">Add file list with modified files</subtask>
+        <subtask id="7.5">Consider note for Epic 3 retrospective about performance impact</subtask>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-3.34" title="Backend Polling Cadence">
+      <given>the Dagster ncaa_games_schedule is configured</given>
+      <when>the schedule definition is updated</when>
+      <then>
+        - Uses cron expression "* * * * *" (every 1 minute, was "*/15 * * * *")
+        - Executes successfully every minute without skipped runs
+        - Shows no 429 (rate limit) errors in logs after 24 hours of operation
+        - Dagster UI displays runs every minute in the Runs tab
+      </then>
+      <validation>
+        Verify in backend/app/dagster_definitions.py:
+        ncaa_games_schedule = ScheduleDefinition(
+            name="ncaa_games_schedule",
+            cron_schedule="* * * * *",  # Every 1 minute
+            target=ncaa_games,
+            execution_timezone="US/Eastern",
+        )
+
+        Manual verification:
+        1. Open Dagster UI: http://localhost:3000 (dev) or https://dagster.gamepulse.top (prod)
+        2. Navigate to Schedules tab, verify ncaa_games_schedule shows "Running"
+        3. Navigate to Runs tab, observe runs every minute
+        4. Check run duration: ~2-3 seconds per execution
+        5. Monitor for 10 minutes: Expect 10 successful runs
+      </validation>
+    </criterion>
+
+    <criterion id="AC-3.35" title="Frontend Polling Alignment">
+      <given>the useGames hook is configured in Story 3.5</given>
+      <when>the React Query polling interval is updated</when>
+      <then>
+        - Sets refetchInterval: 60000 (60 seconds, was 900000)
+        - Sets staleTime: 60000 to match refetch interval
+        - Retains refetchIntervalInBackground: true from Story 3.5
+        - Network tab shows new API request approximately every 60 seconds
+        - "Last updated" timestamp never exceeds 2 minutes between refreshes
+      </then>
+      <validation>
+        Verify in frontend/src/hooks/useGames.ts:
+        export function useGames() {
+          return useQuery&lt;GameListResponse&gt;({
+            queryKey: ["games", "today"],
+            queryFn: async () => { /* ... */ },
+            refetchInterval: 60000,  // 1 minute
+            staleTime: 60000,        // 1 minute
+            refetchIntervalInBackground: true,
+          });
+        }
+
+        Manual verification:
+        1. Open dashboard in browser
+        2. Open DevTools → Network tab → Filter by "games"
+        3. Wait 5 minutes, observe ~5 API requests
+        4. Verify "Last updated" timestamp updates within 1-2 minutes
+        5. Switch tabs, return after 5 minutes → verify polling continued
+      </validation>
+    </criterion>
+
+    <criterion id="AC-3.36" title="Timestamp Display Precision">
+      <given>the Dashboard displays "Last updated X ago" timestamp (Story 3.5)</given>
+      <when>the polling frequency increases to 1 minute</when>
+      <then>
+        - Shows second-level precision: "45 seconds ago" (not "less than a minute ago")
+        - Updates every 30 seconds via existing useEffect timer
+        - Provides clear feedback on data freshness
+        - Helps users understand 1-minute polling behavior
+      </then>
+      <validation>
+        Story 3.5 already implements live-updating timestamp with formatDistanceToNow from date-fns.
+        This AC is validation-only - no code changes required unless precision needs adjustment.
+
+        Manual verification:
+        1. Open dashboard, note "Last updated" timestamp
+        2. Wait 30 seconds, verify timestamp updates
+        3. Verify precision matches expectation for 1-minute polling
+      </validation>
+    </criterion>
+
+    <criterion id="AC-3.37" title="Monitoring and Validation">
+      <given>the system is deployed with 1-minute polling</given>
+      <when>monitoring the application for 24 hours</when>
+      <then>
+        - Backend Performance: Dagster runs complete in &lt;5 seconds (typical: 2-3 seconds)
+        - API Rate Limits: No 429 errors from NCAA API (1 req/min well below 5 req/sec limit)
+        - EC2 Resource Usage: CPU usage remains &lt;15% sustained (was &lt;10% with 15-min polling)
+        - Database Performance: Upsert operations complete without blocking
+        - Frontend Network: 1 request/minute = 1,440 requests/day (21.6 MB/day data transfer)
+      </then>
+      <validation>
+        Monitoring commands:
+        # Check Dagster run status
+        docker compose logs -f dagster-daemon | grep -i "ncaa_games"
+
+        # Monitor EC2 CPU usage
+        top -bn1 | grep -E "Cpu|dagster"
+
+        # Check for rate limit errors
+        docker compose logs dagster-daemon | grep -i "429|rate limit"
+
+        # Verify database performance
+        docker compose exec db psql -U postgres -d app -c "
+          SELECT COUNT(*) as total_games, MAX(updated_at) as last_update
+          FROM fact_game WHERE game_date_key = $(date +%Y%m%d)
+        "
+      </validation>
+    </criterion>
+
+    <criterion id="AC-3.38" title="Error Handling Continuity">
+      <given>Story 3.5 implemented comprehensive error handling</given>
+      <when>the polling frequency increases to 1 minute</when>
+      <then>
+        - React Query retry logic continues working (3 attempts with exponential backoff)
+        - If API fails, cached data remains visible with warning banner
+        - Error state shows: "Unable to fetch latest data. Showing cached results."
+        - No regression in error handling behavior from Story 3.5
+        - Background refetch indicator still works (isFetching vs isLoading states)
+      </then>
+      <validation>
+        All error handling from Story 3.5 remains functional. No code changes required.
+
+        Manual testing:
+        1. Open dashboard with backend running
+        2. Stop backend: docker compose stop backend
+        3. Wait 60+ seconds for refetch interval to trigger
+        4. Verify: Cached games remain visible with warning banner
+        5. Restart backend: docker compose start backend
+        6. Verify: Warning clears on next successful refetch (within 1-2 minutes)
+      </validation>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>NFR-1.4 Performance Requirements</section>
+        <snippet>Data staleness &lt;15 minutes acceptable. Story 3.6 improves to &lt;2 minutes for live sports UX.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR-7.3 Frontend Auto-Refresh</section>
+        <snippet>Auto-refresh every 10-15 minutes (polling, not WebSocket to frontend). Provides continuous data updates without manual user action.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Frontend State Management</section>
+        <snippet>React Query (TanStack Query) 5.90.7 for API data caching, auto-refresh, stale-while-revalidate. Perfect for 10-15 min polling. Handles background refetching when tab is hidden.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Objectives and Scope</section>
+        <snippet>Implement TanStack Query (React Query) for data fetching with automatic polling refresh. Story 3.5 established 15-minute polling; Story 3.6 optimizes to 1-minute for real-time feel during live sports.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Technology Choices</section>
+        <snippet>TanStack Query (React Query) 5.90.7 for state management. API data caching, stale-while-revalidate, automatic polling with configurable refetchInterval. Supports background refetching when tab is hidden.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epic Breakdown Document</title>
+        <section>Epic 3: Story 3.6 Specification</section>
+        <snippet>Increase Refresh Cadence to 1 Minute. Update both backend Dagster schedule (cron: * * * * *) and frontend React Query polling (refetchInterval: 60000) for aligned 1-minute refresh. API rate limit analysis: 1 req/min well below 5 req/sec NCAA API limit.</snippet>
+      </doc>
+      <doc>
+        <path>CLAUDE.md</path>
+        <title>Project Documentation</title>
+        <section>Dagster Development</section>
+        <snippet>Dagster UI accessible at http://localhost:3000 (dev) or https://dagster.gamepulse.top (prod). Schedules tab shows ncaa_games_schedule status. Runs tab displays materialization history. Manual materialization: docker compose exec dagster-daemon dagster asset materialize -m app.dagster_definitions ncaa_games</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/dagster_definitions.py</path>
+        <kind>schedule</kind>
+        <symbol>ncaa_games_schedule</symbol>
+        <lines>36-43</lines>
+        <reason>Current schedule definition with 15-minute cron (*/15 * * * *). Story 3.6 changes to every 1 minute (* * * * *). Includes rationale comment about data freshness and API rate limits.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/hooks/useGames.ts</path>
+        <kind>hook</kind>
+        <symbol>useGames</symbol>
+        <lines>25-39</lines>
+        <reason>React Query hook with current 15-minute polling (refetchInterval: 900000). Story 3.6 updates to 60000 (1 minute) with matching staleTime. Already has refetchIntervalInBackground: true from Story 3.5.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/ncaa_games.py</path>
+        <kind>asset</kind>
+        <symbol>ncaa_games</symbol>
+        <lines>N/A</lines>
+        <reason>Dagster asset that fetches NCAA games data via NCAA API client. Scheduled execution by ncaa_games_schedule. Contains retry logic (3 attempts, exponential backoff) for API failures. No changes required for Story 3.6.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>component</kind>
+        <symbol>Dashboard</symbol>
+        <lines>N/A</lines>
+        <reason>Uses useGames hook for data fetching. Displays "Last updated X ago" timestamp with formatDistanceToNow from date-fns. Has 30-second useEffect timer for live timestamp updates (Story 3.5). No changes required for Story 3.6 - timestamp precision already adequate.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/scripts/tests-start.sh</path>
+        <kind>script</kind>
+        <symbol>N/A</symbol>
+        <lines>N/A</lines>
+        <reason>Test execution script. Runs pytest with coverage. Use for validating backend changes: docker compose exec backend bash scripts/tests-start.sh</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <backend>
+        <dependency name="dagster" version="1.9.8+" ecosystem="python">
+          Data orchestration framework. Schedules and executes ncaa_games asset. Uses cron expressions for scheduling (standard format). In-process executor for lightweight execution on t2.micro.
+        </dependency>
+        <dependency name="pytest" version="8.3.0+" ecosystem="python">
+          Testing framework for backend. Includes pytest-asyncio (0.24.0+) for async test support and pytest-xdist (3.6.0+) for parallel test execution (-n auto flag).
+        </dependency>
+        <dependency name="ruff" version="0.7.0+" ecosystem="python">
+          Linter and formatter. Replaces flake8, isort, pyupgrade. Run: uv run ruff check . --fix for auto-fixing issues. Pre-commit hook runs automatically.
+        </dependency>
+        <dependency name="mypy" version="1.11.0+" ecosystem="python">
+          Type checker with strict mode enabled. Run: uv run mypy . for type validation. Configured in pyproject.toml.
+        </dependency>
+        <dependency name="sqlmodel" version="0.0.21+" ecosystem="python">
+          ORM for database operations. Used by ncaa_games asset for upsert operations (ON CONFLICT DO UPDATE). Handles fact_game table updates efficiently.
+        </dependency>
+      </backend>
+      <frontend>
+        <dependency name="@tanstack/react-query" version="5.28.14" ecosystem="npm">
+          State management and data fetching. Core library for polling implementation. Supports refetchInterval, staleTime, refetchIntervalInBackground. Includes devtools for debugging queries.
+        </dependency>
+        <dependency name="@biomejs/biome" version="1.6.1" ecosystem="npm">
+          Linter and formatter for JavaScript/TypeScript. Run: npm run lint for auto-fixing. Replaces ESLint + Prettier for better performance.
+        </dependency>
+        <dependency name="typescript" version="N/A" ecosystem="npm">
+          Type checking for frontend. Run: npx tsc --noEmit to verify no type errors after changes.
+        </dependency>
+        <dependency name="date-fns" version="N/A" ecosystem="npm">
+          Date formatting utilities. Used for formatDistanceToNow in timestamp display ("45 seconds ago"). Lightweight alternative to moment.js.
+        </dependency>
+        <dependency name="vite" version="N/A" ecosystem="npm">
+          Build tool and dev server. Provides fast HMR (Hot Module Replacement) during development. Env variable support via import.meta.env.VITE_API_URL.
+        </dependency>
+      </frontend>
+      <docker>
+        <dependency name="docker-compose" version="2.40.3+" ecosystem="docker">
+          Container orchestration. Development uses docker-compose.yml + docker-compose.override.yml. Production uses explicit -f flags: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d. Critical for avoiding auto-reload overhead.
+        </dependency>
+      </docker>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <category>Polling Alignment</category>
+      <rule>Frontend polling interval (refetchInterval) must match or exceed backend ingestion frequency to prevent wasted API requests. Story 3.6 aligns both to 1 minute.</rule>
+      <source>Dev Notes - Architecture Patterns from Epic 3 Tech Spec</source>
+    </constraint>
+    <constraint>
+      <category>Configuration Change Only</category>
+      <rule>Story 3.6 is configuration-only optimization. Update numeric values in existing definitions without altering logic, interfaces, or schema. No new files required.</rule>
+      <source>Dev Notes - Project Structure Alignment</source>
+    </constraint>
+    <constraint>
+      <category>API Rate Limits</category>
+      <rule>NCAA API documented burst limit: 5 requests/second. No QPM/QPD limits documented. 1-minute polling (0.0167 req/sec) is 300x below burst limit. Monitor for 429 errors during 24-hour validation period.</rule>
+      <source>Dev Notes - API Rate Limit Analysis</source>
+    </constraint>
+    <constraint>
+      <category>EC2 Resource Constraints</category>
+      <rule>t2.micro instance: 1 vCPU, 1GB RAM, 4GB swap. CPU usage must remain &lt;20% sustained to avoid credit bankruptcy. Expected increase from ~5% (15-min) to ~10-15% (1-min). Rollback if exceeds 20%.</rule>
+      <source>Dev Notes - Performance Impact Analysis</source>
+    </constraint>
+    <constraint>
+      <category>Error Handling Continuity</category>
+      <rule>All error handling from Story 3.5 must remain functional. React Query retry logic (3 attempts, exponential backoff), cached data display during failures, warning banner. No regression allowed.</rule>
+      <source>AC-3.38, Dev Notes - Learnings from Story 3-5</source>
+    </constraint>
+    <constraint>
+      <category>Docker Production Mode</category>
+      <rule>CRITICAL: Production deployment must use explicit -f flags to exclude docker-compose.override.yml. Override file enables --reload flag causing 28% CPU overhead. Command: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d</rule>
+      <source>CLAUDE.md - Docker Compose Files section</source>
+    </constraint>
+    <constraint>
+      <category>Testing Requirements</category>
+      <rule>Backend: Run ruff linter, mypy type checker, pytest suite before commit. Frontend: Run biome linter, TypeScript compiler (npx tsc --noEmit). Pre-commit hooks auto-enforce on commit.</rule>
+      <source>Dev Notes - Code Quality and Linting (Task 4)</source>
+    </constraint>
+    <constraint>
+      <category>Rollback Plan Required</category>
+      <rule>If 429 errors or CPU &gt;20% during 24-hour monitoring: Immediate rollback to 5-minute polling (*/5 * * * * + refetchInterval: 300000). Full revert to 15-minute available if needed. No data loss on rollback.</rule>
+      <source>Dev Notes - Rollback Plan</source>
+    </constraint>
+    <constraint>
+      <category>Cron Expression Format</category>
+      <rule>Dagster schedule cron_schedule uses standard cron format. For 1-minute polling: "* * * * *" (5 fields: minute hour day month weekday). Verify at https://crontab.guru before deployment.</rule>
+      <source>AC-3.34, Dagster Documentation</source>
+    </constraint>
+    <constraint>
+      <category>React Query Best Practices</category>
+      <rule>refetchInterval and staleTime should match to prevent unnecessary refetches. refetchIntervalInBackground: true required for tab-hidden scenarios (established in Story 3.5). Maintain isFetching vs isLoading distinction for background refresh indicator.</rule>
+      <source>AC-3.35, useGames hook implementation</source>
+    </constraint>
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>Dagster ScheduleDefinition</name>
+      <kind>Python class interface</kind>
+      <signature>
+ScheduleDefinition(
+    name: str,
+    job: Union[ExecutableDefinition, ...],
+    cron_schedule: str,  # Standard cron format: "* * * * *" for every minute
+    description: Optional[str],
+    execution_timezone: str,  # e.g., "America/New_York"
+    default_status: DefaultScheduleStatus  # RUNNING or STOPPED
+)
+      </signature>
+      <path>backend/app/dagster_definitions.py</path>
+      <usage>Update cron_schedule parameter from "*/15 * * * *" to "* * * * *" in ncaa_games_schedule definition.</usage>
+    </interface>
+    <interface>
+      <name>TanStack Query useQuery Hook</name>
+      <kind>React Hook interface</kind>
+      <signature>
+useQuery&lt;TData&gt;({
+    queryKey: unknown[],  // e.g., ["games", "today"]
+    queryFn: () =&gt; Promise&lt;TData&gt;,
+    refetchInterval: number | false,  // milliseconds or false to disable
+    staleTime: number,  // milliseconds - how long data is considered fresh
+    refetchIntervalInBackground: boolean,  // continue polling when tab hidden
+    retry: number | boolean,  // default: 3 attempts
+    // ... other options
+})
+      </signature>
+      <path>frontend/src/hooks/useGames.ts</path>
+      <usage>Update refetchInterval from 900000 to 60000, staleTime from 900000 to 60000. Preserve refetchIntervalInBackground: true.</usage>
+    </interface>
+    <interface>
+      <name>GET /api/v1/games/today</name>
+      <kind>REST endpoint</kind>
+      <signature>
+GET /api/v1/games/today
+Response: GameListResponse
+{
+  games: Game[],
+  generated_at: string (ISO 8601 timestamp),
+  count: number
+}
+Game schema includes: game_id, home_team, away_team, home_score, away_score, game_status, start_time, ...
+      </signature>
+      <path>backend/app/api/routes/games.py</path>
+      <usage>No changes to API contract. Frontend continues using existing endpoint. Increased polling frequency (1-min) makes generated_at timestamp more meaningful.</usage>
+    </interface>
+    <interface>
+      <name>Dagster Asset ncaa_games</name>
+      <kind>Dagster asset</kind>
+      <signature>
+@asset(
+    name="ncaa_games",
+    description="NCAA games data...",
+    retry_policy=RetryPolicy(max_retries=3, delay=2)
+)
+def ncaa_games(context, database: DatabaseResource) -&gt; MaterializeResult:
+    # Fetches games from NCAA API
+    # Upserts into fact_game table
+    # Returns MaterializeResult with metadata
+      </signature>
+      <path>backend/app/assets/ncaa_games.py</path>
+      <usage>No changes required. Asset execution triggered by ncaa_games_schedule. Existing retry policy handles API failures gracefully.</usage>
+    </interface>
+    <interface>
+      <name>formatDistanceToNow (date-fns)</name>
+      <kind>Function signature</kind>
+      <signature>
+formatDistanceToNow(
+    date: Date | number,
+    options?: {
+        addSuffix?: boolean,  // "45 seconds ago" vs "45 seconds"
+        includeSeconds?: boolean,
+        // ... other locale options
+    }
+): string
+      </signature>
+      <path>frontend/src/routes/_layout/index.tsx</path>
+      <usage>No changes required. Already implemented in Story 3.5 with { addSuffix: true }. Provides second-level precision adequate for 1-minute polling.</usage>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+Backend testing uses pytest 8.3.0+ with async support (pytest-asyncio 0.24.0+) and parallel execution (pytest-xdist 3.6.0+). Tests organized by category using markers: @pytest.mark.unit for fast tests without database dependencies, @pytest.mark.integration for database-required tests. Run with `uv run pytest -v -n auto` for parallel execution or `uv run pytest -v` for sequential debugging. Code coverage tracked via coverage.py with `uv run coverage run -m pytest` followed by `uv run coverage report`. Test files mirror app structure (app/api/routes/items.py → app/tests/api/test_items.py). Fixtures defined in app/tests/conftest.py for reusable test setup (database sessions, test client, mock data). Story 3.6 is configuration-only with no new backend logic, so existing tests continue validating core functionality. Manual validation via Dagster UI (Schedules tab, Runs tab) and docker compose logs for schedule execution.
+
+Frontend testing uses Playwright for E2E tests, Biome for linting, and TypeScript compiler for type checking. No unit tests currently implemented for React components (acceptable for MVP per PRD). E2E tests validate end-to-end workflows: docker compose up -d --wait backend, npx playwright test, docker compose down -v. Story 3.6 frontend changes are configuration-only (refetchInterval value update), validated manually via browser DevTools Network tab monitoring API request frequency over 5-minute observation period. React Query behavior (caching, refetching, error handling) already proven in Story 3.5 implementation.
+    </standards>
+    <locations>
+      <location>backend/app/tests/ - Backend pytest suite (unit, integration, migrations)</location>
+      <location>backend/app/tests/conftest.py - Shared pytest fixtures</location>
+      <location>backend/app/tests/api/ - API endpoint tests</location>
+      <location>backend/app/tests/integration/ - Integration tests requiring database</location>
+      <location>backend/app/tests/migrations/ - Alembic migration validation tests</location>
+      <location>frontend/playwright.config.ts - Playwright E2E test configuration (if exists)</location>
+      <location>Manual validation: Dagster UI (http://localhost:3000 or https://dagster.gamepulse.top)</location>
+      <location>Manual validation: Browser DevTools Network tab for frontend polling verification</location>
+    </locations>
+    <ideas>
+      <test id="AC-3.34-backend-schedule">
+        <ac>AC-3.34</ac>
+        <type>Manual Validation</type>
+        <description>Verify Dagster schedule updated to 1-minute cron. Open Dagster UI, navigate to Schedules tab, confirm ncaa_games_schedule shows "Running" status. Navigate to Runs tab, observe new runs appearing every minute. Monitor for 10 minutes to confirm 10 successful runs. Check run duration remains 2-3 seconds. Use command: docker compose logs -f dagster-daemon | grep ncaa_games to verify no errors.</description>
+        <acceptance>Schedule shows "* * * * *" cron expression, runs execute every minute without skipped runs, no errors in logs, run duration &lt;5 seconds.</acceptance>
+      </test>
+      <test id="AC-3.35-frontend-polling">
+        <ac>AC-3.35</ac>
+        <type>Manual Validation</type>
+        <description>Verify React Query polling updated to 1-minute interval. Open dashboard in browser, open DevTools → Network tab, filter by "games". Wait 5 minutes and count API requests (expect ~5 requests). Verify requests spaced approximately 60 seconds apart. Check "Last updated" timestamp updates within 1-2 minutes. Switch to different browser tab, return after 5 minutes, verify polling continued (refetchIntervalInBackground: true).</description>
+        <acceptance>Network tab shows ~1 request per minute, "Last updated" timestamp updates within 2 minutes, polling continues when tab is hidden.</acceptance>
+      </test>
+      <test id="AC-3.36-timestamp-precision">
+        <ac>AC-3.36</ac>
+        <type>Manual Validation</type>
+        <description>Verify timestamp display precision adequate for 1-minute polling. Open dashboard, note "Last updated X ago" timestamp. Wait 30 seconds, verify timestamp updates to show "30 seconds ago" or "1 minute ago". Confirm precision matches user expectation for 1-minute polling cadence. No code changes required - validation only.</description>
+        <acceptance>Timestamp shows second-level precision ("45 seconds ago"), updates every 30 seconds via existing useEffect timer.</acceptance>
+      </test>
+      <test id="AC-3.37-performance-monitoring">
+        <ac>AC-3.37</ac>
+        <type>24-Hour Monitoring</type>
+        <description>Monitor production deployment for 24 hours after Story 3.6 deployment. SSH to EC2 instance, run monitoring commands: (1) docker compose logs -f dagster-daemon | grep -i "ncaa_games" - verify runs complete in &lt;5 seconds, (2) top -bn1 | grep -E "Cpu|dagster" - verify CPU usage &lt;15% sustained, (3) docker compose logs dagster-daemon | grep -i "429|rate limit" - verify no 429 errors from NCAA API. Check database performance with psql query for recent fact_game updates. Monitor CloudWatch metrics if available (Epic 9).</description>
+        <acceptance>Dagster runs complete in 2-3 seconds, no 429 API errors, CPU &lt;15%, database upserts complete without blocking, network shows 1 request/min = 1,440 requests/day.</acceptance>
+      </test>
+      <test id="AC-3.38-error-handling-regression">
+        <ac>AC-3.38</ac>
+        <type>Manual Validation</type>
+        <description>Verify error handling from Story 3.5 remains functional with 1-minute polling. Open dashboard with backend running. Stop backend: docker compose stop backend. Wait 60+ seconds for refetch interval to trigger. Verify cached games remain visible with warning banner showing "Unable to fetch latest data. Showing cached results." Restart backend: docker compose start backend. Verify warning banner clears on next successful refetch (within 1-2 minutes). Confirm background refetch indicator (isFetching state) still displays during polling.</description>
+        <acceptance>React Query retry logic works (3 attempts, exponential backoff), cached data visible during failures, warning banner shows/clears appropriately, no regression from Story 3.5 behavior.</acceptance>
+      </test>
+      <test id="code-quality-validation">
+        <ac>All ACs</ac>
+        <type>Automated Linting/Type Checking</type>
+        <description>Run code quality checks before commit. Backend: (1) cd backend &amp;&amp; uv run ruff check . - verify no linting errors, (2) uv run ruff check . --fix - auto-fix issues, (3) uv run mypy . - verify no type errors. Frontend: (1) cd frontend &amp;&amp; npm run lint - verify no linting errors (Biome auto-fixes), (2) npx tsc --noEmit - verify TypeScript compilation succeeds. Run pre-commit hooks: cd backend &amp;&amp; uv run pre-commit run --all-files. All checks must pass before git commit.</description>
+        <acceptance>Ruff reports 0 linting errors, Mypy reports 0 type errors, Biome reports 0 linting errors, TypeScript compiles successfully, pre-commit hooks pass.</acceptance>
+      </test>
+      <test id="rollback-validation">
+        <ac>AC-3.37</ac>
+        <type>Rollback Plan Verification</type>
+        <description>If 429 errors or CPU &gt;20% detected during 24-hour monitoring, execute rollback plan. Update backend/app/dagster_definitions.py cron_schedule to "*/5 * * * *" (5-minute compromise). Update frontend/src/hooks/useGames.ts refetchInterval to 300000 and staleTime to 300000. Commit and push to trigger automated deployment. Verify rollback successful: Dagster runs every 5 minutes, frontend polls every 5 minutes, CPU usage returns to baseline. No data loss expected - only affects refresh frequency.</description>
+        <acceptance>Rollback deployment completes successfully, services run at reduced polling frequency (5-min), CPU/API metrics return to acceptable levels, no data corruption or loss.</acceptance>
+      </test>
+    </ideas>
+  </tests>
+</story-context>
