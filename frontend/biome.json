@@ -1,12 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.6.1/schema.json",
   "files": {
-    "ignore": [
-      "src/client/**/*",
-      "src/routeTree.gen.ts",
-      "*.gen.ts",
-      "*.gen.tsx"
-    ]
+    "ignore": ["src/client/**/*", "*.gen.ts", "*.gen.tsx"]
   },
   "linter": {
     "enabled": true,
