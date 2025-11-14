@@ -1,0 +1,210 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>2</storyId>
+    <title>Add Health Check Endpoint</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/3-2-add-health-endpoint.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>DevOps engineer deploying GamePulse</asA>
+    <iWant>a `/api/health` endpoint that reports system status and database connectivity</iWant>
+    <soThat>I can monitor application health, validate deployments, and diagnose issues quickly</soThat>
+    <tasks>
+      <task id="1" ac="3.4">Create Pydantic Response Schema
+        <subtask>Create backend/app/schemas/health.py file (if not exists from Story 3.1)</subtask>
+        <subtask>Define HealthCheckResponse schema with fields: status, version, database, uptime_seconds, timestamp</subtask>
+        <subtask>Add docstring explaining status field values</subtask>
+        <subtask>Add unit test for Pydantic schema validation</subtask>
+      </task>
+      <task id="2" ac="3.4, 3.5, 3.7">Implement Health Check Route Handler
+        <subtask>Create backend/app/api/routes/health.py file</subtask>
+        <subtask>Implement get_health() function with database connectivity check</subtask>
+        <subtask>Execute SELECT 1 query to verify database connection</subtask>
+        <subtask>Calculate process uptime (time since application start)</subtask>
+        <subtask>Return HealthCheckResponse with HTTP 200 when healthy</subtask>
+        <subtask>Return HTTP 503 when database disconnected</subtask>
+        <subtask>Add structured logging (info on success, error with exc_info=True on failure)</subtask>
+        <subtask>Add explicit context fields: endpoint="/api/health", database_status, response_time_ms</subtask>
+      </task>
+      <task id="3" ac="3.4">Register Router in Main App
+        <subtask>Edit backend/app/api/main.py</subtask>
+        <subtask>Import health.router from app.api.routes.health</subtask>
+        <subtask>Add app.include_router(health.router, prefix="/api", tags=["health"])</subtask>
+        <subtask>Verify endpoint accessible at /api/health</subtask>
+      </task>
+      <task id="4" ac="All">Testing and Validation
+        <subtask>Write integration test: test_health_endpoint_healthy() with connected database</subtask>
+        <subtask>Write integration test: test_health_endpoint_unhealthy() with mocked database failure</subtask>
+        <subtask>Write integration test: test_health_endpoint_logging() with log capture</subtask>
+        <subtask>Manual test: curl http://localhost:8000/api/health</subtask>
+        <subtask>Manual test: Stop database, verify HTTP 503 response</subtask>
+        <subtask>Performance test: ab load test (P95 <100ms)</subtask>
+        <subtask>Verify OpenAPI docs at /docs include health endpoint</subtask>
+      </task>
+      <task id="5" ac="3.8">GitHub Actions Integration
+        <subtask>Verify .github/workflows/deploy.yml smoke test step exists</subtask>
+        <subtask>If missing, add smoke test step after deployment</subtask>
+        <subtask>Test smoke test locally: curl --fail --max-time 10 http://localhost:8000/api/health</subtask>
+        <subtask>Document health endpoint in deployment checklist</subtask>
+      </task>
+      <task id="6" ac="All">Documentation and Deployment
+        <subtask>Add docstring to get_health() function</subtask>
+        <subtask>Document health endpoint usage in CLAUDE.md</subtask>
+        <subtask>Update story file with completion notes</subtask>
+        <subtask>Run pre-commit hooks (ruff, mypy)</subtask>
+        <subtask>Commit changes to git</subtask>
+        <subtask>Update sprint-status.yaml: 3-2-add-health-endpoint = "ready-for-dev" (after story-context)</subtask>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-3.4" title="Health Check Endpoint Functionality">
+      <given>the application is running with database connectivity</given>
+      <when>I send GET request to /api/health</when>
+      <then>
+        - response returns HTTP 200 with valid JSON
+        - response includes fields: status, version, database, uptime_seconds, timestamp
+        - status field contains one of: "healthy", "degraded", "unhealthy"
+        - database field contains one of: "connected", "disconnected"
+        - version field contains API version string (e.g., "1.0.0")
+        - uptime_seconds field contains process runtime as float
+      </then>
+      <validation>Manual API test: curl http://localhost:8000/api/health | jq .</validation>
+    </criterion>
+    <criterion id="AC-3.5" title="Database Connectivity Validation">
+      <given>PostgreSQL database is reachable OR unreachable</given>
+      <when>health endpoint executes connectivity check</when>
+      <then>
+        - query executes SELECT 1 to verify database connection
+        - database field returns "connected" if query succeeds, HTTP 200
+        - database field returns "disconnected" if query fails, HTTP 503
+        - status field returns "healthy" if database connected
+        - status field returns "unhealthy" if database disconnected
+        - exception handler catches database error
+      </then>
+      <validation>
+        docker compose up -d db backend → curl /api/health (expect HTTP 200)
+        docker compose stop db → curl /api/health (expect HTTP 503)
+      </validation>
+    </criterion>
+    <criterion id="AC-3.6" title="Performance Requirements">
+      <given>typical workload conditions</given>
+      <when>health endpoint executes</when>
+      <then>
+        - P95 response time <100ms (faster than main API endpoints)
+        - database connectivity query executes in <50ms
+        - no expensive aggregations or table scans performed
+      </then>
+      <validation>ab -n 1000 -c 100 http://localhost:8000/api/health</validation>
+    </criterion>
+    <criterion id="AC-3.7" title="Structured Logging">
+      <given>health check endpoint is called</given>
+      <when>request completes successfully OR database connectivity fails</when>
+      <then>
+        - structured log emitted with fields: endpoint="/api/health", status, database, response_time_ms
+        - log level is INFO for successful checks
+        - log level is ERROR for failures
+        - structured log includes exc_info=True (full stack trace) for errors
+        - no stack traces exposed to API clients (security best practice)
+      </then>
+      <validation>Integration test with log capture: assert "endpoint" in caplog.records[0].extra</validation>
+    </criterion>
+    <criterion id="AC-3.8" title="GitHub Actions Integration">
+      <given>GitHub Actions deploy workflow completes docker compose up -d</given>
+      <when>smoke test step executes curl https://api.gamepulse.top/api/health</when>
+      <then>
+        - health endpoint returns HTTP 200 within 10 seconds (deployment timeout)
+        - deployment marked successful in GitHub Actions
+        - workflow logs include health check response
+        - if health endpoint returns HTTP 503 or times out, deployment fails
+      </then>
+      <validation>Verify in .github/workflows/deploy.yml smoke test step</validation>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/tech-spec-epic-3.md" title="Epic 3 Technical Specification">
+        <section name="APIs and Interfaces">Health endpoint specification: Simple database connectivity validation with SELECT 1 query, target response time <100ms, HTTP status codes 200 (healthy) / 503 (unhealthy), used by GitHub Actions smoke test and future AWS monitoring, no authentication required</section>
+        <section name="Reliability/Availability">Structured logging with structlog (JSON output), context binding (endpoint, database_status, response_time_ms), stack traces in logs (exc_info=True) not exposed to clients, HTTP 503 with generic message on database failure</section>
+        <section name="Performance">Target P95 <100ms (faster than main API), simple SELECT 1 query (no table scans), no caching needed (must reflect current state)</section>
+      </doc>
+      <doc path="docs/PRD.md" title="Product Requirements Document">
+        <section name="NFR-4.3">Monitoring and observability requirements - health check endpoint enables automated deployment validation and system status visibility</section>
+        <section name="NFR-4.1">95% uptime target requires health monitoring infrastructure</section>
+      </doc>
+      <doc path="docs/architecture.md" title="Architecture Document">
+        <section name="API Contracts">Health endpoint specification, response schema, FastAPI + SQLModel + Pydantic stack</section>
+        <section name="Logging Strategy">Structured logging with structlog, context binding, queryable JSON logs for CloudWatch integration</section>
+      </doc>
+      <doc path="docs/stories/3-1-create-games-endpoint.md" title="Previous Story 3.1">
+        <section name="Completion Notes">Error handling patterns: use exc_info=True in error logging, structured logging with explicit context fields (endpoint, request_id, response_time_ms), specific exception handling (OperationalError, DatabaseError not generic Exception), FastAPI dependency override for testing database failures, performance validation with ab load test</section>
+        <section name="Testing Patterns">Integration tests with FastAPI TestClient preferred over complex mocking, use dependency override pattern, manual curl tests for smoke testing, load testing with Apache Bench (ab), avoid greenlet dependency issues</section>
+        <section name="Code Quality">Specific database exceptions from sqlalchemy.exc, explicit log context fields, Pydantic schema validation unit tests with pytest.raises(ValidationError), performance validation bash script for CI/CD</section>
+      </doc>
+      <doc path="CLAUDE.md" title="Project Instructions">
+        <section name="Common Development Tasks">Deployment smoke test pattern, health check usage in GitHub Actions workflow</section>
+      </doc>
+    </docs>
+    <code>
+      <artifact path="backend/app/api/deps.py" kind="dependency" symbol="get_db" lines="10-12" reason="Database session dependency injection pattern - must reuse for health endpoint. Yields SQLModel Session from engine. Use SessionDep type alias for dependency injection." />
+      <artifact path="backend/app/api/deps.py" kind="type-alias" symbol="SessionDep" lines="15" reason="Type alias for Session dependency - use in health endpoint function signature: session: SessionDep = Depends(get_db)" />
+      <artifact path="backend/app/schemas/game.py" kind="schema" symbol="TeamInfo" lines="8-18" reason="Example Pydantic schema pattern with Field descriptions, model_config from_attributes. Follow this pattern for HealthCheckResponse schema." />
+      <artifact path="backend/app/schemas/game.py" kind="schema" symbol="GamePublic" lines="21-30" reason="Example response schema pattern with Field descriptions. Health check should follow similar structure: explicit Field descriptions, proper typing (str | None for optionals)." />
+      <artifact path="backend/app/api/routes/games.py" kind="route" symbol="get_games" reason="Example FastAPI route handler with SessionDep dependency, error handling with specific exceptions, structured logging, HTTP status codes (200, 503). Pattern to follow for health endpoint." />
+      <artifact path="backend/app/tests/conftest.py" kind="fixture" symbol="client" reason="FastAPI TestClient fixture for integration tests. Use in test_health.py for testing health endpoint." />
+      <artifact path="backend/app/tests/conftest.py" kind="fixture" symbol="session" reason="Database session fixture for tests. Can be used to test database connectivity scenarios." />
+      <artifact path="backend/app/tests/api/routes/test_games.py" kind="test" symbol="test_database_error_handling" reason="Example integration test mocking database failure using dependency override pattern. Follow this pattern for test_health_endpoint_unhealthy()." />
+      <artifact path="backend/app/tests/api/routes/test_games.py" kind="test" symbol="test_game_public_schema_validation" reason="Example Pydantic schema validation unit test with pytest.raises(ValidationError). Follow for health schema tests." />
+    </code>
+    <dependencies>
+      <python>
+        <package name="fastapi" version="0.114.2+" />
+        <package name="sqlmodel" version="0.0.21+" />
+        <package name="structlog" version="25.5.0" />
+        <package name="pytest" version="8.3.4+" />
+        <package name="httpx" version="0.28.1" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="error-handling">Must catch specific database exceptions: (OperationalError, DatabaseError) from sqlalchemy.exc, not generic Exception. This prevents masking unexpected errors unrelated to database connectivity.</constraint>
+    <constraint type="logging">Must use structured logging with structlog. Include explicit context fields: endpoint="/api/health", database_status, response_time_ms, request_id. Use exc_info=True for error logs, INFO level for success, ERROR level for failures.</constraint>
+    <constraint type="performance">Target P95 response time <100ms (faster than main API endpoints <500ms). Use simple SELECT 1 query, no aggregations or table scans. Health check must reflect current state (no caching).</constraint>
+    <constraint type="testing">Prefer integration tests with FastAPI TestClient over complex mocking. Use dependency override pattern for mocking database failures. Include manual curl tests and ab load tests for performance validation.</constraint>
+    <constraint type="http-status">Return HTTP 200 when healthy (database connected), HTTP 503 when unhealthy (database disconnected). Do not use HTTP 500 for expected failure states.</constraint>
+    <constraint type="security">Never expose stack traces to API clients. Use generic error messages in HTTP responses: "Service unavailable - database connection failed". Full stack traces only in logs with exc_info=True.</constraint>
+    <constraint type="architecture">Follow FastAPI template structure: schemas in backend/app/schemas/, routes in backend/app/api/routes/, tests in backend/app/tests/api/routes/. Reuse existing deps.py get_db dependency injection.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="get_db" kind="dependency-function" signature="def get_db() -> Generator[Session, None, None]" path="backend/app/api/deps.py" />
+    <interface name="SessionDep" kind="type-alias" signature="Annotated[Session, Depends(get_db)]" path="backend/app/api/deps.py" />
+    <interface name="HealthCheckResponse" kind="pydantic-schema" signature="BaseModel with fields: status (str), version (str), database (str), uptime_seconds (float), timestamp (datetime)" path="backend/app/schemas/health.py (to be created)" />
+    <interface name="GET /api/health" kind="rest-endpoint" signature="async def get_health(session: SessionDep, request_id: str | None = None) -> HealthCheckResponse" path="backend/app/api/routes/health.py (to be created)" />
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing Strategy: Integration tests with FastAPI TestClient are preferred over complex mocking. Use dependency override pattern for mocking database failures (app.dependency_overrides[get_db] = mock_get_db). Manual curl tests for smoke testing. Load testing with Apache Bench (ab) for performance validation. Avoid greenlet dependency issues by using standard pytest fixtures. All tests use pytest framework with FastAPI TestClient. Test fixtures defined in backend/app/tests/conftest.py include: client (FastAPI TestClient), session (database session). Tests organized by resource: backend/app/tests/api/routes/ for API endpoint tests.
+    </standards>
+    <locations>
+      <location>backend/app/tests/api/routes/test_health.py (to be created)</location>
+      <location>backend/app/tests/conftest.py (existing test fixtures)</location>
+    </locations>
+    <ideas>
+      <test criterion="AC-3.4, AC-3.5" name="test_health_endpoint_healthy">Integration test with connected database. Verify HTTP 200, status="healthy", database="connected", uptime_seconds is float, timestamp is datetime, version="1.0.0".</test>
+      <test criterion="AC-3.5" name="test_health_endpoint_unhealthy">Integration test with mocked database failure using dependency override. Mock get_db to raise OperationalError. Verify HTTP 503, status="unhealthy", database="disconnected".</test>
+      <test criterion="AC-3.7" name="test_health_endpoint_logging">Integration test with log capture (caplog fixture). Call health endpoint, verify structured log emitted with fields: endpoint, status, database, response_time_ms. Verify log level INFO for success.</test>
+      <test criterion="AC-3.7" name="test_health_endpoint_error_logging">Integration test with log capture and mocked database failure. Verify structured log emitted with exc_info=True, ERROR level, fields: endpoint, database_status="disconnected", error message.</test>
+      <test criterion="AC-3.4" name="test_health_check_response_schema_validation">Unit test for HealthCheckResponse Pydantic schema. Use pytest.raises(ValidationError) to verify schema validation for invalid data types and missing required fields.</test>
+      <test criterion="AC-3.6" name="test_health_endpoint_performance">Load test with Apache Bench: ab -n 1000 -c 100 http://localhost:8000/api/health. Verify P95 latency <100ms. Can be automated via bash script similar to backend/scripts/test_performance_games.sh.</test>
+    </ideas>
+  </tests>
+</story-context>

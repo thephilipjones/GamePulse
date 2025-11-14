@@ -204,6 +204,7 @@ class TestGamesEndpoint:
 
     def test_database_error_handling(self, client: TestClient) -> None:
         """Test that database errors are handled gracefully with proper logging."""
+        from collections.abc import Generator
         from unittest.mock import Mock
 
         from sqlalchemy.exc import OperationalError
@@ -218,7 +219,7 @@ class TestGamesEndpoint:
         from app.api.deps import get_db
         from app.main import app
 
-        def mock_get_db():
+        def mock_get_db() -> Generator[Mock, None, None]:
             yield mock_session
 
         app.dependency_overrides[get_db] = mock_get_db
@@ -271,10 +272,10 @@ class TestGamesEndpoint:
         # Invalid data should raise ValidationError
         with pytest.raises(ValidationError) as exc_info:
             GamePublic(
-                game_key="not-an-int",  # Should be int
-                game_id=123,  # Should be str
-                game_date="not-a-date",  # Should be datetime
-                game_start_time="invalid",  # Should be datetime
+                game_key="not-an-int",  # type: ignore[arg-type]  # Should be int
+                game_id=123,  # type: ignore[arg-type]  # Should be str
+                game_date="not-a-date",  # type: ignore[arg-type]  # Should be datetime
+                game_start_time="invalid",  # type: ignore[arg-type]  # Should be datetime
                 game_status="scheduled",
                 home_team=valid_team,
                 away_team=valid_team,
@@ -285,4 +286,4 @@ class TestGamesEndpoint:
 
         # Test missing required fields
         with pytest.raises(ValidationError):
-            GamePublic()  # Missing all required fields
+            GamePublic()  # type: ignore[call-arg]  # Missing all required fields
