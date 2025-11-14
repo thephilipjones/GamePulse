@@ -1,7 +1,19 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.6.1/schema.json",
   "files": {
-    "ignore": ["src/client/**/*", "*.gen.ts", "*.gen.tsx"]
+    "ignore": [
+      "src/client/**/*",
+      "*.gen.ts",
+      "*.gen.tsx",
+      "dist/**/*",
+      "build/**/*",
+      "node_modules/**/*",
+      ".vite/**/*",
+      "coverage/**/*",
+      "playwright-report/**/*",
+      "test-results/**/*",
+      "blob-report/**/*"
+    ]
   },
   "linter": {
     "enabled": true,
