@@ -1,5 +1,4 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import React, { StrictMode } from "react";
 import ReactDOM from "react-dom/client";
@@ -36,7 +35,6 @@ ReactDOM.createRoot(rootElement).render(
   <StrictMode>
     <CustomProvider>
       <QueryClientProvider client={queryClient}>
-        <ReactQueryDevtools initialIsOpen={false} />
         <RouterProvider router={router} />
       </QueryClientProvider>
     </CustomProvider>
