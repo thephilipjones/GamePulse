@@ -67,7 +67,7 @@ development_status:
   epic-3: contexted
   3-1-create-games-endpoint: done
   3-2-add-health-endpoint: done
-  3-3-initialize-react-dashboard: drafted
+  3-3-initialize-react-dashboard: ready-for-dev
   3-4-build-game-list: drafted
   3-5-add-auto-refresh: drafted
   epic-3-retrospective: optional

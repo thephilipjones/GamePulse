@@ -1,0 +1,460 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>3</epicId>
+    <storyId>3</storyId>
+    <title>Initialize React Dashboard with Chakra UI</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-14</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/3-3-initialize-react-dashboard.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>frontend developer setting up the GamePulse dashboard</asA>
+    <iWant>to initialize the React application structure with Chakra UI, React Query, and routing configuration</iWant>
+    <soThat>I have a functional foundation for displaying NCAA game data with proper state management and responsive layout</soThat>
+    <tasks>
+      <task id="1" acs="3.11, 3.15">
+        <title>Clean Up Authentication Boilerplate</title>
+        <subtasks>
+          <subtask>Remove frontend/src/pages/Login.tsx (auth page not needed)</subtask>
+          <subtask>Remove frontend/src/contexts/AuthContext.tsx (no user sessions)</subtask>
+          <subtask>Remove authentication-protected route wrappers</subtask>
+          <subtask>Delete unused auth-related components (ProtectedRoute, etc.)</subtask>
+          <subtask>Update App.tsx to remove auth context providers</subtask>
+        </subtasks>
+      </task>
+
+      <task id="2" acs="3.13">
+        <title>Configure React Query (TanStack Query)</title>
+        <subtasks>
+          <subtask>Install @tanstack/react-query if not in template (check package.json)</subtask>
+          <subtask>Install @tanstack/react-query-devtools as dev dependency</subtask>
+          <subtask>Create QueryClient with 15-minute staleTime in main.tsx</subtask>
+          <subtask>Wrap app with QueryClientProvider</subtask>
+          <subtask>Add ReactQueryDevTools for development debugging (conditionally enabled)</subtask>
+          <subtask>Test QueryClient configuration by checking DevTools in browser</subtask>
+        </subtasks>
+      </task>
+
+      <task id="3" acs="3.12">
+        <title>Configure Chakra UI Theme</title>
+        <subtasks>
+          <subtask>Verify Chakra UI installed in package.json (template includes v3.8+)</subtask>
+          <subtask>Add ChakraProvider to main.tsx wrapping App component</subtask>
+          <subtask>Use default light theme (no custom theme file needed for MVP)</subtask>
+          <subtask>Test responsive breakpoints in Chrome DevTools device mode</subtask>
+        </subtasks>
+      </task>
+
+      <task id="4" acs="3.11, 3.17">
+        <title>Create Dashboard Page Component</title>
+        <subtasks>
+          <subtask>Create frontend/src/pages/Dashboard.tsx file</subtask>
+          <subtask>Import Chakra UI components: Container, Heading, Box</subtask>
+          <subtask>Implement responsive Container with maxW="container.xl"</subtask>
+          <subtask>Add centered "GamePulse" heading (size="2xl", mb={8} for spacing)</subtask>
+          <subtask>Add placeholder Box with "Loading games..." text</subtask>
+          <subtask>Export Dashboard component as default</subtask>
+        </subtasks>
+      </task>
+
+      <task id="5" acs="3.15">
+        <title>Configure Routing</title>
+        <subtasks>
+          <subtask>Update frontend/src/App.tsx to render Dashboard directly</subtask>
+          <subtask>Remove authentication-protected route logic</subtask>
+          <subtask>Simplify to single route: / → Dashboard</subtask>
+          <subtask>Prepare for future expansion: comment structure for /game/:id route</subtask>
+        </subtasks>
+      </task>
+
+      <task id="6" acs="3.14">
+        <title>Environment Configuration</title>
+        <subtasks>
+          <subtask>Create frontend/.env.development with VITE_API_URL=http://localhost:8000</subtask>
+          <subtask>Create frontend/.env.production with VITE_API_URL=https://api.gamepulse.top</subtask>
+          <subtask>Create frontend/src/config.ts exporting API_BASE_URL constant</subtask>
+          <subtask>Add type declaration for VITE_API_URL in vite-env.d.ts</subtask>
+        </subtasks>
+      </task>
+
+      <task id="7" acs="all">
+        <title>Testing and Validation</title>
+        <subtasks>
+          <subtask>Start frontend dev server: npm run dev</subtask>
+          <subtask>Verify dashboard loads at http://localhost:5173 without errors</subtask>
+          <subtask>Check browser console for warnings (React Query, Chakra UI)</subtask>
+          <subtask>Test responsive layout in Chrome DevTools (mobile, tablet, desktop)</subtask>
+          <subtask>Run TypeScript type check: tsc --noEmit (should pass)</subtask>
+          <subtask>Run linter: npm run lint (should pass)</subtask>
+          <subtask>Verify React Query DevTools visible in development</subtask>
+        </subtasks>
+      </task>
+
+      <task id="8" acs="all">
+        <title>Documentation and Cleanup</title>
+        <subtasks>
+          <subtask>Add JSDoc comments to Dashboard component</subtask>
+          <subtask>Document environment variables in frontend/README.md</subtask>
+          <subtask>Update package.json scripts if needed</subtask>
+          <subtask>Commit changes with descriptive message</subtask>
+          <subtask>Update sprint-status.yaml: 3-3-initialize-react-dashboard = "in-progress"</subtask>
+        </subtasks>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-3.11">
+      <title>React Application Structure</title>
+      <description>Application renders without errors at http://localhost:5173, has Dashboard page at frontend/src/pages/Dashboard.tsx, includes "GamePulse" header, uses Chakra UI Container with responsive max-width, removes all authentication-related pages/routes/contexts from template</description>
+      <validation>Start frontend dev server (npm run dev), open http://localhost:5173, verify Dashboard page loads with header, no auth UI visible</validation>
+    </criterion>
+
+    <criterion id="AC-3.12">
+      <title>Chakra UI Theme Configuration</title>
+      <description>Uses Chakra UI default light theme (dark mode deferred to Epic 8), has ChakraProvider wrapping app in main.tsx, includes responsive breakpoint support (sm, md, lg, xl, 2xl), works correctly on mobile viewports</description>
+      <validation>Verify main.tsx includes ChakraProvider, Dashboard.tsx uses responsive Container, test in Chrome DevTools device mode</validation>
+    </criterion>
+
+    <criterion id="AC-3.13">
+      <title>React Query (TanStack Query) Configuration</title>
+      <description>QueryClient configured with 15-minute staleTime (900000ms), QueryClientProvider wraps app, React Query DevTools enabled in development mode only, matches backend Dagster 15-minute ingestion cadence</description>
+      <validation>Verify main.tsx configures QueryClient with staleTime: 900000, retry: 3, includes ReactQueryDevtools, test DevTools visible in browser</validation>
+    </criterion>
+
+    <criterion id="AC-3.14">
+      <title>Environment-Based API Configuration</title>
+      <description>Frontend reads API base URL from VITE_API_URL environment variable, defaults to http://localhost:8000 for local development, uses https://api.gamepulse.top in production, validates environment variable is set</description>
+      <validation>Verify .env.development and .env.production files exist, frontend/src/config.ts exports API_BASE_URL from import.meta.env.VITE_API_URL</validation>
+    </criterion>
+
+    <criterion id="AC-3.15">
+      <title>Routing Configuration</title>
+      <description>Root route renders Dashboard component, authentication-protected routes removed from template, clean URL structure: / → Dashboard, prepares for future routes: /game/:id (deferred to Epic 8)</description>
+      <validation>Verify routes.tsx or App.tsx defines single route to Dashboard, no auth route guards present</validation>
+    </criterion>
+
+    <criterion id="AC-3.16">
+      <title>TypeScript Type Safety</title>
+      <description>Code passes TypeScript compilation with zero errors (tsc --noEmit), uses proper type annotations for component props, imports types correctly from dependencies, follows Chakra UI and React Query type patterns</description>
+      <validation>Run: cd frontend && npm run build (should complete without TypeScript errors)</validation>
+    </criterion>
+
+    <criterion id="AC-3.17">
+      <title>Empty State Display</title>
+      <description>Displays "GamePulse" header, shows placeholder text ("Loading games..." or "No games available"), has proper spacing and layout (not broken/unstyled), provides visual confirmation dashboard structure works</description>
+      <validation>Manual browser check: Dashboard renders with header and placeholder, no console errors</validation>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification: Basic API + Dashboard MVP</title>
+        <section>Epic Summary</section>
+        <snippet>Initialize React 18 dashboard application with TypeScript, Vite build tooling, and Chakra UI component library. Build GameList React component displaying today's games with team names, scores, game status, and team colors. Implement TanStack Query (React Query) for data fetching with automatic polling refresh every 10-15 minutes.</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>System Architecture Alignment</section>
+        <snippet>Frontend Stack: React 18 + TypeScript + Vite + Chakra UI 3.8+ (from FastAPI full-stack template). State Management: TanStack Query (React Query) 5.90.7 for API data caching, stale-while-revalidate, and automatic 10-15 min polling.</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/tech-spec-epic-3.md</path>
+        <title>Epic 3 Technical Specification</title>
+        <section>Services and Modules</section>
+        <snippet>React Dashboard App (main.tsx) - Main application entry point. GameList Component (components/GameList.tsx) - Display list of games with team info. useGamesQuery Hook (hooks/useGamesQuery.ts) - TanStack Query hook for fetching games with refetchInterval: 900000ms (15 min).</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>FR-7: Frontend Dashboard</section>
+        <snippet>Single-page React dashboard for data visualization. Auto-refresh every 10-15 minutes (polling, not WebSocket to frontend). Philosophy: Data-first, UI as time allows - basic functional UI prioritized over pixel-perfect design.</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Technology Stack</section>
+        <snippet>React + TypeScript 18.2+: Type-safe frontend with modern hooks. Chakra UI 3.8+: React component library with dark mode. React Query (TanStack Query) 5.90.7: API data caching, auto-refresh, stale-while-revalidate. Already included in starter template. Perfect for 10-15 min polling.</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Project Structure - Frontend</section>
+        <snippet>Frontend directory structure: frontend/src/components/ (reusable UI), frontend/src/pages/ (route-level components like Dashboard.tsx), frontend/src/hooks/ (React Query hooks like useGames.ts), frontend/src/main.tsx (app entry point).</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Frontend Layer</section>
+        <snippet>Frontend Layer (Epic 8 foundation in Epic 3): Owns React components, UI state management. React Query fetches /api/games/today every 10-15 min (polling). React dashboard uses stale-while-revalidate pattern for smooth user experience.</snippet>
+      </doc>
+
+      <doc>
+        <path>docs/stories/3-2-add-health-endpoint.md</path>
+        <title>Story 3.2: Add Health Check Endpoint</title>
+        <section>Dev Notes - Learnings</section>
+        <snippet>Docker rebuild required for new files - volume mounts only sync existing files. Command: docker compose build [service] && docker compose up -d [service]. Frontend logging via browser console in development. Code quality: run npm run lint before committing. TypeScript compilation: tsc --noEmit must pass.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>frontend/src/main.tsx</path>
+        <kind>entry-point</kind>
+        <symbol>main</symbol>
+        <lines>1-35</lines>
+        <reason>Existing application entry point. QueryClient already instantiated (line 12) but needs configuration with staleTime: 900000 and retry: 3. Already has QueryClientProvider (line 29) and uses VITE_API_URL (line 10). CustomProvider wraps app (line 28) - this is Chakra UI v3 provider.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/src/routes/__root.tsx</path>
+        <kind>route</kind>
+        <symbol>Route</symbol>
+        <lines>1-35</lines>
+        <reason>Root route configuration. React Query DevTools already configured and lazy-loaded for development only (lines 6-22). TanStack Router DevTools also included. No changes needed.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>page-component</kind>
+        <symbol>Dashboard</symbol>
+        <lines>1-20</lines>
+        <reason>Existing Dashboard component at root route. Currently displays "Welcome to GamePulse" message. Needs enhancement to match AC-3.11 and AC-3.17 requirements: centered "GamePulse" heading (size="2xl"), responsive Container (maxW="container.xl"), placeholder text.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/src/routes/_layout.tsx</path>
+        <kind>layout-component</kind>
+        <symbol>Layout</symbol>
+        <lines>1-26</lines>
+        <reason>Layout wrapper with Navbar and Sidebar. This structure is from the FastAPI template. For a simple dashboard, this may be simplified or kept as-is depending on design preference.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/src/theme.tsx</path>
+        <kind>configuration</kind>
+        <symbol>system</symbol>
+        <lines>1-32</lines>
+        <reason>Chakra UI v3 theme system configuration using createSystem. Default light theme already configured with custom colors (ui.main: #009688). CustomProvider in main.tsx uses this theme system.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/package.json</path>
+        <kind>configuration</kind>
+        <symbol>dependencies</symbol>
+        <lines>13-27</lines>
+        <reason>All required dependencies already installed: @chakra-ui/react ^3.8.0, @tanstack/react-query ^5.28.14, @tanstack/react-query-devtools ^5.28.14, @tanstack/react-router 1.19.1, react ^18.2.0. No installation needed for this story.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/.env</path>
+        <kind>configuration</kind>
+        <symbol>VITE_API_URL</symbol>
+        <lines>1</lines>
+        <reason>Environment variable already configured: VITE_API_URL=http://localhost:8000. May need .env.development and .env.production variants per AC-3.14, or keep single .env for local dev and use deployment config for production.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/src/components/Common/Navbar.tsx</path>
+        <kind>component</kind>
+        <symbol>Navbar</symbol>
+        <lines>unknown</lines>
+        <reason>Existing Navbar component used in layout. No auth-related code detected. May need review/simplification for dashboard-only use case.</reason>
+      </artifact>
+
+      <artifact>
+        <path>frontend/src/components/Common/Sidebar.tsx</path>
+        <kind>component</kind>
+        <symbol>Sidebar</symbol>
+        <lines>unknown</lines>
+        <reason>Existing Sidebar component used in layout. No auth-related code detected. May need review/simplification for dashboard-only use case.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <ecosystem name="node">
+        <package name="react" version="^18.2.0" />
+        <package name="react-dom" version="^18.2.0" />
+        <package name="@chakra-ui/react" version="^3.8.0" />
+        <package name="@emotion/react" version="^11.14.0" />
+        <package name="@tanstack/react-query" version="^5.28.14" />
+        <package name="@tanstack/react-query-devtools" version="^5.28.14" />
+        <package name="@tanstack/react-router" version="1.19.1" />
+        <package name="typescript" version="^5.2.2" />
+        <package name="vite" version="^5.4.14" />
+        <package name="axios" version="1.7.4" />
+        <package name="react-hook-form" version="7.49.3" />
+        <package name="react-icons" version="^5.4.0" />
+      </ecosystem>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <title>Chakra UI v3 Provider</title>
+      <description>Use CustomProvider (not ChakraProvider) - this is the correct provider name for Chakra UI v3. The system theme is already configured in theme.tsx using createSystem.</description>
+    </constraint>
+
+    <constraint>
+      <title>File-Based Routing</title>
+      <description>TanStack Router uses file-based routing. Routes are defined in frontend/src/routes/ directory. Dashboard is at _layout/index.tsx (root route under layout). Use createFileRoute() for new routes.</description>
+    </constraint>
+
+    <constraint>
+      <title>TypeScript Compilation</title>
+      <description>All code must pass TypeScript compilation with zero errors. Run: cd frontend && tsc --noEmit before committing. Use proper type annotations for component props.</description>
+    </constraint>
+
+    <constraint>
+      <title>Code Quality</title>
+      <description>Run npm run lint before committing. Biome linter configured in biome.json. Linting must pass for CI/CD.</description>
+    </constraint>
+
+    <constraint>
+      <title>Docker Rebuild</title>
+      <description>After creating new files, rebuild Docker container: docker compose build frontend && docker compose up -d frontend. Volume mounts only sync existing files, not new ones.</description>
+    </constraint>
+
+    <constraint>
+      <title>Query Client Configuration</title>
+      <description>QueryClient must be configured with staleTime: 900000 (15 minutes) and retry: 3 to match backend Dagster 15-minute ingestion cadence. This enables efficient caching and automatic retry on API failures.</description>
+    </constraint>
+
+    <constraint>
+      <title>Environment Variables</title>
+      <description>VITE_API_URL is already configured in .env. For production deployment, this is set via deployment configuration to https://api.gamepulse.top. Vite requires VITE_ prefix for exposed env vars.</description>
+    </constraint>
+
+    <constraint>
+      <title>No Authentication</title>
+      <description>Per Epic 1 Story 1.2, authentication has been removed from backend and frontend. Dashboard is public read-only. No auth context, login pages, or protected routes needed.</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>QueryClient Configuration</name>
+      <kind>configuration-interface</kind>
+      <signature>
+new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 900000,  // 15 minutes
+      retry: 3,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
+      </signature>
+      <path>frontend/src/main.tsx</path>
+    </interface>
+
+    <interface>
+      <name>OpenAPI Client Configuration</name>
+      <kind>client-configuration</kind>
+      <signature>
+OpenAPI.BASE = import.meta.env.VITE_API_URL;
+// Already configured in main.tsx line 10
+      </signature>
+      <path>frontend/src/main.tsx</path>
+    </interface>
+
+    <interface>
+      <name>Chakra UI CustomProvider</name>
+      <kind>react-component</kind>
+      <signature>
+import { CustomProvider } from "./components/ui/provider";
+// Wraps app with Chakra UI v3 theme system
+&lt;CustomProvider&gt;
+  &lt;App /&gt;
+&lt;/CustomProvider&gt;
+      </signature>
+      <path>frontend/src/main.tsx</path>
+    </interface>
+
+    <interface>
+      <name>Dashboard Route</name>
+      <kind>tanstack-router-route</kind>
+      <signature>
+export const Route = createFileRoute("/_layout/")({
+  component: Dashboard,
+});
+// File-based routing: _layout/index.tsx creates route "/"
+      </signature>
+      <path>frontend/src/routes/_layout/index.tsx</path>
+    </interface>
+
+    <interface>
+      <name>Responsive Container Pattern</name>
+      <kind>chakra-ui-component</kind>
+      <signature>
+&lt;Container maxW="container.xl" py={8}&gt;
+  {/* Dashboard content */}
+&lt;/Container&gt;
+// Chakra UI responsive container with predefined breakpoint
+      </signature>
+      <path>docs/stories/3-3-initialize-react-dashboard.md</path>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+Frontend testing follows a layered approach: E2E tests with Playwright (configured in frontend/playwright.config.ts, testDir: ./tests, baseURL: http://localhost:5173), unit tests with React Testing Library (deferred to Epic 9), and mandatory TypeScript type checking (tsc --noEmit must pass with zero errors). Biome linter (npm run lint) enforces code quality. For Story 3.3, testing is primarily manual validation in browser (dashboard loads, responsive layout in Chrome DevTools device mode, no console errors, React Query DevTools visible). Automated E2E tests for dashboard rendering will be added in Epic 9 per PRD testing strategy. All code must pass linting and TypeScript compilation before commit to pass CI/CD gates.
+    </standards>
+    <locations>
+      <location>frontend/tests/ - Playwright E2E tests (future Epic 9)</location>
+      <location>frontend/src/**/__tests__/ - React component unit tests (future Epic 9)</location>
+      <location>TypeScript compilation check: cd frontend && tsc --noEmit</location>
+      <location>Linting: cd frontend && npm run lint</location>
+    </locations>
+    <ideas>
+      <idea ac="AC-3.11">
+        <title>Dashboard Structure Test</title>
+        <description>Manual: Start frontend dev server (npm run dev), navigate to http://localhost:5173, verify Dashboard page renders without errors. Check browser console for warnings. Confirm "GamePulse" header is visible and centered. Verify no authentication UI present.</description>
+      </idea>
+
+      <idea ac="AC-3.12">
+        <title>Chakra UI Theme Test</title>
+        <description>Manual: Inspect main.tsx in browser DevTools, verify CustomProvider wraps app. Check Dashboard uses Chakra UI Container component. Test responsive breakpoints in Chrome DevTools device mode (mobile 375px, tablet 768px, desktop 1280px) - layout should adapt correctly.</description>
+      </idea>
+
+      <idea ac="AC-3.13">
+        <title>React Query Configuration Test</title>
+        <description>Manual: Open React Query DevTools in browser (bottom-left icon). Inspect QueryClient configuration in browser console: queryClient.getDefaultOptions().queries should show staleTime: 900000, retry: 3. Verify DevTools displays empty cache (no queries yet since no API calls in this story).</description>
+      </idea>
+
+      <idea ac="AC-3.14">
+        <title>Environment Variable Test</title>
+        <description>Manual: Verify .env file exists with VITE_API_URL=http://localhost:8000. In browser console, check import.meta.env.VITE_API_URL returns correct value. Verify OpenAPI.BASE is set correctly (should match VITE_API_URL).</description>
+      </idea>
+
+      <idea ac="AC-3.15">
+        <title>Routing Test</title>
+        <description>Manual: Navigate to http://localhost:5173/ - should render Dashboard component. Check browser address bar stays at "/" (no redirects). Verify no authentication route guards blocking access. TanStack Router DevTools (if visible) should show single route: /_layout/.</description>
+      </idea>
+
+      <idea ac="AC-3.16">
+        <title>TypeScript Compilation Test</title>
+        <description>Automated: Run 'cd frontend && npm run build' - TypeScript compilation (tsc --noEmit) must complete with zero errors. Check build output for type errors. Run 'npm run lint' - Biome linter must pass. This validates all component props have proper type annotations and imports are correct.</description>
+      </idea>
+
+      <idea ac="AC-3.17">
+        <title>Empty State Display Test</title>
+        <description>Manual: Load dashboard at http://localhost:5173, verify "GamePulse" header displays correctly. Check placeholder text ("Loading games..." or similar) is visible with proper spacing. Verify layout is not broken (no unstyled elements, proper margins/padding). Browser console should show no errors (0 errors, 0 warnings).</description>
+      </idea>
+
+      <idea ac="All">
+        <title>Docker Rebuild Verification</title>
+        <description>Integration: After code changes, run 'docker compose build frontend && docker compose up -d frontend'. Wait for container to start. Access http://localhost:5173 via Docker-exposed port. Verify dashboard loads correctly in Docker environment (same as local npm run dev).</description>
+      </idea>
+    </ideas>
+  </tests>
+</story-context>
