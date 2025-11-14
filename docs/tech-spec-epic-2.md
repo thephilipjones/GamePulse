@@ -75,9 +75,9 @@ Epic 2 implements the **Data Ingestion Layer (Batch Processing)** as defined in 
 | **NCAA API Client** | Fetch game schedules and scores from NCAA API | `backend/app/services/ncaa_client.py` | Game date, division filter | List[GameData] (raw API response) |
 | **Dagster Definitions** | Define software-defined assets and schedules | `backend/app/dagster_definitions.py` | Asset dependencies, sensor triggers | Dagster repository with assets |
 | **NCAA Games Asset** | Dagster asset for ingesting NCAA game data | `backend/app/assets/ncaa_games.py` | None (sensor-triggered) | Materialized game data in PostgreSQL |
-| **Game Model** | SQLModel schema for games table | `backend/app/models/game.py` | API data transformation | ORM object for database persistence |
+| **Game Fact Model** | SQLModel schema for fact_game table (dimensional model) | `backend/app/models/fact_game.py` | API data transformation | ORM object for database persistence |
 | **Dimensional Data Seed** | JSON files for teams and conferences | `backend/app/data/teams.json`, `conferences.json` | Manual curation | Database seed data via Alembic migration |
-| **Rivalry Detection Service** | Compute rivalry_factor from conference matching | `backend/app/services/rivalry_detector.py` | home_team, away_team conference IDs | rivalry_factor (float 1.0-1.5) |
+| **Rivalry Detection Service** | Compute rivalry_factor from conference matching | `backend/app/services/rivalry_detector.py` | home_team, away_team conference IDs | rivalry_factor (Decimal 1.00-1.50) |
 | **Database Resource** | Dagster resource for PostgreSQL connection | `backend/app/resources/database.py` | Connection config | SQLModel async session factory |
 
 **Module Interaction Flow:**
@@ -257,28 +257,66 @@ async def ncaa_games(context: AssetExecutionContext) -> dict:
         await client.close()
 
 
-async def transform_game_data(game_data: dict, session) -> Game:
-    """Transform NCAA API response to Game SQLModel"""
+async def transform_game_data(game_data: dict, session: AsyncSession) -> dict:
+    """
+    Transform NCAA API response to FactGame dimensional model.
+
+    Dimensional model lookups:
+    1. Resolve team surrogate keys via dim_team natural keys
+    2. Derive game_date_key from timestamp (YYYYMMDD integer)
+    3. Calculate rivalry_factor based on conference matching
+    """
+    from sqlmodel import select
+    from app.models.dim_team import DimTeam
+
+    # Build team_id natural keys
     home_team_id = f"ncaam_{game_data['home']['id']}"
     away_team_id = f"ncaam_{game_data['away']['id']}"
 
+    # Lookup surrogate keys (team_key) via dim_team natural keys
+    home_team_result = await session.execute(
+        select(DimTeam).where(
+            DimTeam.team_id == home_team_id,
+            DimTeam.is_current == True,  # SCD Type 2 filter
+        )
+    )
+    home_team = home_team_result.scalar_one_or_none()
+    if not home_team:
+        raise ValueError(f"Home team not found in dim_team: {home_team_id}")
+
+    away_team_result = await session.execute(
+        select(DimTeam).where(
+            DimTeam.team_id == away_team_id,
+            DimTeam.is_current == True,
+        )
+    )
+    away_team = away_team_result.scalar_one_or_none()
+    if not away_team:
+        raise ValueError(f"Away team not found in dim_team: {away_team_id}")
+
+    # Derive game_date_key from timestamp (YYYYMMDD integer)
+    game_date = datetime.fromisoformat(game_data['date'])
+    game_date_key = int(game_date.strftime("%Y%m%d"))
+
+    # Calculate rivalry factor based on conference matching
     rivalry_factor = await calculate_rivalry_factor(
         home_team_id, away_team_id, session
     )
 
-    return Game(
-        game_id=f"ncaam_{game_data['id']}",
-        sport="ncaam",
-        game_date=datetime.fromisoformat(game_data['date']),
-        home_team_id=home_team_id,
-        away_team_id=away_team_id,
-        home_score=int(game_data['home'].get('score', 0)),
-        away_score=int(game_data['away'].get('score', 0)),
-        game_status=map_status(game_data['status']['state']),
-        game_clock=game_data['status'].get('clock'),
-        venue=game_data.get('venue', {}).get('fullName'),
-        rivalry_factor=rivalry_factor,
-    )
+    return {
+        "game_id": f"ncaam_{game_data['id']}",
+        "sport": "ncaam",
+        "game_date": game_date,
+        "game_date_key": game_date_key,
+        "home_team_key": home_team.team_key,  # Surrogate key FK
+        "away_team_key": away_team.team_key,  # Surrogate key FK
+        "home_score": int(game_data['home'].get('score', 0)),
+        "away_score": int(game_data['away'].get('score', 0)),
+        "game_status": map_status(game_data['status']['state']),
+        "game_clock": game_data['status'].get('clock'),
+        "venue": game_data.get('venue', {}).get('fullName'),
+        "rivalry_factor": rivalry_factor,
+    }
 
 
 def map_status(api_status: str) -> str:
@@ -290,92 +328,130 @@ def map_status(api_status: str) -> str:
 **3. Rivalry Detection Service (`backend/app/services/rivalry_detector.py`):**
 
 ```python
-from app.models.team import Team
+from app.models.dim_team import DimTeam
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from decimal import Decimal
 
 async def calculate_rivalry_factor(
     home_team_id: str,
     away_team_id: str,
     session: AsyncSession
-) -> float:
+) -> Decimal:
     """
     Calculate rivalry factor based on conference matching.
 
+    Uses dim_team lookups with SCD Type 2 filtering.
+
     Returns:
-        1.0 = normal game (different conferences)
-        1.2 = same conference (conference rivalry)
-        1.5 = explicit rivalry (from team_rivalries table - future)
+        Decimal("1.00") = normal game (different conferences)
+        Decimal("1.20") = same conference (conference rivalry)
+        Decimal("1.50") = explicit rivalry (from team_rivalries table - future)
     """
-    home_team = await session.get(Team, home_team_id)
-    away_team = await session.get(Team, away_team_id)
+    # Lookup teams via natural keys with SCD Type 2 filter
+    home_team_result = await session.execute(
+        select(DimTeam).where(
+            DimTeam.team_id == home_team_id,
+            DimTeam.is_current == True,  # noqa: E712
+        )
+    )
+    home_team = home_team_result.scalar_one_or_none()
+
+    away_team_result = await session.execute(
+        select(DimTeam).where(
+            DimTeam.team_id == away_team_id,
+            DimTeam.is_current == True,  # noqa: E712
+        )
+    )
+    away_team = away_team_result.scalar_one_or_none()
 
     if not home_team or not away_team:
-        return 1.0
+        return Decimal("1.00")
 
     # Same conference = conference rivalry
     if home_team.team_group_id == away_team.team_group_id:
-        return 1.2
+        return Decimal("1.20")
 
     # TODO: Epic 5+ - Check team_rivalries table for explicit rivalries
 
-    return 1.0
+    return Decimal("1.00")
 ```
 
 ### Data Models and Contracts
 
-**Game SQLModel Schema (`backend/app/models/game.py`):**
+**Game Fact Table SQLModel Schema (`backend/app/models/fact_game.py`):**
 
 ```python
 from sqlmodel import Field, SQLModel
 from datetime import datetime
-from typing import Optional
+from decimal import Decimal
+from sqlalchemy import BigInteger, Column, DECIMAL, DateTime
 
-class Game(SQLModel, table=True):
+class FactGame(SQLModel, table=True):
     """
-    SQLModel for games table (inherits from Epic 1 schema).
+    Game fact table with surrogate keys and dimensional foreign keys.
+    Implements Kimball-style dimensional modeling.
     Tracks NCAA Men's Basketball games with live score updates.
     """
-    __tablename__ = "games"
+    __tablename__ = "fact_game"
 
-    # Primary key
-    game_id: str = Field(primary_key=True)  # Format: "ncaam_{api_id}"
+    # Surrogate key (PK) - stable identifier
+    game_key: int = Field(
+        sa_column=Column(BigInteger, primary_key=True, autoincrement=True)
+    )
 
-    # Multi-sport support
-    sport: str = Field(index=True, default="ncaam")
+    # Natural key (unique, indexed) - format: "{sport}_{api_id}"
+    game_id: str = Field(unique=True, index=True, max_length=50)
 
-    # Game metadata
-    game_date: datetime = Field(index=True)
-    game_start_time: Optional[datetime] = None
-    game_end_time: Optional[datetime] = None
-    venue: Optional[str] = None
+    # Dimension foreign keys (using surrogate keys)
+    game_date_key: int | None = Field(
+        default=None, foreign_key="dim_date.date_key"
+    )
+    home_team_key: int = Field(foreign_key="dim_team.team_key")
+    away_team_key: int = Field(foreign_key="dim_team.team_key")
 
-    # Teams (foreign keys to teams table from Epic 1)
-    home_team_id: str = Field(foreign_key="teams.team_id")
-    away_team_id: str = Field(foreign_key="teams.team_id")
+    # Multi-sport support (degenerate dimension)
+    sport: str = Field(index=True, max_length=20, default="ncaam")
 
-    # Live scores (updated every 15 min)
+    # Game metadata (degenerate dimensions)
+    game_status: str | None = Field(
+        default=None, index=True, max_length=20
+    )  # "scheduled", "in_progress", "final"
+    game_type: str = Field(
+        default="regular_season", index=True, max_length=50
+    )  # "regular_season", "postseason", "tournament"
+    venue: str | None = Field(default=None, max_length=200)
+    broadcast_network: str | None = Field(default=None, max_length=50)
+    game_clock: str | None = Field(default=None, max_length=50)
+
+    # Measures (numeric facts)
     home_score: int = Field(default=0)
     away_score: int = Field(default=0)
+    attendance: int | None = None
+    rivalry_factor: Decimal | None = Field(
+        default=None, sa_column=Column(DECIMAL(3, 2))
+    )  # 1.00 = normal, 1.50 = rivalry
 
-    # Game status tracking
-    game_status: Optional[str] = Field(index=True)  # "scheduled", "live", "halftime", "final"
-    game_clock: Optional[str] = None  # "2:34 2nd Half"
+    # Timestamps (context, not measures) - timezone-aware
+    game_date: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), index=True, nullable=False)
+    )
+    game_start_time: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
+    game_end_time: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True))
+    )
 
-    # Game type classification
-    game_type: str = Field(default="regular_season", index=True)
-    # Enum values: "regular_season", "conference_tournament", "ncaa_tournament"
-
-    # Rivalry detection (calculated from team conferences)
-    rivalry_factor: Optional[float] = None  # 1.0 = normal, 1.2 = conference, 1.5 = historic
-
-    # Optional enrichment fields
-    broadcast_network: Optional[str] = None
-    attendance: Optional[int] = None
-
-    # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    # Audit timestamps - timezone-aware
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False)
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False)
+    )
 ```
 
 **NCAA API Response Contract (henrygd/ncaa-api):**
@@ -442,11 +518,13 @@ class NCAAClient:
 **2. Rivalry Detection Interface (`rivalry_detector.py`):**
 
 ```python
+from decimal import Decimal
+
 async def calculate_rivalry_factor(
     home_team_id: str,
     away_team_id: str,
     session: AsyncSession
-) -> float
+) -> Decimal
 ```
 
 **3. Dagster Asset Interface (`assets/ncaa_games.py`):**
@@ -459,16 +537,26 @@ async def ncaa_games(context: AssetExecutionContext) -> dict
 
 **Database Write Interface (SQLModel ORM):**
 
-Epic 2 writes to the `games` table established in Epic 1:
+Epic 2 writes to the `fact_game` table using dimensional model pattern:
 
 ```python
-# Upsert pattern (insert or update)
+from sqlmodel import select
+from app.models.fact_game import FactGame
+
+# Upsert pattern using natural key (game_id)
 async with get_session() as session:
-    existing_game = await session.get(Game, game_id)
+    # Lookup by natural key (game_id) instead of surrogate key (game_key)
+    result = await session.execute(
+        select(FactGame).where(FactGame.game_id == game_id)
+    )
+    existing_game = result.scalar_one_or_none()
+
     if existing_game:
+        # Update existing game (surrogate key preserved)
         existing_game.home_score = new_score
-        existing_game.updated_at = datetime.utcnow()
+        existing_game.updated_at = datetime.now(timezone.utc)
     else:
+        # Insert new game (game_key auto-generated)
         session.add(new_game)
     await session.commit()
 ```
@@ -988,16 +1076,19 @@ dagster-daemon:
 - [ ] Unit test: Mock NCAA API response, verify parsing logic
 - [ ] Integration test: Fetch live NCAA API (if games scheduled), verify response structure
 
-**AC-3: Game Model and Migration (Story 2.3)**
-- [ ] File created: `backend/app/models/game.py`
-- [ ] `Game` SQLModel class matches Epic 1 schema specification
-- [ ] Foreign keys defined: `home_team_id`, `away_team_id` reference `teams.team_id`
+**AC-3: Game Fact Model and Migration (Story 2.3a - Dimensional Refactor)**
+- [ ] File created: `backend/app/models/fact_game.py`
+- [ ] `FactGame` SQLModel class implements dimensional model with surrogate keys
+- [ ] Surrogate key (PK): `game_key` (BIGSERIAL auto-increment)
+- [ ] Natural key (unique): `game_id` (indexed for upserts)
+- [ ] Foreign keys defined using surrogate keys: `home_team_key`, `away_team_key` reference `dim_team.team_key`
+- [ ] Date foreign key: `game_date_key` references `dim_date.date_key`
 - [ ] Indexes created: `sport`, `game_date`, `game_status`, `game_type`
-- [ ] Alembic migration generated: `alembic revision --autogenerate -m "Add game model"`
+- [ ] Alembic migration generated: `alembic revision --autogenerate -m "Add fact_game dimensional model"`
 - [ ] Migration applied: `alembic upgrade head` succeeds
-- [ ] Database table exists: `\d games` shows correct schema
-- [ ] Can insert test game: `INSERT INTO games (game_id, sport, ...) VALUES (...)`
-- [ ] Foreign key constraint enforced: Invalid `home_team_id` raises error
+- [ ] Database table exists: `\d fact_game` shows correct schema with surrogate keys
+- [ ] Can insert test game: `INSERT INTO fact_game (game_id, sport, home_team_key, away_team_key, ...) VALUES (...)`
+- [ ] Foreign key constraint enforced: Invalid `home_team_key` raises error
 
 **AC-4: Dagster Orchestration Setup (Story 2.4)**
 - [ ] File created: `backend/app/dagster_definitions.py`
