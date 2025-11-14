@@ -1,0 +1,268 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>2</epicId>
+    <storyId>5</storyId>
+    <title>Validate Retry Logic and Error Handling</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-13</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/2-5-add-retry-logic.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>data pipeline developer</asA>
+    <iWant>to verify that error handling works correctly across all failure scenarios</iWant>
+    <soThat>the NCAA game ingestion pipeline is resilient to API outages and transient failures</soThat>
+    <tasks>
+      - Verify RetryPolicy configuration in ncaa_games asset (Story 2.4)
+      - Verify tenacity retry decorator in NCAAClient (Story 2.2)
+      - Create test_ncaa_client_retry.py with 4+ test cases
+      - Create test_ncaa_games_retry.py with 5+ test cases
+      - Test API timeout scenario (15s delay exceeds 10s timeout)
+      - Test API 5xx error scenario (HTTP 500 Internal Server Error)
+      - Test API 4xx error scenario (HTTP 404 - no retry)
+      - Test network failure scenario (Docker network disconnect)
+      - Test partial failure handling (invalid data in batch)
+      - Verify Dagster UI retry timeline display
+      - Verify cached data retention on failure
+      - Verify structured logging with exc_info=True
+      - Document retry strategy in tech-spec
+      - Update story status to DONE
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC1">
+      <description>Verify Dagster RetryPolicy Configuration</description>
+      <details>Inspect ncaa_games asset decorator and confirm RetryPolicy(max_retries=3, delay=2, backoff=2.0) configured with exponential backoff: 2s, 4s, 8s</details>
+    </criterion>
+    <criterion id="AC2">
+      <description>Verify NCAA Client Tenacity Retry Decorator</description>
+      <details>Inspect NCAAClient.fetch_games() method and confirm @retry(stop=stop_after_attempt(3)) decorator with exponential backoff wait_exponential(multiplier=1, min=2, max=10)</details>
+    </criterion>
+    <criterion id="AC3">
+      <description>Test API Timeout Scenario</description>
+      <details>Mock NCAA API with 15-second response delay (exceeds 10s timeout), verify Dagster retries 3 times, run marked "Failed" in UI, daemon continues running, logs show all retry attempts</details>
+    </criterion>
+    <criterion id="AC4">
+      <description>Test API 5xx Error Scenario</description>
+      <details>Mock NCAA API returning HTTP 500 (Internal Server Error), verify tenacity retries 3 times then Dagster RetryPolicy triggers, exponential backoff applied (2s, 4s, 8s), final failure logged with exc_info=True</details>
+    </criterion>
+    <criterion id="AC5">
+      <description>Test HTTP 4xx Error Scenario</description>
+      <details>Mock NCAA API returning HTTP 404 or 401, verify no retries triggered (client errors not retryable), asset fails immediately, error logged with descriptive message</details>
+    </criterion>
+    <criterion id="AC6">
+      <description>Test Network Failure Scenario</description>
+      <details>Disconnect Docker network during materialization, verify retries attempted, run marked "Failed", Dagster daemon continues running (docker compose ps), next scheduled run executes automatically</details>
+    </criterion>
+    <criterion id="AC7">
+      <description>Test Partial Failure Handling</description>
+      <details>NCAA API returns 10 games, 1 game has invalid data (missing team_id), verify 9 valid games saved to database, 1 invalid game skipped with logged warning, asset completes successfully, metadata shows games_processed=9, games_skipped=1</details>
+    </criterion>
+    <criterion id="AC8">
+      <description>Verify Dagster UI Retry Timeline</description>
+      <details>Navigate to Dagster UI at http://localhost:3000, Runs tab shows failed run, timeline displays 4 attempts (initial + 3 retries), each attempt has log output, final attempt shows failure reason, asset status shows last successful materialization timestamp</details>
+    </criterion>
+    <criterion id="AC9">
+      <description>Verify Cached Data Retention</description>
+      <details>Last successful poll was 30 minutes ago, current poll failing due to API outage, query games table and verify last successful poll's data still present, updated_at timestamps show data is 30 minutes old, no data lost or corrupted</details>
+    </criterion>
+    <criterion id="AC10">
+      <description>Verify Structured Logging</description>
+      <details>Various failure scenarios (timeout, 5xx, network), errors logged with structured context: event="ncaa_games_asset_failed", error=exception message, exc_info=True (full stack trace), retry_attempt=1-3, next_retry_delay_seconds=2|4|8</details>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>NFR-4.2 Graceful Degradation</section>
+        <snippet>System must handle external API failures gracefully with retry logic and exponential backoff. Failed operations should not crash daemon or prevent future retries.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>NFR-1.4 Data Freshness</section>
+        <snippet>Game data should be updated within 20 minutes of real-time events. 15-minute polling interval with 5-minute processing buffer meets this requirement.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>ADR-007 Dagster for Data Orchestration</section>
+        <snippet>Dagster provides declarative retry policies, asset-oriented paradigm, and full observability UI for data pipeline orchestration.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>AC-5: Retry Logic and Error Handling</section>
+        <snippet>ncaa_games asset decorated with RetryPolicy(max_retries=3, delay=2, backoff=2.0). HTTP 5xx errors trigger retry, HTTP 4xx errors do not retry. Dagster UI shows retry attempts in run timeline.</snippet>
+      </doc>
+      <doc>
+        <path>docs/tech-spec-epic-2.md</path>
+        <title>Epic 2 Technical Specification</title>
+        <section>Workflow 3: Error Handling and Retry Logic</section>
+        <snippet>Two-layer retry strategy: (1) tenacity at client layer for HTTP-level transient failures, (2) Dagster RetryPolicy at asset layer for any materialization failure. Combined provides defense in depth.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics.md</path>
+        <title>Epics Document</title>
+        <section>Epic 2 - Story 2.5</section>
+        <snippet>Add Retry Logic and Error Handling - Validate retry implementations from Stories 2.2 (NCAA client) and 2.4 (Dagster asset) through comprehensive testing.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/ncaa_client.py</path>
+        <kind>service</kind>
+        <symbol>NCAAClient.fetch_todays_games()</symbol>
+        <lines>76-131</lines>
+        <reason>Story 2.2 retry logic - tenacity decorator with exponential backoff (3 attempts, 2s-10s wait). This is Layer 1 retry (HTTP-level).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/ncaa_games.py</path>
+        <kind>dagster_asset</kind>
+        <symbol>ncaa_games</symbol>
+        <lines>26-142</lines>
+        <reason>Story 2.4 retry logic - Dagster RetryPolicy(max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL). This is Layer 2 retry (asset-level).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/services/test_ncaa_client.py</path>
+        <kind>test</kind>
+        <symbol>Existing NCAA client tests</symbol>
+        <lines></lines>
+        <reason>Existing test file for NCAA client. Story 2.5 will add retry-specific tests to this file or create test_ncaa_client_retry.py.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/assets/test_ncaa_games.py</path>
+        <kind>test</kind>
+        <symbol>Existing Dagster asset tests</symbol>
+        <lines></lines>
+        <reason>Existing test file for ncaa_games asset. Story 2.5 will add retry-specific tests to this file or create test_ncaa_games_retry.py.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/dagster_definitions.py</path>
+        <kind>dagster_config</kind>
+        <symbol>defs</symbol>
+        <lines></lines>
+        <reason>Dagster Definitions object with assets, schedules, and resources. Referenced for understanding daemon lifecycle and asset scheduling.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="pytest" version="8.3.0+" />
+        <package name="pytest-asyncio" version="0.24.0+" />
+        <package name="pytest-xdist" version="3.6.0+" />
+        <package name="tenacity" version="9.0.0+" />
+        <package name="dagster" version="1.12.1+" />
+        <package name="dagster-webserver" version="1.12.1+" />
+        <package name="dagster-postgres" version="0.28.1+" />
+        <package name="httpx" version="0.27.0+" />
+        <package name="structlog" version="24.0.0+" />
+        <package name="mypy" version="1.11.0+" />
+        <package name="coverage" version="7.6.0+" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Story focuses on TESTING and VALIDATION, not implementation (retry logic already exists from Stories 2.2 and 2.4)
+    - Must verify both tenacity retry decorator (client layer) and Dagster RetryPolicy (asset layer) are functioning correctly
+    - Dagster daemon must never crash, even during prolonged API outages - verify with manual network failure test
+    - HTTP 4xx errors (client errors) should NOT trigger retries - only HTTP 5xx and timeouts are retryable
+    - Partial failure handling required: save valid games even if some games have invalid data
+    - All errors must be logged with structured context (exc_info=True for stack traces)
+    - Dagster UI must show retry attempts in run timeline (manual verification required)
+    - Database retains cached data from last successful poll - no data loss during failures
+    - Test coverage target: >80% for retry logic paths
+    - Create separate test files for retry tests: test_ncaa_client_retry.py and test_ncaa_games_retry.py
+    - Manual testing required for network failure scenario (Docker network disconnect)
+    - Update tech-spec-epic-2.md with retry strategy documentation
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>NCAAClient.fetch_todays_games()</name>
+      <kind>async_method</kind>
+      <signature>async def fetch_todays_games(self) -> list[dict[str, Any]]:</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>Fetch today's games from NCAA API with tenacity retry decorator. Retries: 3 attempts with exponential backoff (2s, 4s, 8s max). Raises httpx.HTTPStatusError on 4xx/5xx after retries exhausted.</description>
+    </interface>
+    <interface>
+      <name>ncaa_games asset</name>
+      <kind>dagster_asset</kind>
+      <signature>async def ncaa_games(context: AssetExecutionContext, database: DatabaseResource) -> dict[str, int]:</signature>
+      <path>backend/app/assets/ncaa_games.py</path>
+      <description>Dagster asset for NCAA game data ingestion. Decorated with RetryPolicy(max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL). Returns metadata dict with games_processed, games_inserted, games_updated counts.</description>
+    </interface>
+    <interface>
+      <name>Dagster RetryPolicy</name>
+      <kind>dagster_decorator</kind>
+      <signature>RetryPolicy(max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL)</signature>
+      <path>backend/app/assets/ncaa_games.py</path>
+      <description>Declarative retry policy for Dagster assets. Exponential backoff: 2s, 4s, 8s. Asset-level retries for any failure in materialization (API, database, transform errors).</description>
+    </interface>
+    <interface>
+      <name>tenacity @retry decorator</name>
+      <kind>python_decorator</kind>
+      <signature>@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), reraise=True)</signature>
+      <path>backend/app/services/ncaa_client.py</path>
+      <description>HTTP-level retry decorator for NCAA client methods. Retries transient network issues (timeouts, connection resets, 5xx errors). Re-raises exception after retries exhausted.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing framework: pytest with pytest-asyncio for async support. Tests organized by category using markers: @pytest.mark.unit (no database) and @pytest.mark.integration (requires database). Test naming convention: test_*.py files with test_* functions. Mocking: pytest-mock (mocker fixture) for external dependencies. Coverage reporting: pytest-cov with >80% target for retry logic paths. Async tests use @pytest.mark.asyncio decorator with asyncio_mode="auto" in pytest.ini.
+    </standards>
+    <locations>
+      - backend/app/tests/services/ (NCAA client tests)
+      - backend/app/tests/assets/ (Dagster asset tests)
+      - backend/app/tests/conftest.py (shared fixtures)
+    </locations>
+    <ideas>
+      <idea criterion="AC1">
+        Test: test_verify_dagster_retry_policy_config()
+        Assert ncaa_games asset has RetryPolicy with max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL
+      </idea>
+      <idea criterion="AC2">
+        Test: test_verify_tenacity_retry_decorator()
+        Inspect NCAAClient.fetch_todays_games source code and assert @retry decorator present with stop_after_attempt(3) and wait_exponential
+      </idea>
+      <idea criterion="AC3">
+        Test: test_api_timeout_triggers_retry()
+        Mock httpx with 15s delay (exceeds 10s timeout), verify Dagster retries 3 times, logs show retry attempts
+      </idea>
+      <idea criterion="AC4">
+        Test: test_api_500_error_retry_backoff()
+        Mock NCAA API returning HTTP 500, measure elapsed time to verify exponential backoff (~14s total: 2+4+8), verify exc_info in logs
+      </idea>
+      <idea criterion="AC5">
+        Test: test_api_404_no_retry()
+        Mock NCAA API returning HTTP 404, verify only 1 attempt (no retries), error logged immediately
+      </idea>
+      <idea criterion="AC6">
+        Manual Test: Network failure scenario
+        Disconnect Docker network during materialization, verify daemon stays running (docker compose ps), reconnect and verify next run succeeds
+      </idea>
+      <idea criterion="AC7">
+        Test: test_partial_failure_saves_valid_games()
+        Mock NCAA API with 10 games (1 invalid - missing team_id), verify 9 games saved, result metadata shows games_processed=9, games_skipped=1
+      </idea>
+      <idea criterion="AC8">
+        Manual Test: Dagster UI retry timeline
+        Trigger failure (mock 500 error), open http://localhost:3000, verify Runs tab shows timeline with 4 attempts (initial + 3 retries)
+      </idea>
+      <idea criterion="AC9">
+        Test: test_failed_poll_retains_cached_data()
+        Successful first poll inserts game with home_score=50, second poll fails (mocked exception), verify original game.home_score still 50 (not corrupted)
+      </idea>
+      <idea criterion="AC10">
+        Test: test_structured_error_logging()
+        Mock API failure, verify error logs contain: event="ncaa_games_asset_failed", error field, exc_info is not None (stack trace present)
+      </idea>
+    </ideas>
+  </tests>
+</story-context>

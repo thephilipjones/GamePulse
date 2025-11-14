@@ -1,7 +1,7 @@
 # Story 2.4: Implement Dagster Data Orchestration and NCAA Game Asset
 
 **Epic:** Epic 2 - Game Data Ingestion (Batch)
-**Status:** review
+**Status:** done
 **Assignee:** Claude Code (Amelia)
 **Sprint:** Week 1
 
@@ -563,3 +563,7 @@ dagster asset materialize -m app.dagster_definitions ncaa_games
 
 ### Context Reference
 - Story Context XML: `docs/stories/2-4-implement-polling-worker.context.xml` (generated 2025-11-12)
+
+### Completion Notes
+**Completed:** November 13, 2025
+**Definition of Done:** All acceptance criteria met, code reviewed, tests passing
