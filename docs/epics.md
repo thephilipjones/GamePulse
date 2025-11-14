@@ -108,6 +108,214 @@ GamePulse is a real-time sports analytics platform demonstrating modern data eng
 3. [Story 3.3: Initialize React Dashboard with Chakra UI](./stories/story-3.3-initialize-react-dashboard.md)
 4. [Story 3.4: Build Simple Game List Component](./stories/story-3.4-build-game-list.md)
 5. [Story 3.5: Add Auto-Refresh Polling with React Query](./stories/story-3.5-add-auto-refresh.md)
+6. **Story 3.6: Increase Refresh Cadence to 1 Minute** (Real-Time Feel)
+
+---
+
+#### Story 3.6: Increase Refresh Cadence to 1 Minute (Real-Time Feel)
+
+**Goal:** Transform dashboard from batch-oriented (15-minute updates) to real-time feel (1-minute updates) to match user expectations for live sports.
+
+**User Story:**
+> As a user watching a live game, I want scores and game status to update within 1-2 minutes, so the dashboard feels like a real sports app instead of a delayed summary.
+
+**Business Value:**
+- ✅ **Interview Impact:** Demonstrates understanding of real-time data requirements in sports/gaming
+- ✅ **User Experience:** 15-minute delays feel broken for live games; 1-minute feels responsive
+- ✅ **Portfolio Differentiation:** Shows ability to balance real-time requirements with API constraints
+- ✅ **Low Risk, High Impact:** Simple configuration change with dramatic UX improvement
+
+**Technical Approach:**
+
+Story 3.5 implemented the auto-refresh mechanism with 15-minute polling as a conservative starting point. This story tunes the system to 1-minute cadence by updating both backend data ingestion (Dagster) and frontend polling (React Query).
+
+**Backend Changes:**
+```python
+# backend/app/dagster_definitions.py
+ncaa_games_schedule = ScheduleDefinition(
+    name="ncaa_games_schedule",
+    cron_schedule="* * * * *",  # Every 1 minute (was "*/15 * * * *")
+    # ... rest unchanged
+)
+```
+
+**Frontend Changes:**
+```typescript
+// frontend/src/hooks/useGames.ts
+export function useGames() {
+  return useQuery<GameListResponse>({
+    queryKey: ["games", "today"],
+    queryFn: async () => { /* ... */ },
+    refetchInterval: 60000,  // 1 minute (was 900000)
+    staleTime: 60000,        // 1 minute (was 900000)
+    refetchIntervalInBackground: true,
+  });
+}
+```
+
+**UI Enhancement:**
+```typescript
+// frontend/src/routes/_layout/index.tsx
+// Update "Last updated" display to show seconds for better feedback
+<Text fontSize="sm" color="gray.500">
+  Last updated {formatDistanceToNow(new Date(data.generated_at), { addSuffix: true })}
+</Text>
+// Outputs: "Last updated 45 seconds ago" (instead of "less than a minute ago")
+```
+
+**API Rate Limit Analysis:**
+
+**Current Usage (15-minute polling):**
+- Frequency: 1 request every 15 minutes = 96 requests/day
+- Sustained rate: 0.0011 req/sec
+- Daily data transfer: ~1.4 MB (96 × 15 KB response size)
+
+**Proposed Usage (1-minute polling):**
+- Frequency: 1 request every 1 minute = 1,440 requests/day
+- Sustained rate: 0.0167 req/sec
+- Daily data transfer: ~21.6 MB (1,440 × 15 KB response size)
+- **Increase:** 15x more frequent (still **well below** 5 req/sec burst limit)
+
+**NCAA API Limits (henrygd/ncaa-api wrapper):**
+- Documented burst limit: 5 req/sec (enforced with 200ms client-side delay)
+- Undocumented QPM/QPD limits: None found in documentation
+- Self-hosted wrapper: No centralized rate limiting beyond per-client throttling
+- **Risk Assessment:** Low - 1-minute polling is 300x slower than burst limit
+
+**Performance Impact:**
+
+**Backend (Dagster):**
+- Current run duration: ~2-3 seconds per execution
+- Execution frequency: 60x more frequent (every 1 minute vs every 15 minutes)
+- CPU impact: Minimal - Dagster in-process executor with async I/O
+- Database impact: ~60 upserts/hour (negligible for PostgreSQL)
+
+**Frontend:**
+- Network overhead: 1 request/minute = battery-friendly on mobile
+- React Query cache: ~15KB per query (no memory impact)
+- Tab visibility API: Polling continues when hidden (user preference for freshness)
+
+**Monitoring and Observability:**
+
+**Add CloudWatch Metrics (Optional - Epic 9):**
+```python
+# Future enhancement: Track API response codes
+context.log.info(f"NCAA API request completed: status={response.status_code}, games={len(raw_games)}")
+```
+
+**Manual Monitoring (Immediate):**
+- Watch Dagster logs for 429 (rate limit) errors
+- Check `/api/v1/health` endpoint response times
+- Monitor EC2 instance CPU usage (should remain <10% resting)
+
+**Rollback Plan:**
+
+If rate limiting or performance issues occur:
+1. Revert Dagster cron to `"*/5 * * * *"` (5-minute compromise)
+2. Revert frontend to `refetchInterval: 300000` (5 minutes)
+3. No schema changes required - pure configuration rollback
+
+**Gradual Rollout Strategy (Recommended):**
+
+Instead of jumping directly from 15-minute to 1-minute, consider intermediate testing:
+
+1. **Step 1:** Deploy 5-minute polling (both backend + frontend)
+   - Monitor for 24-48 hours
+   - Check Dagster logs for errors
+   - Verify no API throttling
+
+2. **Step 2:** Deploy 1-minute polling if Step 1 successful
+   - Monitor for 24-48 hours
+   - If issues arise, rollback to 5-minute
+
+**Why Gradual:**
+- De-risks undocumented API rate limits
+- Allows performance validation on EC2 t2.micro
+- Provides fallback option (5-minute) if 1-minute proves too aggressive
+
+**Alternative: Feature Flag Approach**
+
+For production systems, consider environment-based configuration:
+
+```python
+# backend/app/core/config.py
+class Settings(BaseSettings):
+    DAGSTER_SCHEDULE_INTERVAL: str = "* * * * *"  # Default: 1 minute
+    # Override via .env: DAGSTER_SCHEDULE_INTERVAL="*/5 * * * *"
+```
+
+**Dependencies:**
+- ✅ Story 3.5 completed (auto-refresh mechanism in place)
+- ✅ Dagster schedule running and healthy
+- ✅ NCAA API client with rate limiting (Story 2.2)
+
+**Acceptance Criteria Hints:**
+
+1. **AC-3.34: Backend Polling Cadence**
+   - Dagster schedule updates every 1 minute
+   - Dagster logs show successful runs every minute
+   - No 429 (rate limit) errors in logs after 24 hours
+
+2. **AC-3.35: Frontend Polling Alignment**
+   - React Query refetch interval set to 60000ms
+   - Network tab shows API requests every 60 seconds
+   - "Last updated" timestamp never exceeds 2 minutes
+
+3. **AC-3.36: Timestamp Display Precision**
+   - "Last updated" shows seconds for recency: "45 seconds ago"
+   - Updates every 30 seconds via useEffect timer (already implemented in 3.5)
+
+4. **AC-3.37: Monitoring and Validation**
+   - Manual verification: Wait 5 minutes, observe 5 API requests in Network tab
+   - Dagster UI shows runs every minute (not skipped or failed)
+   - EC2 CPU usage remains <15% (CloudWatch or `top` command)
+
+5. **AC-3.38: Error Handling**
+   - Existing retry logic from Story 3.5 continues working
+   - If API fails, cached data shown with warning banner
+   - No regression in error handling behavior
+
+**Risk Assessment:**
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| NCAA API rate limiting | Low | Medium | Gradual rollout (5-min → 1-min), monitoring, rollback plan |
+| EC2 CPU overload (t2.micro) | Very Low | Medium | CPU metrics monitoring, swap already configured |
+| Increased network costs | Very Low | Very Low | 21.6 MB/day well within free tier (15 GB/month) |
+| Frontend battery drain | Low | Low | Tab visibility API already pauses polling when hidden |
+
+**Overall Risk:** **LOW** - Well-scoped configuration change with proven rollback path.
+
+**Success Metrics:**
+
+- ✅ Dashboard updates within 1-2 minutes of game events
+- ✅ No API rate limit errors after 7 days
+- ✅ EC2 CPU usage <15% sustained
+- ✅ User perception: "Feels like live sports" vs "Feels delayed"
+
+**Future Enhancements (Out of Scope):**
+
+This story maintains batch polling architecture (1-minute intervals). Future improvements:
+- **Epic 6:** WebSocket streaming for sub-second updates (betting odds)
+- **Epic 5:** Historical snapshots for tracking score changes between polls
+- **Epic 8:** Server-Sent Events (SSE) for push-based updates
+
+**References:**
+- NCAA API Client: `backend/app/services/ncaa_client.py` (5 req/sec limit, 200ms delay)
+- Dagster Schedule: `backend/app/dagster_definitions.py` (current 15-min schedule)
+- React Query Hook: `frontend/src/hooks/useGames.ts` (current 15-min polling)
+- Story 3.5 Implementation: Auto-refresh mechanism with stale-while-revalidate
+
+**File Changes Expected:**
+- `backend/app/dagster_definitions.py` - Update cron schedule string
+- `frontend/src/hooks/useGames.ts` - Update refetchInterval and staleTime
+- `frontend/src/routes/_layout/index.tsx` - Optionally enhance timestamp display
+
+**Testing Strategy:**
+- **Unit Tests:** No new tests required (configuration change only)
+- **Integration Tests:** Verify Dagster schedule triggers every minute
+- **Manual Testing:** Monitor dashboard for 5 minutes, count API requests (should be 5)
+- **Smoke Test:** Health endpoint response time <500ms under 1-minute polling load
 
 ---
 
@@ -225,14 +433,428 @@ final_score = (base_score * game_context_factor) + rivalry_bonus
 excitement_score = min(max(final_score, 0), 100)          # Clamp to 0-100
 ```
 
-**Stories:** _High-level implementation captured at epic level_
-1. Create fact_moment table schema (TimescaleDB hypertable)
-2. Reddit velocity calculation (posts/minute in 5-min window)
-3. Engagement scoring aggregation (upvotes + comments*0.5 + awards*2.0)
-4. Sentiment score integration (from Epic 4 VADER output)
-5. Multi-factor excitement algorithm (weighted composite 0-100 scale)
-6. Time-series storage and aggregation (TimescaleDB time_bucket)
-7. **Link moments to Reddit posts** (heuristic: single high-engagement post within 5-min window → populate source_reddit_post_key)
+**Stories:**
+1. **Story 5.1: Implement Historical Game Snapshots with TimescaleDB** (Foundation - MUST BE FIRST)
+
+**Remaining Stories:** _High-level implementation captured at epic level (to be decomposed after 5.1)_
+2. Create fact_moment table schema (TimescaleDB hypertable)
+3. Reddit velocity calculation (posts/minute in 5-min window)
+4. Engagement scoring aggregation (upvotes + comments*0.5 + awards*2.0)
+5. Sentiment score integration (from Epic 4 VADER output)
+6. Multi-factor excitement algorithm (weighted composite 0-100 scale)
+7. Time-series storage and aggregation (TimescaleDB time_bucket)
+8. **Link moments to Reddit posts** (heuristic: single high-engagement post within 5-min window → populate source_reddit_post_key)
+
+---
+
+#### Story 5.1: Implement Historical Game Snapshots with TimescaleDB (Foundation Story)
+
+**Goal:** Create time-series snapshot infrastructure to preserve game state over time, enabling historical analysis and future features (win probability, moment detection, score momentum).
+
+**User Story:**
+> As a developer building excitement detection algorithms, I need historical game state data (score progression, game clock) at regular intervals, so I can calculate score momentum, detect swings, and build win probability models.
+
+**Why This Story MUST Be First:**
+
+Epic 5's excitement scoring and moment detection **require historical data that doesn't exist yet**. The current architecture (`fact_game` table) uses **update-in-place** strategy:
+
+```python
+# Current behavior (Story 2.4): backend/app/assets/ncaa_games.py
+stmt = insert(FactGame).values(fact_game)
+stmt = stmt.on_conflict_do_update(
+    index_elements=["game_id"],
+    set_={
+        "home_score": stmt.excluded.home_score,  # Overwrites previous value!
+        "away_score": stmt.excluded.away_score,  # No history preserved
+        "game_status": stmt.excluded.game_status,
+        # ...
+    }
+)
+```
+
+**Problem:** This approach **destroys historical state**. We can't answer:
+- "What was the score at 5:32 in the 2nd half?" → Lost, only current score exists
+- "How fast did the score change?" → Can't calculate Δ score / Δ time
+- "When did momentum shift?" → No baseline to compare against
+
+**Solution:** Implement dual-table architecture:
+1. **Keep `fact_game`** (current state table) - Unchanged, fast dashboard queries
+2. **Add `fact_game_snapshot`** (historical time-series) - New, enables analytics
+
+**Business Value:**
+- ✅ **Unblocks Epic 5:** Excitement algorithms require score deltas (Δ score, Δ time)
+- ✅ **Enables Win Probability:** Future model needs score progression to train on
+- ✅ **Portfolio Differentiation:** Demonstrates time-series database expertise (TimescaleDB)
+- ✅ **Data Foundation:** Accumulates data passively while building other features
+
+**Architectural Pattern: Hybrid Current-State + Snapshot Strategy**
+
+**Table 1: `fact_game` (Existing - NO CHANGES)**
+- **Purpose:** Latest game state for dashboard queries
+- **Grain:** One row per game
+- **Updates:** In-place upserts (current behavior)
+- **Queries:** Fast lookups by game_id
+
+**Table 2: `fact_game_snapshot` (New - This Story)**
+- **Purpose:** Historical state over time for analytics
+- **Grain:** One row per game per snapshot interval
+- **Inserts:** Append-only (never update)
+- **Queries:** Time-series analysis, win probability, moments
+
+**Schema Design:**
+
+```sql
+CREATE TABLE fact_game_snapshot (
+  snapshot_key BIGSERIAL,
+  game_key BIGINT NOT NULL REFERENCES fact_game(game_key),
+  snapshot_time TIMESTAMP NOT NULL,  -- Partition key for TimescaleDB
+
+  -- Snapshot values (denormalized for query performance)
+  home_score INT NOT NULL,
+  away_score INT NOT NULL,
+  game_status VARCHAR(20),           -- "scheduled", "in_progress", "final"
+  game_clock VARCHAR(20),            -- "14:32 2nd Half", "Final", "Halftime"
+  period VARCHAR(10),                -- "1st", "2nd", "OT", "Final"
+
+  -- Derived measures (computed at snapshot time for query speed)
+  score_differential INT,            -- home_score - away_score
+  total_score INT,                   -- home_score + away_score
+
+  -- Audit
+  created_at TIMESTAMP DEFAULT NOW(),
+
+  PRIMARY KEY (game_key, snapshot_time)
+);
+
+-- Convert to TimescaleDB hypertable (automatic partitioning by snapshot_time)
+SELECT create_hypertable('fact_game_snapshot', 'snapshot_time',
+  chunk_time_interval => INTERVAL '1 day');
+
+-- Add compression policy (90% size reduction after 7 days for old snapshots)
+SELECT add_compression_policy('fact_game_snapshot', INTERVAL '7 days');
+
+-- Add index for game_key lookups (queries often filter by specific game)
+CREATE INDEX idx_fact_game_snapshot_game_key ON fact_game_snapshot(game_key, snapshot_time DESC);
+```
+
+**Design Rationale:**
+
+1. **TimescaleDB Hypertable:** Automatic time-based partitioning (1-day chunks)
+   - Efficient inserts: New snapshots append to latest chunk
+   - Efficient queries: Time-range queries only scan relevant chunks
+   - Compression: Old chunks compressed automatically (90% size reduction)
+
+2. **Denormalized Design:** Store `score_differential` and `total_score` pre-computed
+   - Why: Avoids expensive calculations on every query
+   - Tradeoff: 8 bytes extra storage per row vs milliseconds saved per query
+   - Portfolio win: Shows understanding of dimensional modeling tradeoffs
+
+3. **Composite Primary Key:** `(game_key, snapshot_time)`
+   - Prevents duplicate snapshots for same game at same timestamp
+   - Efficient for time-series queries (range scans)
+
+**Snapshot Frequency Decision:**
+
+| Frequency | Snapshots/Game (2-hour avg) | Annual Volume | Storage (Compressed) | Use Case |
+|-----------|----------------------------|---------------|----------------------|----------|
+| **1-minute** | 120 | 660K rows | 13 MB/year | Real-time analytics, win probability |
+| **5-minute** | 24 | 132K rows | 3 MB/year | Excitement scoring, general analytics |
+| **15-minute** | 8 | 44K rows | 1 MB/year | Archival, cost optimization |
+
+**Recommendation: 5-minute snapshots** (middle ground)
+- **Why:** Sufficient granularity for excitement detection (score swings visible)
+- **Storage:** Only 3 MB/year compressed (negligible on 30 GB EC2 disk)
+- **Performance:** 24 snapshots/game = minimal insert overhead
+- **Flexibility:** Can switch to 1-minute later if needed (configuration change)
+
+**Implementation Strategy:**
+
+**Phase 1: Create Schema (Migration)**
+```bash
+# Generate Alembic migration
+alembic revision --autogenerate -m "Add fact_game_snapshot for historical tracking"
+
+# Apply migration
+alembic upgrade head
+```
+
+**Phase 2: Modify Dagster Asset to Insert Snapshots**
+
+```python
+# backend/app/assets/ncaa_games.py (modify existing asset)
+
+from app.models.fact_game_snapshot import FactGameSnapshot  # New model
+
+async def ncaa_games(context, database):
+    # ... existing upsert logic for fact_game (unchanged) ...
+
+    # NEW: Insert snapshot for games currently in progress
+    snapshot_count = 0
+    for game_data in raw_games:
+        game_state = game_data.get("gameState", "")
+
+        # Only snapshot live games (not scheduled or final)
+        if game_state == "live":
+            # Retrieve game_key from fact_game upsert
+            game_key_result = await session.execute(
+                select(FactGame.game_key).where(FactGame.game_id == fact_game.game_id)
+            )
+            game_key = game_key_result.scalar_one()
+
+            # Create snapshot row
+            snapshot = FactGameSnapshot(
+                game_key=game_key,
+                snapshot_time=datetime.now(UTC),
+                home_score=fact_game.home_score,
+                away_score=fact_game.away_score,
+                game_status=fact_game.game_status,
+                game_clock=fact_game.game_clock,
+                period=extract_period(game_data),  # Parse from NCAA API
+                score_differential=fact_game.home_score - fact_game.away_score,
+                total_score=fact_game.home_score + fact_game.away_score,
+            )
+
+            # Insert snapshot (no conflict handling needed - composite PK prevents duplicates)
+            await session.execute(insert(FactGameSnapshot).values(snapshot))
+            snapshot_count += 1
+
+    await session.commit()
+
+    # Add to materialization metadata
+    context.log.info(f"Processed {games_processed} games, created {snapshot_count} snapshots")
+
+    return MaterializeResult(
+        metadata={
+            "games_processed": games_processed,
+            "games_inserted": games_inserted,
+            "games_updated": games_updated,
+            "snapshots_created": snapshot_count,  # NEW metric
+        }
+    )
+```
+
+**Phase 3: Verification Queries**
+
+```sql
+-- Check snapshot capture rate
+SELECT
+  game_key,
+  COUNT(*) as num_snapshots,
+  MIN(snapshot_time) as first_snapshot,
+  MAX(snapshot_time) as last_snapshot,
+  MAX(snapshot_time) - MIN(snapshot_time) as game_duration
+FROM fact_game_snapshot
+GROUP BY game_key
+ORDER BY num_snapshots DESC
+LIMIT 10;
+
+-- Verify score progression for a specific game
+SELECT
+  snapshot_time,
+  game_clock,
+  home_score,
+  away_score,
+  score_differential
+FROM fact_game_snapshot
+WHERE game_key = 12345  -- Example game
+ORDER BY snapshot_time;
+
+-- Check storage and compression
+SELECT
+  pg_size_pretty(pg_total_relation_size('fact_game_snapshot')) as total_size,
+  pg_size_pretty(pg_relation_size('fact_game_snapshot')) as table_size;
+```
+
+**Storage Cost Analysis:**
+
+**Assumptions:**
+- NCAA Men's Basketball: ~350 teams, ~30 games/season each
+- Annual games: ~5,500 (350 × 30 / 2, accounting for shared games)
+- Average game duration: 2 hours
+- Snapshot frequency: 5 minutes
+- Snapshots per game: ~24 (2 hours × 60 min / 5 min interval)
+- Row size: ~200 bytes (8 fields × ~25 bytes avg)
+
+**Storage Calculations:**
+
+**Uncompressed:**
+- Snapshots/year: 5,500 games × 24 snapshots = 132,000 rows
+- Storage: 132,000 rows × 200 bytes = 26.4 MB/year
+
+**Compressed (TimescaleDB):**
+- Compression ratio: ~90% reduction (typical for time-series data)
+- Storage: 26.4 MB × 0.10 = **2.6 MB/year compressed**
+
+**5-Year Projection:**
+- Total storage: 2.6 MB/year × 5 years = **13 MB total**
+- EC2 Free Tier Disk: 30 GB available
+- **Usage: <0.05% of available disk** ✅
+
+**Conclusion:** Storage is NOT a constraint, even with 1-minute snapshots (13 MB/year).
+
+**Query Performance Optimization:**
+
+**Use Case 1: Score Progression Chart (Frontend)**
+```sql
+-- Get last 2 hours of snapshots for game timeline
+SELECT
+  snapshot_time,
+  home_score,
+  away_score,
+  game_clock
+FROM fact_game_snapshot
+WHERE game_key = $1
+  AND snapshot_time >= NOW() - INTERVAL '2 hours'
+ORDER BY snapshot_time;
+```
+
+**Performance:** <10ms with TimescaleDB chunk exclusion and index on (game_key, snapshot_time)
+
+**Use Case 2: Score Momentum Calculation (Excitement Scoring)**
+```sql
+-- Calculate score change velocity over 5-minute window
+SELECT
+  game_key,
+  snapshot_time,
+  score_differential,
+  score_differential - LAG(score_differential) OVER (
+    PARTITION BY game_key ORDER BY snapshot_time
+  ) AS score_momentum,
+  (snapshot_time - LAG(snapshot_time) OVER (
+    PARTITION BY game_key ORDER BY snapshot_time
+  )) AS time_delta
+FROM fact_game_snapshot
+WHERE game_status = 'in_progress'
+  AND snapshot_time >= NOW() - INTERVAL '15 minutes';
+```
+
+**Use Case 3: Win Probability Model Training (Future)**
+```sql
+-- Extract training data: score differential and time remaining at each snapshot
+SELECT
+  fgs.game_key,
+  fgs.snapshot_time,
+  fgs.score_differential,
+  fgs.period,
+  fgs.game_clock,
+  -- Outcome (did home team win?)
+  CASE WHEN fg.home_score > fg.away_score THEN 1 ELSE 0 END as home_team_won
+FROM fact_game_snapshot fgs
+JOIN fact_game fg ON fgs.game_key = fg.game_key
+WHERE fg.game_status = 'final'  -- Only completed games for training
+  AND fgs.snapshot_time >= '2024-01-01';
+```
+
+**Dependencies:**
+- ✅ Story 2.4 completed (Dagster ncaa_games asset exists)
+- ✅ Story 2.3a completed (`fact_game` table with surrogate keys)
+- ✅ Story 1.3 completed (TimescaleDB extension enabled)
+- ✅ Story 3.6 recommended (1-minute Dagster polling for frequent snapshots)
+
+**Acceptance Criteria Hints:**
+
+1. **AC-5.1: Schema Creation**
+   - `fact_game_snapshot` table created via Alembic migration
+   - TimescaleDB hypertable configured with 1-day chunk interval
+   - Compression policy enabled (7-day retention for uncompressed data)
+   - Primary key on `(game_key, snapshot_time)` enforced
+   - Foreign key to `fact_game(game_key)` enforced
+
+2. **AC-5.2: Snapshot Capture Logic**
+   - Dagster asset inserts snapshots only for games with `game_status = 'in_progress'`
+   - Snapshots NOT created for scheduled or final games (avoids wasted storage)
+   - Derived measures (`score_differential`, `total_score`) calculated and stored
+   - Dagster metadata includes `snapshots_created` count
+
+3. **AC-5.3: Data Quality Validation**
+   - No duplicate snapshots: Primary key constraint prevents same `(game_key, snapshot_time)`
+   - Score consistency: Snapshot scores match `fact_game` current scores (within 1-minute lag)
+   - Temporal ordering: Snapshots for each game ordered chronologically
+   - No orphan snapshots: All `game_key` values exist in `fact_game` table
+
+4. **AC-5.4: Query Performance**
+   - Score progression query (<game_key, last 2 hours>) returns in <50ms
+   - Index on `(game_key, snapshot_time DESC)` exists and used by query planner
+   - TimescaleDB chunk exclusion visible in EXPLAIN plan
+
+5. **AC-5.5: Storage Verification**
+   - Annual snapshot volume: ~132K rows for 5-minute snapshots (or ~660K for 1-minute)
+   - Compressed size: <5 MB/year for 5-minute snapshots
+   - Compression policy active (verify with `SELECT * FROM timescaledb_information.compression_settings`)
+
+6. **AC-5.6: Monitoring and Observability**
+   - Dagster run logs include snapshot metrics: `"Created 42 snapshots for 7 live games"`
+   - No errors in Dagster logs related to snapshot insertion
+   - PostgreSQL disk usage remains <5% of 30 GB after 30 days
+
+**Risk Assessment:**
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Storage growth exceeds estimates | Low | Low | Compression reduces by 90%, retention policy deletes >90 days |
+| Insert performance degrades | Very Low | Low | TimescaleDB optimized for high-velocity inserts, 24-60 inserts/hour trivial |
+| Query performance impacts dashboard | Very Low | Medium | Snapshots use separate table, `fact_game` queries unchanged |
+| Snapshot logic bugs (duplicates, missing) | Medium | Low | Primary key prevents duplicates, validation queries catch missing |
+
+**Overall Risk:** **LOW** - Well-understood TimescaleDB patterns, no changes to existing queries.
+
+**Rollback Plan:**
+
+If issues arise:
+1. Disable snapshot insertion logic (comment out in Dagster asset)
+2. `fact_game` queries unaffected (no dependency on snapshots)
+3. Drop `fact_game_snapshot` table if needed (no foreign key from other tables)
+
+**Success Metrics:**
+
+- ✅ Historical data accumulating: 24 snapshots/game for 2-hour games
+- ✅ Storage growth linear: ~2.6 MB/year compressed
+- ✅ No Dagster errors: 100% successful snapshot insertions
+- ✅ Query speed: Score progression chart renders in <100ms
+- ✅ Future-ready: Data foundation for Epic 5 excitement algorithms
+
+**Future Enhancements (Out of Scope):**
+
+- **Continuous Aggregates:** Pre-compute hourly score averages using TimescaleDB
+- **Retention Policy:** Auto-delete snapshots >90 days old (keep disk usage bounded)
+- **Snapshot API Endpoint:** `GET /api/games/{id}/timeline` (Epic 8)
+- **Win Probability Model:** Train on snapshot data (Epic 5.9 or Epic 11)
+
+**Why This Story Unlocks Epic 5:**
+
+Without snapshots, Epic 5 stories **cannot be implemented**:
+- ❌ Story 5.5 (Multi-factor excitement algorithm): Needs score momentum = Δ(score_differential) / Δt
+- ❌ Story 5.6 (Time-series aggregation): Needs historical measurements to aggregate
+- ❌ Future win probability: Needs score progression to train Bayesian model
+
+With snapshots:
+- ✅ Score momentum calculable: Compare snapshot N to snapshot N-1
+- ✅ Excitement detection possible: Identify rapid score swings (>6 points in 5 min)
+- ✅ Data foundation ready: Accumulate 1-2 months of data for modeling
+
+**Recommended Timeline:**
+
+1. **Week 2 Start:** Implement Story 5.1 (snapshots)
+2. **Week 2-3:** Let snapshots accumulate passively while building Epic 4 (Reddit)
+3. **Week 3 End:** Decompose remaining Epic 5 stories (now have historical data to work with)
+
+**References:**
+- Current Architecture: `backend/app/assets/ncaa_games.py` (upsert-only, no snapshots)
+- TimescaleDB Docs: [Hypertables](https://docs.timescale.com/use-timescale/latest/hypertables/)
+- TimescaleDB Docs: [Compression](https://docs.timescale.com/use-timescale/latest/compression/)
+- PRD Section: NFR-1.5 (Data retention: 90 days for time-series metrics)
+
+**File Changes Expected:**
+- `backend/app/models/fact_game_snapshot.py` - New SQLModel class
+- `backend/app/alembic/versions/XXX_add_game_snapshots.py` - New migration
+- `backend/app/assets/ncaa_games.py` - Modify to insert snapshots
+- `backend/app/models/__init__.py` - Import new model
+
+**Testing Strategy:**
+- **Unit Tests:** Snapshot model validation (required fields, derived measures)
+- **Integration Tests:** Dagster asset inserts snapshots for live games, not final games
+- **Manual Testing:** Run Dagster asset 3x over 15 minutes, verify 3 snapshots created
+- **Query Tests:** Validate score progression query returns chronological results
 
 ---
 
@@ -575,15 +1197,19 @@ dim_bookmaker (
 **Phase 1 (Week 1):** Stories defined ✅
 - Epic 1: 8 stories (Foundation + Infrastructure)
 - Epic 2: 8 stories (**3 NEW** - Dimensional Foundation: 2-3a, 2-3b, 2-3c)
-- Epic 3: 5 stories (Basic API + Dashboard MVP)
-- **Total: 21 stories for Week 1 working demo**
+- Epic 3: **6 stories** (Basic API + Dashboard MVP) - **+1 NEW: Story 3.6 (1-Minute Refresh)**
+- **Total: 22 stories for Week 1 working demo**
 
 **Phase 2 (Week 2):** Epic-level schema designs complete ✅
 - Epic 4: event_reddit_post schema defined
-- Epic 5: fact_moment schema defined (renamed from fact_excitement)
+- Epic 5: **Story 5.1 defined** (fact_game_snapshot - Foundation story) + fact_moment schema defined (renamed from fact_excitement)
 - Epic 6: fact_betting_odds schema defined
 - Epic 7: Time mapping (TBD)
 - Epic 8: Dimensional query patterns defined
+
+**New Stories (Architecture-Driven):**
+- ✅ **Story 3.6:** Increase Refresh Cadence to 1 Minute (Epic 3 extension - real-time feel)
+- ✅ **Story 5.1:** Implement Historical Game Snapshots with TimescaleDB (Epic 5 foundation - MUST BE FIRST)
 
 **Phase 3-4:** To be decomposed as Phase 2 nears completion
 
