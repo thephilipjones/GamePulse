@@ -1,17 +1,24 @@
 """
-Seed dim_date dimension table with dates from 2024-2026.
+Seed or extend dim_date dimension table with Kimball attributes and NCAA tournament flags.
 
-Generates ~1,095 date records with Kimball standard attributes and NCAA-specific
-March Madness tournament flags.
+Automatically detects existing data and extends as needed. Default range: (current_year - 1)
+to (current_year + 2), ensuring 2+ years of future dates are always available.
 
 Usage:
+    # Auto-detect and extend (recommended)
     docker compose exec backend python -m app.scripts.seed_dim_date
+
+    # Specify custom date range
+    docker compose exec backend python -m app.scripts.seed_dim_date --start-year 2024 --end-year 2028
+
+    # Force full re-seed (idempotent via merge)
+    docker compose exec backend python -m app.scripts.seed_dim_date --force
 """
 
 import logging
 from datetime import date, timedelta
 
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, create_engine, func, select
 
 from app.core.config import settings
 from app.models.dim_date import DimDate
@@ -20,12 +27,15 @@ from app.models.dim_date import DimDate
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# March Madness date ranges (hardcoded for 2024-2026)
+# March Madness date ranges (hardcoded for 2024-2028)
 # Format: (start_date, end_date, selection_sunday)
+# Note: Extend this dict annually or calculate dates programmatically
 MARCH_MADNESS_WINDOWS = {
     2024: (date(2024, 3, 19), date(2024, 4, 8), date(2024, 3, 17)),  # Selection Sunday
     2025: (date(2025, 3, 18), date(2025, 4, 7), date(2025, 3, 16)),
     2026: (date(2026, 3, 17), date(2026, 4, 6), date(2026, 3, 15)),
+    2027: (date(2027, 3, 16), date(2027, 4, 5), date(2027, 3, 14)),
+    2028: (date(2028, 3, 21), date(2028, 4, 10), date(2028, 3, 19)),
 }
 
 # Tournament round mappings (day offset from Selection Sunday -> round name)
@@ -86,20 +96,105 @@ def calculate_tournament_round(dt: date) -> tuple[bool, str | None]:
     return (True, tournament_round)
 
 
-def seed_dim_date() -> None:
+def get_existing_date_range(engine) -> tuple[date | None, date | None]:
     """
-    Seed dim_date table with dates from 2024-01-01 to 2026-12-31.
+    Detect existing date range in dim_date table.
 
-    Generates ~1,095 date records with all Kimball attributes and NCAA tournament flags.
+    Args:
+        engine: SQLAlchemy engine
+
+    Returns:
+        Tuple of (min_date, max_date) or (None, None) if table is empty
+    """
+    with Session(engine) as session:
+        result = session.exec(
+            select(func.min(DimDate.full_date), func.max(DimDate.full_date))
+        ).first()
+
+        if result and result[0] and result[1]:
+            return (result[0], result[1])
+        return (None, None)
+
+
+def seed_dim_date(
+    start_year: int | None = None,
+    end_year: int | None = None,
+    force_full_seed: bool = False,
+) -> None:
+    """
+    Seed or extend dim_date table with dates.
+
+    Automatically detects existing data and extends as needed. Default range:
+    (current_year - 1) to (current_year + 2), ensuring 2+ years of future dates.
+
+    Args:
+        start_year: Override start year (default: current_year - 1)
+        end_year: Override end year (default: current_year + 2)
+        force_full_seed: Force full re-seed (ignore existing data)
+
+    Generates date records with all Kimball attributes and NCAA tournament flags.
     Uses batch insert (100 rows per transaction) and session.merge() for idempotency.
     """
-    logger.info("Starting dim_date seed...")
+    logger.info("Starting dim_date seed/extension...")
 
     engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
 
-    # Date range: 2024-01-01 to 2026-12-31
-    start_date = date(2024, 1, 1)
-    end_date = date(2026, 12, 31)
+    # Detect existing date range
+    min_existing, max_existing = get_existing_date_range(engine)
+
+    if min_existing and max_existing and not force_full_seed:
+        logger.info(
+            f"Existing data detected: {min_existing} to {max_existing} "
+            f"({(max_existing - min_existing).days + 1} days)"
+        )
+
+    # Determine date range
+    from datetime import datetime
+
+    current_year = datetime.now().year
+
+    if start_year is None:
+        if force_full_seed or not min_existing:
+            # New seed: default to (current_year - 1)
+            start_year = current_year - 1
+        else:
+            # Extension: start from day after max existing date
+            start_year = min_existing.year
+
+    if end_year is None:
+        if force_full_seed or not max_existing:
+            # New seed: default to (current_year + 2)
+            end_year = current_year + 2
+        else:
+            # Extension: extend to (current_year + 2)
+            end_year = max(max_existing.year, current_year + 2)
+
+    # Build date range
+    start_date = date(start_year, 1, 1)
+    end_date = date(end_year, 12, 31)
+
+    # Optimize: skip existing range if extending
+    if not force_full_seed and min_existing and max_existing:
+        if start_date < min_existing:
+            # Need to backfill before existing data
+            logger.info(
+                f"Backfilling dates: {start_date} to {min_existing - timedelta(days=1)}"
+            )
+        if end_date > max_existing:
+            # Need to extend after existing data
+            logger.info(
+                f"Extending dates: {max_existing + timedelta(days=1)} to {end_date}"
+            )
+
+        # Check if we're fully covered
+        if start_date >= min_existing and end_date <= max_existing:
+            logger.info(
+                f"Date range {start_date} to {end_date} already covered by existing data. "
+                "Nothing to insert."
+            )
+            return
+
+    logger.info(f"Seeding date range: {start_date} to {end_date}")
 
     current_date = start_date
     total_count = 0
@@ -201,7 +296,7 @@ def seed_dim_date() -> None:
 
     # Verify March Madness dates
     with Session(engine) as session:
-        for year in [2024, 2025, 2026]:
+        for year in [2024, 2025, 2026, 2027, 2028]:
             results = session.exec(
                 select(DimDate).where(
                     DimDate.year == year,
@@ -214,4 +309,33 @@ def seed_dim_date() -> None:
 
 
 if __name__ == "__main__":
-    seed_dim_date()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Seed or extend dim_date dimension table with Kimball attributes and NCAA tournament flags."
+    )
+    parser.add_argument(
+        "--start-year",
+        type=int,
+        default=None,
+        help="Start year (default: current_year - 1)",
+    )
+    parser.add_argument(
+        "--end-year",
+        type=int,
+        default=None,
+        help="End year (default: current_year + 2)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force full re-seed (ignore existing data)",
+    )
+
+    args = parser.parse_args()
+
+    seed_dim_date(
+        start_year=args.start_year,
+        end_year=args.end_year,
+        force_full_seed=args.force,
+    )

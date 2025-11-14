@@ -12,6 +12,28 @@ alembic upgrade head
 # Create initial data in DB
 python app/initial_data.py
 
+# Seed/extend dim_date dimension table
+if [ "${DIM_DATE_AUTO_SEED:-true}" = "true" ]; then
+    echo "==================================================================="
+    echo "Seeding/extending dim_date dimension table"
+    echo "==================================================================="
+
+    START_YEAR=${DIM_DATE_START_YEAR:-}
+    END_YEAR=${DIM_DATE_END_YEAR:-}
+
+    if [ -n "$START_YEAR" ] && [ -n "$END_YEAR" ]; then
+        echo "Using custom date range: $START_YEAR to $END_YEAR"
+        python -m app.scripts.seed_dim_date --start-year $START_YEAR --end-year $END_YEAR
+    else
+        echo "Using auto-detected date range (current_year - 1 to current_year + 2)"
+        python -m app.scripts.seed_dim_date
+    fi
+
+    echo "==================================================================="
+    echo "dim_date seeding complete"
+    echo "==================================================================="
+fi
+
 # Initialize Dagster database if DAGSTER_POSTGRES_DB is set and differs from app DB
 if [ ! -z "$DAGSTER_POSTGRES_DB" ] && [ "$DAGSTER_POSTGRES_DB" != "$POSTGRES_DB" ]; then
     echo "==================================================================="
