@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
+    # Epic 4: Reddit Data Pipeline
+    REDDIT_POLLING_ENABLED: bool = True
+    REDDIT_USER_AGENT: str = (
+        "GamePulse/1.0 (Educational portfolio project; +https://gamepulse.top)"
+    )
+    REDDIT_RATE_LIMIT_QPM: int = 10  # Queries per minute
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (

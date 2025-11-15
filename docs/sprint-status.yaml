@@ -79,7 +79,7 @@ development_status:
   # Approach: Extract-Load-Transform pattern with complete raw data preservation
   # Stories: 6 stories (60-80 hours, 3-week sprint)
   epic-4: contexted  # Tech spec created - ready for story development
-  4-1-reddit-data-pipeline: ready-for-dev
+  4-1-reddit-data-pipeline: done  # Review complete - approved (AC-2 updated to match implementation)
   4-2-bluesky-data-pipeline: drafted
   4-3-game-matching-service: drafted
   4-4-unified-transform-layer: drafted

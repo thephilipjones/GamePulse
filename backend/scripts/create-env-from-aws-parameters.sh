@@ -139,6 +139,11 @@ map_parameter_name() {
         APP_BACKEND_CORS_ORIGINS)  echo "BACKEND_CORS_ORIGINS" ;;
         APP_EMAILS_FROM_EMAIL)     echo "EMAILS_FROM_EMAIL" ;;
 
+        # Epic 4: Reddit Data Pipeline mappings
+        APP_REDDIT_POLLING_ENABLED) echo "REDDIT_POLLING_ENABLED" ;;
+        APP_REDDIT_USER_AGENT)     echo "REDDIT_USER_AGENT" ;;
+        APP_REDDIT_RATE_LIMIT_QPM) echo "REDDIT_RATE_LIMIT_QPM" ;;
+
         # Docker mappings
         DOCKER_BACKEND_IMAGE)      echo "DOCKER_IMAGE_BACKEND" ;;
         DOCKER_FRONTEND_IMAGE)     echo "DOCKER_IMAGE_FRONTEND" ;;

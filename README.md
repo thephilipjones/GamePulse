@@ -229,6 +229,29 @@ General development docs: [development.md](./development.md).
 
 This includes using Docker Compose, custom local domains, `.env` configurations, etc.
 
+## Legal Disclaimer
+
+### Reddit Data Integration (Epic 4)
+
+GamePulse includes optional Reddit data integration for educational and portfolio demonstration purposes.
+
+**IMPORTANT: Terms of Service Violation**
+
+The Reddit data pipeline (`backend/app/assets/reddit_posts.py`) uses unauthenticated scraping of Reddit's public JSON endpoints, which **violates Reddit's Terms of Service**. This implementation is provided solely for:
+
+- Educational purposes
+- Portfolio demonstration
+- Technical proof-of-concept
+
+**This integration is NOT intended for production use or commercial applications.**
+
+If you fork this project:
+- Disable Reddit polling by setting `REDDIT_POLLING_ENABLED=false` in `.env`
+- Consider using Reddit's official API with OAuth authentication for legitimate use cases
+- Understand the legal and ethical implications of web scraping
+
+For more details, see [Reddit Terms of Service](https://www.redditinc.com/policies/user-agreement).
+
 ## Release Notes
 
 Check the file [release-notes.md](./release-notes.md).

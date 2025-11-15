@@ -1491,3 +1491,35 @@ docker compose exec backend python
   ```
 
 - **Prevention:** Swap is automatically configured on new EC2 instances. For existing instances, run manual setup above.
+
+**Issue: Reddit data pipeline legal concerns**
+
+- **Context:** GamePulse includes Reddit data integration (Epic 4, Story 4-1) for educational purposes
+- **Legal Status:** The implementation violates Reddit's Terms of Service
+  - Uses unauthenticated JSON endpoint scraping (`/r/subreddit/new.json`)
+  - Reddit's ToS prohibits automated data collection without explicit permission
+  - Implemented with 10 QPM rate limiting and respectful User-Agent header
+- **Intended Use:** Portfolio demonstration and educational purposes ONLY
+  - NOT for production use
+  - NOT for commercial applications
+  - NOT for large-scale data collection
+- **How to Disable:**
+  ```bash
+  # In .env file, set:
+  REDDIT_POLLING_ENABLED=false
+  ```
+- **Alternative Approaches:**
+  - Use Reddit's official API with OAuth authentication
+  - Apply for Reddit API access for legitimate use cases
+  - Consider PRAW (Python Reddit API Wrapper) for authorized access
+- **Implementation Details:**
+  - Multi-subreddit support with many-to-many sport mappings
+  - Dual storage: Parsed columns + raw JSONB for future ML/analytics
+  - TimescaleDB hypertable with 90-day retention and 7-day compression
+  - Token bucket rate limiting (10 QPM = 10 API calls per minute)
+  - Incremental extraction using cursor pattern (MAX(fetched_at) per subreddit)
+- **Files Involved:**
+  - [backend/app/assets/reddit_posts.py](backend/app/assets/reddit_posts.py) - Dagster asset
+  - [backend/app/services/reddit_client.py](backend/app/services/reddit_client.py) - HTTP client with rate limiting
+  - [backend/app/models/reddit.py](backend/app/models/reddit.py) - SQLModel models
+  - [backend/app/alembic/versions/*subreddit*.py](backend/app/alembic/versions/) - Database migrations

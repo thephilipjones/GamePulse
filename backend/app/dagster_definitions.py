@@ -14,17 +14,21 @@ from dagster import (
 )
 
 from app.assets import ncaa_games as ncaa_games_module
+from app.assets import reddit_posts as reddit_posts_module
+from app.assets.reddit_posts import reddit_posts_job, reddit_posts_schedule
 from app.resources.database import DatabaseResource
 
 # Load all assets from assets module
-all_assets = load_assets_from_modules([ncaa_games_module])
+all_assets = load_assets_from_modules([ncaa_games_module, reddit_posts_module])
 
-# Define asset job for manual materialization
+# Define asset job for manual materialization (NCAA)
 ncaa_games_job = define_asset_job(
     name="materialize_ncaa_games",
     selection="ncaa_games",
     description="Manually materialize NCAA games asset",
 )
+
+# Reddit job and schedule imported from reddit_posts module
 
 # Define schedule: every 1 minute (starts RUNNING automatically)
 # RATIONALE: Schedule auto-starts on daemon initialization to ensure continuous
@@ -48,10 +52,10 @@ database_resource = DatabaseResource()
 # Dagster definitions
 defs = Definitions(
     assets=all_assets,
-    schedules=[ncaa_games_schedule],
+    schedules=[ncaa_games_schedule, reddit_posts_schedule],
     resources={
         "database": database_resource,
     },
-    jobs=[ncaa_games_job],
+    jobs=[ncaa_games_job, reddit_posts_job],
     executor=in_process_executor,
 )
