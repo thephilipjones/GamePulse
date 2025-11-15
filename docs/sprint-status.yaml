@@ -1,7 +1,7 @@
 # Sprint Status - GamePulse Project
 # This tracks progress through implementation phases
 
-# generated: 2025-11-11
+# generated: 2025-11-15
 # project: gamepulse
 # project_key: gamepulse
 # tracking_system: file-system
@@ -32,7 +32,7 @@
 # - SM typically drafts next story after previous one is 'done' to incorporate learnings
 # - Dev moves story to 'review', SM reviews, then Dev moves to 'done'
 
-generated: 2025-11-11
+generated: 2025-11-15
 project: gamepulse
 project_key: gamepulse
 tracking_system: file-system
@@ -73,13 +73,23 @@ development_status:
   3-6-increase-refresh-cadence: done
   epic-3-retrospective: done
 
-  # Epic 4: Reddit Social Sentiment (not decomposed yet)
-  epic-4: backlog
+  # Epic 4: Social Media ELT Pipeline (multi-platform: Reddit + Bluesky)
+  # Goals: docs/epic-4-goals.md (2025-11-15)
+  # Tech Spec: docs/epics/epic-4-social-media-elt.md (2025-11-15)
+  # Approach: Extract-Load-Transform pattern with complete raw data preservation
+  # Stories: 6 stories (60-80 hours, 3-week sprint)
+  epic-4: contexted  # Tech spec created - ready for story development
+  4-1-reddit-data-pipeline: ready-for-dev
+  4-2-bluesky-data-pipeline: drafted
+  4-3-game-matching-service: drafted
+  4-4-unified-transform-layer: drafted
+  4-5-sentiment-analysis-fact-table: drafted
+  4-6-orchestration-data-management: drafted
   epic-4-retrospective: optional
 
   # Epic 5: Moment Detection & Excitement Scoring (1 story defined, rest to be decomposed)
   epic-5: backlog
-  5-1-implement-game-snapshots: backlog  # NEW - Foundation story (MUST BE FIRST)
+  5-1-implement-game-snapshots: backlog  # Foundation story (MUST BE FIRST)
   epic-5-retrospective: optional
 
   # Epic 6: Streaming Betting Odds Integration (not decomposed yet)

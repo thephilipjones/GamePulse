@@ -1,0 +1,324 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>4-1</storyId>
+    <title>Reddit Data Pipeline</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-1-reddit-data-pipeline.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>GamePulse data engineer</asA>
+    <iWant>to extract raw Reddit posts from r/CollegeBasketball every 10 minutes</iWant>
+    <soThat>downstream stories (4-4, 4-5) can match posts to games and analyze sentiment</soThat>
+    <tasks>
+      <task id="1" title="Create Alembic Migration for raw_reddit_posts Hypertable">
+        Subtasks:
+        - Generate new migration file with alembic revision --autogenerate
+        - Create raw_reddit_posts table with columns: post_key, post_id, fetched_at, post_created_at, subreddit, author, title, selftext, score, num_comments, upvote_ratio, permalink, flair_text
+        - Execute create_hypertable() on fetched_at column with 1-day chunk intervals
+        - Add retention policy (90 days) via add_retention_policy()
+        - Add compression policy (7 days) via add_compression_policy()
+        - Create indexes on post_id (unique), subreddit, post_created_at
+        - Test migration up/down locally
+        - Verify hypertable configuration via TimescaleDB queries
+      </task>
+
+      <task id="2" title="Create SQLModel RawRedditPost Model">
+        Subtasks:
+        - Create backend/app/models/reddit.py
+        - Define RawRedditPost(SQLModel, table=True) with __tablename__="raw_reddit_posts"
+        - Map all columns from migration with correct types (BIGSERIAL, VARCHAR, TIMESTAMP, etc.)
+        - Add validation (post_id unique, fetched_at NOT NULL)
+        - Import model in __init__.py for SQLModel registry
+        - Verify model matches migration schema exactly
+      </task>
+
+      <task id="3" title="Build RedditClient with Token Bucket Rate Limiting">
+        Subtasks:
+        - Create backend/app/services/reddit_client.py
+        - Implement TokenBucket class (10 QPM capacity, acquire() method)
+        - Create RedditClient(httpx.AsyncClient) with unauthenticated endpoints
+        - Implement fetch_latest_posts(limit=100) method
+        - Add retry logic with tenacity (3 attempts, exponential backoff)
+        - Add structured logging (fetch_started, rate_limit_wait, fetch_completed)
+        - Add legal warning docstring (ToS violation acknowledgment)
+        - Write unit tests for token bucket algorithm
+        - Test rate limiting manually (verify 10 QPM enforcement)
+      </task>
+
+      <task id="4" title="Create extract_reddit_posts Dagster Asset">
+        Subtasks:
+        - Create backend/app/assets/reddit_posts.py
+        - Define @asset decorator with name, description, group_name
+        - Implement async def extract_reddit_posts(context, database)
+        - Query MAX(fetched_at) for incremental extraction cursor
+        - Call RedditClient.fetch_latest_posts()
+        - Transform Reddit JSON to RawRedditPost models
+        - Upsert with ON CONFLICT DO NOTHING (idempotency)
+        - Log structured events (extraction_started, posts_fetched, posts_inserted)
+        - Return metadata dict with post counts
+        - Test asset materialization locally
+      </task>
+
+      <task id="5" title="Configure 10-Minute Schedule">
+        Subtasks:
+        - Open backend/app/dagster_definitions.py
+        - Create reddit_posts_schedule = ScheduleDefinition(cron_schedule="*/10 * * * *")
+        - Set execution_timezone="US/Eastern"
+        - Link schedule to extract_reddit_posts asset
+        - Add schedule to Definitions(schedules=[...])
+        - Verify cron syntax via crontab.guru
+        - Test schedule in Dagster UI (enable, wait 10 min, verify run)
+        - Monitor logs for automatic triggering
+      </task>
+
+      <task id="6" title="Add Environment Variables for Polling Control">
+        Subtasks:
+        - Add REDDIT_POLLING_ENABLED to backend/.env.example (default=true)
+        - Update backend/app/core/config.py with reddit_polling_enabled: bool
+        - Wrap schedule activation in conditional (if settings.reddit_polling_enabled)
+        - Document variable in CLAUDE.md
+        - Test disabling polling via environment variable
+        - Verify asset can still be manually materialized when disabled
+      </task>
+
+      <task id="7" title="Document Legal Warnings">
+        Subtasks:
+        - Add legal warning docstring to RedditClient class
+        - Log WARNING level message on asset materialization
+        - Add troubleshooting section to CLAUDE.md
+        - Update README with Reddit ToS violation acknowledgment
+        - Add legal warning to PR description template
+        - Verify warnings are prominently visible
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-1" title="Reddit Client with Rate Limiting">
+      GIVEN the Reddit client is initialized
+      WHEN the asset fetches posts from r/CollegeBasketball
+      THEN the client:
+      - Uses unauthenticated HTTP endpoints (no OAuth)
+      - Respects 10 QPM limit using token bucket algorithm
+      - Retries up to 3 times with exponential backoff on failure
+      - Logs structured events (fetch_started, fetch_completed, rate_limit_wait)
+      - Returns JSON list of posts with required fields (post_id, title, score, etc.)
+    </criterion>
+
+    <criterion id="AC-2" title="TimescaleDB Hypertable Schema">
+      GIVEN the Alembic migration is applied
+      WHEN the raw_reddit_posts table is created
+      THEN the schema:
+      - Includes columns: post_key (BIGSERIAL PK), post_id (VARCHAR UNIQUE), fetched_at (TIMESTAMPTZ), post_created_at (TIMESTAMPTZ), subreddit (VARCHAR), author (VARCHAR), title (TEXT), selftext (TEXT), score (INTEGER), num_comments (INTEGER), upvote_ratio (FLOAT), permalink (VARCHAR), flair_text (VARCHAR)
+      - Is configured as TimescaleDB hypertable on fetched_at with 1-day chunks
+      - Has retention policy: 90 days
+      - Has compression policy: 7 days threshold
+      - Has indexes on post_id (unique), subreddit, post_created_at
+      - Manual verification: SELECT * FROM timescaledb_information.hypertables WHERE hypertable_name='raw_reddit_posts';
+    </criterion>
+
+    <criterion id="AC-3" title="Dagster Asset Incremental Extraction">
+      GIVEN the extract_reddit_posts asset is materialized
+      WHEN the asset runs
+      THEN it:
+      - Queries MAX(fetched_at) to establish cursor
+      - Fetches only posts created after cursor timestamp
+      - Transforms Reddit JSON to RawRedditPost SQLModel instances
+      - Upserts to database with ON CONFLICT (post_id) DO NOTHING
+      - Logs structured events with context (asset_materialization_started, posts_fetched, posts_inserted)
+      - Returns metadata dict with keys: posts_fetched, posts_inserted, cursor_time
+      - Incremental runs fetch new posts only (verified by querying database counts)
+    </criterion>
+
+    <criterion id="AC-4" title="10-Minute Schedule Auto-Execution">
+      GIVEN the Dagster daemon is running
+      WHEN the reddit_posts_schedule is enabled in Dagster UI
+      THEN the schedule:
+      - Executes every 10 minutes (cron: */10 * * * *)
+      - Auto-starts on daemon initialization (no manual trigger required)
+      - Shows successful runs in Dagster UI Runs tab
+      - Logs execution timestamps and durations
+      - Manual verification: Wait 20 minutes, expect 2 runs in UI
+    </criterion>
+
+    <criterion id="AC-5" title="Polling Control via Environment Variable">
+      GIVEN the REDDIT_POLLING_ENABLED environment variable is set
+      WHEN set to true
+      THEN the schedule is active and runs every 10 minutes
+      WHEN set to false
+      THEN the schedule is inactive but asset can still be manually materialized
+      Manual verification: Toggle variable, restart daemon, check schedule status in UI
+    </criterion>
+
+    <criterion id="AC-6" title="Legal Warnings Documented">
+      GIVEN the Reddit client and asset are implemented
+      WHEN reviewing the codebase and documentation
+      THEN legal warnings are present in:
+      - RedditClient class docstring (ToS violation acknowledgment)
+      - Asset materialization logs (WARNING level)
+      - CLAUDE.md troubleshooting section
+      - README.md (prominent notice)
+      - PR description template
+    </criterion>
+
+    <criterion id="AC-7" title="Week 1 Success Metric">
+      GIVEN the asset runs for 7 days with 10-minute polling
+      WHEN querying the database at end of Week 1
+      THEN the raw_reddit_posts table contains:
+      - Between 700-3,500 posts (50-500 posts/day for active season)
+      - Posts from r/CollegeBasketball subreddit
+      - No duplicate post_id values
+      - Fetched_at timestamps spread across 7 days
+      - Manual verification: SELECT COUNT(*), MIN(fetched_at), MAX(fetched_at) FROM raw_reddit_posts;
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc path="docs/epics/epic-4-social-media-elt.md" title="Epic 4 Specification" section="API Client Specifications">
+        Reddit client HTTP methods, rate limiting (10 QPM token bucket), retry strategy (3 attempts, exponential backoff 2s/4s/8s), unauthenticated endpoints (/r/CollegeBasketball/new.json), response parsing.
+      </doc>
+
+      <doc path="docs/epics/epic-4-social-media-elt.md" title="Epic 4 Specification" section="Data Schema Specifications">
+        raw_reddit_posts table schema with 13 columns, TimescaleDB hypertable configuration (1-day chunks, 90-day retention, 7-day compression), indexes on post_id/subreddit/post_created_at.
+      </doc>
+
+      <doc path="docs/epics/epic-4-social-media-elt.md" title="Epic 4 Specification" section="Asset 1: extract_reddit_posts">
+        Incremental extraction logic (cursor pattern using MAX(fetched_at)), ON CONFLICT DO NOTHING idempotency, structured logging events, success metrics (700-3,500 posts Week 1).
+      </doc>
+
+      <doc path="docs/epics/epic-4-social-media-elt.md" title="Epic 4 Specification" section="Legal and Ethical Considerations">
+        ToS violation acknowledgment, required warning placements (code docstrings, logs, CLAUDE.md, README, PR template), educational/portfolio use only disclaimer.
+      </doc>
+
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="FR-3: Social Sentiment Integration">
+        Reddit sentiment data requirement for excitement scoring algorithm, integration with game matching (Story 4-4) and sentiment analysis (Story 4-5).
+      </doc>
+
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="NFR-1.4: Data Freshness">
+        Data staleness requirement <15 minutes acceptable. 10-minute polling satisfies this with 10-minute max latency.
+      </doc>
+
+      <doc path="docs/PRD.md" title="Product Requirements Document" section="NFR-4.2: Graceful Degradation">
+        Retry logic requirement for external API failures. Reddit client implements 3-retry tenacity pattern matching NCAA client.
+      </doc>
+
+      <doc path="docs/architecture.md" title="Architecture Document" section="Async/Await Patterns (Mandatory for I/O)">
+        All I/O operations must use async/await. HTTP clients use httpx.AsyncClient. Pattern: async with client as c: response = await c.get(url).
+      </doc>
+
+      <doc path="docs/architecture.md" title="Architecture Document" section="Logging Strategy">
+        Structured logging with structlog, JSON format for CloudWatch. Event naming: past tense snake_case (fetch_completed not fetch_complete). Context binding for request tracing.
+      </doc>
+
+      <doc path="docs/architecture.md" title="Architecture Document" section="TimescaleDB Partitioning Strategy">
+        Chunk interval guidance: 1-day chunks for raw batch data (low write volume <100 writes/day), 1-hour chunks for high-velocity streaming data. Compression threshold 7 days for non-aggregated data.
+      </doc>
+
+      <doc path="docs/architecture.md" title="Architecture Document" section="Data Flow - Integration Points">
+        ELT pattern sequence: Extract (raw data ingestion) → Load (store as-is) → Transform (downstream processing). Reddit posts extracted raw, matched to games in Story 4-4, analyzed in Story 4-5.
+      </doc>
+
+      <doc path="docs/stories/3-6-increase-refresh-cadence.md" title="Story 3-6: Increase Refresh Cadence" section="Dev Notes - Learnings">
+        Dagster schedule cron format pattern: Standard 5-field cron expression ("*/10 * * * *" for 10-minute polling), execution_timezone="US/Eastern" required. Performance impact on t2.micro: CPU baseline 10-15% after 1-minute NCAA polling, monitor after adding Reddit polling.
+      </doc>
+    </docs>
+
+    <code>
+      <artifact path="backend/app/services/ncaa_client.py" kind="service" symbol="NCAAClient" lines="22-50" reason="Reusable async HTTP client pattern with httpx.AsyncClient, rate limiting (RATE_LIMIT_DELAY), retry logic with tenacity decorator, structured logging. Reddit client should follow same pattern with token bucket rate limiting instead of simple delay."/>
+
+      <artifact path="backend/app/assets/ncaa_games.py" kind="asset" symbol="ncaa_games" lines="26-50" reason="Dagster asset pattern: @asset decorator with retry_policy, async function signature (context: AssetExecutionContext, database: DatabaseResource), database session management, structured logging, metadata return dict. Reddit asset extract_reddit_posts should follow identical pattern."/>
+
+      <artifact path="backend/app/dagster_definitions.py" kind="config" symbol="ncaa_games_schedule" lines="N/A" reason="Schedule definition pattern: ScheduleDefinition(name, cron_schedule, target, execution_timezone). Reddit schedule reddit_posts_schedule should use same structure with cron="*/10 * * * *" (10-minute interval)."/>
+
+      <artifact path="backend/app/models/dim_team.py" kind="model" symbol="DimTeam" lines="N/A" reason="SQLModel pattern example: SQLModel with table=True, __tablename__ explicit, Field() for column config, type annotations. RawRedditPost model should follow same pattern for raw_reddit_posts table."/>
+
+      <artifact path="backend/app/tests/services/test_ncaa_client.py" kind="test" symbol="test suite" lines="N/A" reason="Async test pattern with pytest-asyncio, httpx mock responses, error handling tests. Reddit client tests should follow same structure."/>
+    </code>
+
+    <dependencies>
+      <python>
+        <package name="httpx" version=">=0.27.0,<1.0.0">Async HTTP client for Reddit API requests</package>
+        <package name="structlog" version=">=24.0.0,<25.0.0">Structured logging for event tracking</package>
+        <package name="tenacity" version=">=9.0.0,<10.0.0">Retry logic with exponential backoff</package>
+        <package name="dagster" version=">=1.12.1">Orchestration framework for assets and schedules</package>
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0">ORM for RawRedditPost model and database operations</package>
+        <package name="alembic" version=">=1.13.0,<2.0.0">Database migration management</package>
+        <package name="pydantic" version=">=2.9.0,<3.0.0">Data validation for Reddit API responses</package>
+        <package name="asyncpg" version=">=0.30.0">Async PostgreSQL driver</package>
+        <package name="pytest" version=">=8.3.0,<9.0.0">Testing framework</package>
+        <package name="pytest-asyncio" version=">=0.24.0,<1.0.0">Async test support</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>All HTTP requests MUST use async/await with httpx.AsyncClient (no requests library, no sync I/O)</constraint>
+    <constraint>Reddit client MUST use token bucket algorithm for 10 QPM rate limiting (not simple delay like NCAA client)</constraint>
+    <constraint>Database operations MUST use SQLModel ORM (no raw SQL except in migrations)</constraint>
+    <constraint>Alembic migrations MUST be the only way to modify database schema (no SQLModel.metadata.create_all)</constraint>
+    <constraint>TimescaleDB hypertable MUST be created in migration with create_hypertable() SQL function</constraint>
+    <constraint>Dagster asset MUST use incremental extraction pattern (cursor via MAX(fetched_at), not full reload)</constraint>
+    <constraint>All logging MUST use structlog with event naming convention: past_tense_snake_case (e.g., "fetch_completed")</constraint>
+    <constraint>Legal warnings MUST appear in: RedditClient docstring, asset logs (WARNING level), CLAUDE.md, README, PR template</constraint>
+    <constraint>Environment variable REDDIT_POLLING_ENABLED MUST control schedule activation (asset still manually materializable when disabled)</constraint>
+    <constraint>ON CONFLICT DO NOTHING idempotency pattern MUST be used for upserts (prevents duplicate post_id insertions)</constraint>
+    <constraint>Schedule cron format MUST be standard 5-field expression with execution_timezone="US/Eastern"</constraint>
+    <constraint>Code MUST pass ruff linter and mypy type checker before commit</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface name="Reddit API Endpoint" kind="REST">
+      <signature>GET https://www.reddit.com/r/CollegeBasketball/new.json?limit=100</signature>
+      <description>Unauthenticated Reddit endpoint for latest posts. Returns JSON with data.children[] array containing post objects.</description>
+      <path>External API</path>
+    </interface>
+
+    <interface name="RedditClient.fetch_latest_posts" kind="async function">
+      <signature>async def fetch_latest_posts(self, limit: int = 100) -> list[dict[str, Any]]</signature>
+      <description>Fetches latest posts from r/CollegeBasketball with token bucket rate limiting. Returns list of post dictionaries with fields: id, created_utc, title, selftext, score, num_comments, etc.</description>
+      <path>backend/app/services/reddit_client.py (to be created)</path>
+    </interface>
+
+    <interface name="extract_reddit_posts asset" kind="Dagster asset">
+      <signature>async def extract_reddit_posts(context: AssetExecutionContext, database: DatabaseResource) -> dict[str, int]</signature>
+      <description>Dagster asset for incremental Reddit post extraction. Returns metadata dict with keys: posts_fetched, posts_inserted, cursor_time.</description>
+      <path>backend/app/assets/reddit_posts.py (to be created)</path>
+    </interface>
+
+    <interface name="RawRedditPost model" kind="SQLModel">
+      <signature>class RawRedditPost(SQLModel, table=True): ...</signature>
+      <description>ORM model for raw_reddit_posts TimescaleDB hypertable. Columns: post_key (PK), post_id (unique), fetched_at, post_created_at, subreddit, author, title, selftext, score, num_comments, upvote_ratio, permalink, flair_text.</description>
+      <path>backend/app/models/reddit.py (to be created)</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Testing follows pytest-asyncio patterns for async code. Unit tests mock external dependencies (httpx for Reddit API, database sessions). Integration tests use test database with fixtures. Manual testing via Dagster UI for asset materialization and schedule execution. Code coverage target: >70% for services and assets. All tests must pass before merge.
+    </standards>
+
+    <locations>
+      backend/app/tests/services/ (unit tests for RedditClient)
+      backend/app/tests/assets/ (integration tests for extract_reddit_posts asset)
+      backend/app/tests/models/ (model validation tests for RawRedditPost)
+    </locations>
+
+    <ideas>
+      <idea ac="AC-1">Unit test RedditClient: Mock httpx responses, verify rate limiting (10 QPM), test retry logic (3 attempts with backoff), validate structured logging events</idea>
+      <idea ac="AC-1">Unit test TokenBucket: Verify 10 tokens max capacity, test acquire() waits when tokens depleted, test refill rate (10 tokens per 60 seconds)</idea>
+      <idea ac="AC-2">Migration test: Apply migration up/down, verify hypertable created, check retention/compression policies via TimescaleDB queries</idea>
+      <idea ac="AC-2">Schema validation test: Ensure RawRedditPost SQLModel matches migration schema exactly (column names, types, constraints)</idea>
+      <idea ac="AC-3">Asset integration test: Mock RedditClient, verify incremental cursor logic (MAX(fetched_at) query), test ON CONFLICT DO NOTHING idempotency</idea>
+      <idea ac="AC-3">Asset metadata test: Verify return dict contains posts_fetched, posts_inserted, cursor_time keys with correct values</idea>
+      <idea ac="AC-4">Manual schedule test: Enable schedule in Dagster UI, wait 20 minutes, verify 2 runs appear in Runs tab with 10-minute spacing</idea>
+      <idea ac="AC-5">Environment variable test: Toggle REDDIT_POLLING_ENABLED, restart daemon, verify schedule active/inactive status, test manual materialization when disabled</idea>
+      <idea ac="AC-6">Documentation review: Grep codebase for legal warning strings, verify presence in RedditClient, logs, CLAUDE.md, README, PR template</idea>
+      <idea ac="AC-7">Week 1 data validation: Query raw_reddit_posts after 7 days, assert 700-3500 posts, check for duplicates, verify date range</idea>
+    </ideas>
+  </tests>
+</story-context>
