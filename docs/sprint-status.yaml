@@ -64,14 +64,14 @@ development_status:
   epic-2-retrospective: completed
 
   # Epic 3: Basic API + Dashboard MVP (6 stories)
-  epic-3: contexted
+  epic-3: done
   3-1-create-games-endpoint: done
   3-2-add-health-endpoint: done
   3-3-initialize-react-dashboard: done
   3-4-build-game-list: done
   3-5-add-auto-refresh: done
-  3-6-increase-refresh-cadence: review  # Code review: APPROVED - Ready for deployment & 24h monitoring
-  epic-3-retrospective: optional
+  3-6-increase-refresh-cadence: done
+  epic-3-retrospective: done
 
   # Epic 4: Reddit Social Sentiment (not decomposed yet)
   epic-4: backlog
