@@ -24,6 +24,7 @@ dependencies = [
     "dagster-postgres>=0.28.1",
     "asyncpg>=0.30.0",
     "rapidfuzz>=3.14.3",
+    "vadersentiment>=3.3.2",
 ]
 
 [dependency-groups]

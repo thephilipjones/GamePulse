@@ -12,7 +12,8 @@ from datetime import datetime
 
 import structlog
 from rapidfuzz import fuzz
-from sqlmodel import Session, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
 
 from app.models.dim_team import DimTeam
 from app.models.fact_game import FactGame
@@ -50,40 +51,50 @@ class GameMatcher:
 
     Features:
     - In-memory team cache with aliases for fast matching
-    - RapidFuzz partial_ratio scorer for substring matching
+    - Multi-tier matching: exact match for short acronyms (≤3 chars), token-based for longer names
     - Confidence scoring (average of top 2 matches, normalized 0-1)
     - Optional game key resolution (2 teams → head-to-head, 1 team → any game)
     - Structured logging (teams_loaded, match_result, resolution events)
 
+    Matching Strategy (improved for false positive reduction):
+    - Tier 1: Exact match for aliases ≤3 characters (prevents UMBC→ULM false matches)
+    - Tier 2: token_sort_ratio for aliases >3 characters (reduces "buzzer beater"→"Baylor Bears")
+    - Threshold: 70/100 (increased from 60 to reduce false positives)
+
     Usage:
         matcher = GameMatcher(session)
+        await matcher.initialize()
         result = matcher.match_post_to_teams("Duke vs UNC tonight!")
         # result.matched_teams = ["ncaam_duke", "ncaam_unc"]
         # result.match_confidence = 0.95
         # result.is_game_related = True
 
-        game_key = matcher.resolve_game_key(result.matched_teams, post_date)
+        game_key = await matcher.resolve_game_key(result.matched_teams, post_date)
     """
 
-    MATCH_THRESHOLD = 60  # RapidFuzz score threshold (0-100 scale)
+    MATCH_THRESHOLD = 70  # RapidFuzz score threshold (0-100 scale) - increased from 60
     CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for is_game_related flag
     TOP_N_MATCHES = 5  # Number of top matches to consider
+    SHORT_ACRONYM_LENGTH = 3  # Aliases ≤ this length require exact match
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         """
         Initialize GameMatcher with teams cache from database.
 
         Args:
-            session: SQLModel database session for loading teams
+            session: Async database session for loading teams
 
         Raises:
             RuntimeError: If team cache loading fails
         """
         self.session = session
         self.teams_cache: dict[str, str] = {}  # alias -> team_id mapping
-        self._load_teams_cache()
 
-    def _load_teams_cache(self) -> None:
+    async def initialize(self) -> None:
+        """Load teams cache from database. Must be called after __init__."""
+        await self._load_teams_cache()
+
+    async def _load_teams_cache(self) -> None:
         """
         Load NCAA basketball teams with aliases into in-memory cache.
 
@@ -99,7 +110,8 @@ class GameMatcher:
                 DimTeam.sport == "ncaam",
                 DimTeam.is_current == True,  # noqa: E712
             )
-            teams = self.session.exec(statement).all()
+            result = await self.session.execute(statement)
+            teams = result.scalars().all()
 
             if not teams:
                 raise RuntimeError(
@@ -132,10 +144,14 @@ class GameMatcher:
 
     def match_post_to_teams(self, post_text: str) -> GameMatchResult:
         """
-        Match social media post text to NCAA teams using fuzzy string matching.
+        Match social media post text to NCAA teams using multi-tier fuzzy matching.
 
-        Uses RapidFuzz partial_ratio scorer for substring matching.
-        Returns top 5 matches with scores >= 60/100 threshold.
+        Multi-tier matching strategy to reduce false positives:
+        - Tier 1: Exact match for short acronyms (≤3 chars) - prevents UMBC→ULM
+        - Tier 2: token_sort_ratio for longer aliases (>3 chars) - reduces "buzzer beater"→"Baylor"
+        - Threshold: 70/100 (increased from 60)
+
+        Returns top 5 matches with scores >= 70/100 threshold.
         Deduplicates multiple aliases for same team.
         Confidence = average of top 2 match scores, normalized to 0-1.
 
@@ -169,12 +185,23 @@ class GameMatcher:
         # Normalize post text for matching
         text_lower = post_text.lower()
 
-        # Find all matches above threshold using RapidFuzz
+        # Find all matches above threshold using multi-tier strategy
         matches: list[tuple[str, float]] = []  # (team_id, score)
 
         for alias, team_id in self.teams_cache.items():
-            # Use partial_ratio for substring matching (allows "Duke" in "Duke vs UNC")
-            score = fuzz.partial_ratio(alias, text_lower)
+            # Tier 1: Short acronyms (≤3 chars) require exact match
+            if len(alias) <= self.SHORT_ACRONYM_LENGTH:
+                # Use word boundary check for exact match
+                # This prevents "UMBC" from matching "ULM" and vice versa
+                if alias in text_lower.split():
+                    score = 100.0  # Exact match = perfect score
+                else:
+                    score = 0.0  # No fuzzy matching for short acronyms
+            # Tier 2: Longer aliases use token_sort_ratio
+            else:
+                # token_sort_ratio is better for multi-word names and reduces substring false positives
+                # Example: "buzzer beater" → "Baylor Bears" scores lower than partial_ratio
+                score = fuzz.token_sort_ratio(alias, text_lower)
 
             if score >= self.MATCH_THRESHOLD:
                 matches.append((team_id, score))
@@ -223,7 +250,9 @@ class GameMatcher:
             is_game_related=is_game_related,
         )
 
-    def resolve_game_key(self, team_ids: list[str], post_date: datetime) -> int | None:
+    async def resolve_game_key(
+        self, team_ids: list[str], post_date: datetime
+    ) -> int | None:
         """
         Resolve matched teams to a specific game key on the post date.
 
@@ -260,7 +289,8 @@ class GameMatcher:
             team_keys: list[int] = []
             for team_id in team_ids:
                 statement = select(DimTeam.team_key).where(DimTeam.team_id == team_id)
-                team_key = self.session.exec(statement).first()
+                result = await self.session.execute(statement)
+                team_key = result.scalar_one_or_none()
                 if team_key:
                     team_keys.append(team_key)
 
@@ -295,7 +325,8 @@ class GameMatcher:
                         )
                     )
                 )
-                game_key = self.session.exec(statement).first()
+                result = await self.session.execute(statement)
+                game_key = result.scalar_one_or_none()
                 return game_key
 
             # Case 2: One team - query for any game (home or away)
@@ -315,7 +346,8 @@ class GameMatcher:
                         | (FactGame.away_team_key == team_keys[0])
                     )
                 )
-                games = self.session.exec(statement).all()
+                result = await self.session.execute(statement)
+                games = list(result.scalars().all())
 
                 # Return game_key only if exactly one game found (unambiguous)
                 if len(games) == 1:

@@ -1,0 +1,381 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>5</storyId>
+    <title>Sentiment Analysis & Fact Table</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-16</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-5-sentiment-analysis-fact-table.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>data engineer</asA>
+    <iWant>to apply VADER sentiment analysis to social posts and create a fact table linked to games</iWant>
+    <soThat>Epic 5 excitement scoring can query sentiment signals for NCAA basketball games</soThat>
+    <tasks>
+### Task 1: Database Migration - fact_social_sentiment Table
+- Create Alembic migration for fact_social_sentiment table
+- Include columns: sentiment_key, game_key, date_key, social_post_key, sentiment scores, platform, post_text, created_at, engagement_score
+- Configure as TimescaleDB hypertable with 1-day chunks
+- Add UNIQUE constraint on social_post_key
+- Create indexes on game_key, date_key, sentiment_compound, engagement_score
+- Add 90-day retention policy
+
+### Task 2: SQLModel - FactSocialSentiment Model
+- Create FactSocialSentiment class in backend/app/models/social.py
+- Define all fields with proper types and foreign keys
+- Add table configuration
+
+### Task 3: Sentiment Analyzer Service
+- Create backend/app/services/sentiment_analyzer.py
+- Implement SentimentAnalyzer class using vaderSentiment library
+- Add analyze() method returning compound + component scores
+- Add batch_analyze() for efficiency
+- Install vaderSentiment dependency via uv
+
+### Task 4: Dagster Asset - calculate_sentiment
+- Create backend/app/assets/social_sentiment.py
+- Implement calculate_sentiment asset
+- Read new posts from stg_social_posts not in fact_social_sentiment
+- Apply sentiment analysis to each post
+- Resolve game_key using GameMatcher.resolve_game_key()
+- Resolve date_key from fact_game
+- Insert into fact_social_sentiment
+- Track metadata: posts_analyzed, posts_matched_to_game, posts_skipped_no_game
+
+### Task 5: Dagster Schedule Definition
+- Create calculate_sentiment_schedule in social_sentiment.py
+- Configure cron: 30 * * * * (hourly at :30)
+- Add to dagster_definitions.py all_schedules
+- Set default status to RUNNING
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### AC1: Database Table - fact_social_sentiment
+- Table exists with all required columns and types
+- TimescaleDB hypertable partitioned on created_at (1-day chunks)
+- UNIQUE constraint on social_post_key
+- Indexes on game_key, date_key, sentiment_compound, engagement_score
+- 90-day retention policy configured
+
+### AC2: Sentiment Analyzer Service
+- SentimentAnalyzer.analyze() returns compound, positive, negative, neutral scores
+- Compound score range: -1 to +1
+- Handles emojis, caps, punctuation correctly
+- >= 0.05 = positive, <= -0.05 = negative, between = neutral
+
+### AC3: Dagster Asset - calculate_sentiment
+- Reads new posts from stg_social_posts
+- Applies VADER sentiment analysis
+- Resolves game_key using GameMatcher
+- Resolves date_key from fact_game
+- Inserts into fact_social_sentiment
+- Returns metadata with counts
+
+### AC4: Game Key Resolution
+- Two-team match: queries fact_game for both teams on date
+- Single-team match: finds any game for that team on date
+- Returns NULL for 0 or 3+ teams (ambiguous)
+- Returns NULL if no game found
+
+### AC5: Dagster Schedule - Hourly at :30
+- Schedule exists with cron: 30 * * * *
+- Status: RUNNING
+- Triggers 15 minutes after transform_social_posts
+
+### AC6: Epic 5 Query Example
+- Can query sentiment aggregated by game_key
+- Joins fact_social_sentiment with fact_game
+- Returns avg_sentiment, total_engagement per game
+
+### AC7: Week 3 Success Metric
+- 400-1,200 total sentiment records
+- 80-90% of stg_social_posts matched to games
+- avg_compound: 0.1-0.3 (slightly positive)
+- 20-50 games with sentiment coverage
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <!-- Epic 4 Technical Specification (Primary Reference) -->
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Sentiment Analysis Integration (lines 1056-1170)</section>
+        <snippet>
+          VADER sentiment implementation details including SentimentAnalyzer class,
+          vaderSentiment library integration, analyze() and batch_analyze() methods.
+          Complete code example shows compound score calculation and Epic 5 integration pattern.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Data Schema - fact_social_sentiment (lines 349-394)</section>
+        <snippet>
+          Complete table definition with columns, foreign keys, TimescaleDB configuration,
+          indexes (game_key, date_key, compound, engagement), retention policy (90 days),
+          and Epic 5 query examples showing JOIN pattern with fact_game.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Architecture Overview - Data Flow (lines 60-145)</section>
+        <snippet>
+          Shows calculate_sentiment asset in fact layer, running hourly at :30 after transform_social_posts.
+          Reads stg_social_posts, applies VADER, resolves FK to fact_game, writes fact_social_sentiment.
+        </snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse System Architecture</title>
+        <section>General architecture patterns</section>
+        <snippet>
+          Backend patterns: FastAPI + SQLModel, TimescaleDB hypertables, Dagster orchestration,
+          Alembic migrations, structured logging with structlog.
+        </snippet>
+      </doc>
+    </docs>
+    <code>
+      <!-- Existing Services (Dependencies) -->
+      <artifact>
+        <path>backend/app/services/game_matcher.py</path>
+        <kind>service</kind>
+        <symbol>GameMatcher.resolve_game_key()</symbol>
+        <lines>1-300</lines>
+        <reason>
+          Used for FK resolution in calculate_sentiment asset. Takes matched_teams list
+          and post_date, queries fact_game for matching games. Returns game_key or None.
+          Handles 2-team (head-to-head), 1-team (any game), and ambiguous cases.
+        </reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/social.py</path>
+        <kind>model</kind>
+        <symbol>StgSocialPost</symbol>
+        <lines>103-200</lines>
+        <reason>
+          Input source for calculate_sentiment asset. Contains matched_teams (JSONB array),
+          post_text, created_at, engagement_score, platform. Story 4-5 reads from this table.
+        </reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/fact_game.py</path>
+        <kind>model</kind>
+        <symbol>FactGame</symbol>
+        <lines>1-100</lines>
+        <reason>
+          Target for FK resolution. Contains game_key (PK), game_date, home_team_id, away_team_id.
+          Used to resolve game_key from matched_teams + created_at, and to get date_key.
+        </reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/transform_social_posts.py</path>
+        <kind>asset</kind>
+        <symbol>transform_social_posts</symbol>
+        <lines>1-80</lines>
+        <reason>
+          Upstream dependency for calculate_sentiment. Produces stg_social_posts table.
+          Story 4-5 schedule runs 15 minutes after this completes (hourly at :15 vs :30).
+        </reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/dagster_definitions.py</path>
+        <kind>config</kind>
+        <symbol>all_schedules</symbol>
+        <lines>1-50</lines>
+        <reason>
+          Where calculate_sentiment_schedule must be registered. Contains existing schedules
+          for reddit_posts, bluesky_posts, ncaa_games. Follow same pattern for new schedule.
+        </reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="vaderSentiment" version=">=3.3.2" purpose="VADER sentiment analysis library" />
+        <package name="sqlmodel" version=">=0.0.22" purpose="Database ORM and models" />
+        <package name="dagster" version=">=1.12.1" purpose="Data pipeline orchestration" />
+        <package name="structlog" version=">=24.0.0" purpose="Structured logging" />
+        <package name="alembic" version=">=1.13.0" purpose="Database migrations" />
+        <package name="pytest" version=">=8.3.0" purpose="Test framework" />
+        <package name="pytest-asyncio" version=">=0.24.0" purpose="Async test support" />
+      </python>
+      <database>
+        <extension name="TimescaleDB" purpose="Hypertable partitioning and retention policies" />
+        <table name="fact_game" purpose="Game key resolution target" />
+        <table name="dim_date" purpose="Date key resolution source" />
+        <table name="stg_social_posts" purpose="Input for sentiment analysis" />
+      </database>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <!-- Database Layer -->
+    - fact_social_sentiment MUST be a TimescaleDB hypertable partitioned on created_at (1-day chunks)
+    - MUST have UNIQUE constraint on social_post_key (one sentiment record per post)
+    - MUST have indexes on: game_key, date_key, sentiment_compound, engagement_score
+    - MUST have 90-day retention policy for storage optimization
+    - Alembic migration MUST use op.execute() for TimescaleDB functions (create_hypertable, add_retention_policy)
+
+    <!-- Service Layer -->
+    - SentimentAnalyzer MUST use vaderSentiment library (not transformers)
+    - MUST return 4 scores: compound, positive, negative, neutral (all float type)
+    - Compound score range: -1.0 to +1.0 (sentiment polarity)
+    - Component scores range: 0.0 to 1.0 (normalized probabilities)
+
+    <!-- Asset Layer -->
+    - calculate_sentiment MUST process incrementally (posts not yet in fact_social_sentiment)
+    - MUST use GameMatcher.resolve_game_key() for FK resolution (reuse existing service)
+    - MUST skip posts where game_key resolution fails (return NULL, log as posts_skipped_no_game)
+    - MUST resolve date_key from fact_game (not from created_at directly)
+    - Batch size limit: 1000 posts (memory constraint on t4g.small)
+
+    <!-- Scheduling -->
+    - Schedule MUST run hourly at :30 (15 minutes after transform_social_posts at :15)
+    - MUST set default_status=DefaultScheduleStatus.RUNNING (auto-start on deployment)
+    - MUST register in dagster_definitions.py all_schedules list
+
+    <!-- Testing -->
+    - MUST have unit tests for SentimentAnalyzer with positive/negative/neutral/emoji test cases
+    - MUST have asset tests for game_key resolution (2-team, 1-team, ambiguous)
+    - MUST use pytest fixtures from conftest.py for database session
+    - Tests MUST seed dim_team and fact_game data using fixtures (see test_game_matcher.py pattern)
+  </constraints>
+
+  <interfaces>
+    <!-- GameMatcher Service Interface (Existing - Reuse) -->
+    <interface>
+      <name>GameMatcher.resolve_game_key()</name>
+      <kind>Service method</kind>
+      <signature>
+        def resolve_game_key(
+            self,
+            matched_teams: list[str],
+            post_date: datetime,
+            lookback_days: int = 1
+        ) -> int | None
+      </signature>
+      <path>backend/app/services/game_matcher.py</path>
+      <usage>
+        Used in calculate_sentiment to resolve stg_social_posts.matched_teams to fact_game.game_key.
+        Returns None for ambiguous matches (0 or 3+ teams) or no games found.
+      </usage>
+    </interface>
+
+    <!-- SentimentAnalyzer Service Interface (New - This Story) -->
+    <interface>
+      <name>SentimentAnalyzer.analyze()</name>
+      <kind>Service method</kind>
+      <signature>
+        def analyze(self, text: str) -> dict[str, float]:
+            # Returns: {"compound": float, "positive": float, "negative": float, "neutral": float}
+      </signature>
+      <path>backend/app/services/sentiment_analyzer.py</path>
+      <usage>
+        Called in calculate_sentiment asset for each post.
+        Input: post_text from stg_social_posts
+        Output: Sentiment scores for fact_social_sentiment columns
+      </usage>
+    </interface>
+
+    <!-- Database Schema Interfaces -->
+    <interface>
+      <name>fact_social_sentiment</name>
+      <kind>Database table</kind>
+      <signature>
+        CREATE TABLE fact_social_sentiment (
+            sentiment_key BIGSERIAL PRIMARY KEY,
+            game_key BIGINT REFERENCES fact_game(game_key),
+            date_key INTEGER REFERENCES dim_date(date_key),
+            social_post_key BIGINT UNIQUE REFERENCES stg_social_posts(social_post_key),
+            sentiment_compound NUMERIC(5,4),
+            sentiment_positive NUMERIC(5,4),
+            sentiment_negative NUMERIC(5,4),
+            sentiment_neutral NUMERIC(5,4),
+            platform TEXT,
+            post_text TEXT,
+            created_at TIMESTAMPTZ,
+            engagement_score NUMERIC(10,2)
+        )
+      </signature>
+      <path>backend/app/alembic/versions/{timestamp}_create_fact_social_sentiment.py</path>
+      <usage>Epic 5 will query this table joined with fact_game for excitement scoring</usage>
+    </interface>
+
+    <!-- Dagster Schedule Interface -->
+    <interface>
+      <name>calculate_sentiment_schedule</name>
+      <kind>Dagster schedule</kind>
+      <signature>
+        ScheduleDefinition(
+            name="calculate_sentiment_schedule",
+            job=calculate_sentiment_job,
+            cron_schedule="30 * * * *",
+            execution_timezone="America/New_York",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
+      </signature>
+      <path>backend/app/assets/social_sentiment.py</path>
+      <usage>
+        Triggers calculate_sentiment asset hourly at :30.
+        Must be added to all_schedules in dagster_definitions.py.
+      </usage>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      GamePulse uses pytest for all backend testing with async support (pytest-asyncio).
+      Tests are organized by type: app/tests/services/ for service tests, app/tests/assets/ for Dagster asset tests.
+      Use fixtures from conftest.py for database sessions and test data seeding.
+      Follow pattern in test_game_matcher.py for seeding dim_team and fact_game data.
+      Run tests with: uv run pytest -v (sequential) or uv run pytest -v -n auto (parallel).
+      Coverage tracked via: uv run coverage run -m pytest -v && uv run coverage report.
+    </standards>
+    <locations>
+      - backend/app/tests/services/test_sentiment_analyzer.py (new - unit tests for SentimentAnalyzer)
+      - backend/app/tests/assets/test_calculate_sentiment.py (new - asset tests for calculate_sentiment)
+      - backend/app/tests/conftest.py (existing - shared fixtures)
+    </locations>
+    <ideas>
+      <!-- SentimentAnalyzer Unit Tests -->
+      <test id="AC2" name="test_analyze_positive_sentiment">
+        Verify VADER returns high positive compound score (>= 0.05) for enthusiastic text like
+        "What an amazing game! Duke vs UNC was incredible!!!"
+      </test>
+      <test id="AC2" name="test_analyze_negative_sentiment">
+        Verify VADER returns negative compound score (<= -0.05) for frustrated text like
+        "Terrible refs, worst game ever. So disappointed."
+      </test>
+      <test id="AC2" name="test_analyze_neutral_sentiment">
+        Verify VADER returns neutral compound score (-0.05 to 0.05) for informational text like
+        "Duke vs UNC tonight at 7pm on ESPN."
+      </test>
+      <test id="AC2" name="test_analyze_handles_emojis">
+        Verify VADER correctly processes emojis and caps like "LET'S GO DUKE 🔥🔥🔥"
+        (should return positive compound score).
+      </test>
+
+      <!-- calculate_sentiment Asset Tests -->
+      <test id="AC3" name="test_sentiment_calculates_for_new_posts">
+        Seed stg_social_posts with test data, run calculate_sentiment asset,
+        verify fact_social_sentiment has records with VADER scores.
+      </test>
+      <test id="AC4" name="test_game_key_resolution_two_teams">
+        Seed fact_game with Duke vs UNC game, seed stg_social_posts with post mentioning both,
+        verify calculate_sentiment resolves correct game_key FK.
+      </test>
+      <test id="AC4" name="test_skips_posts_without_game_key">
+        Seed stg_social_posts with post mentioning 0 teams (generic text),
+        verify calculate_sentiment skips it (not in fact_social_sentiment, logged in metadata).
+      </test>
+      <test id="AC1" name="test_unique_constraint_on_social_post_key">
+        Insert two fact_social_sentiment records with same social_post_key,
+        verify database raises IntegrityError (UNIQUE constraint violation).
+      </test>
+    </ideas>
+  </tests>
+</story-context>

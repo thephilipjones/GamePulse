@@ -4,15 +4,17 @@ Dagster asset for unified social media post transformation (Story 4-4).
 Asset: transform_social_posts
 - Transforms raw Reddit and Bluesky posts into unified stg_social_posts table
 - Calculates platform-specific engagement scores
+- Matches posts to NCAA teams using GameMatcher service (Story 4-5 prerequisite)
 - Processes incrementally (WHERE processed_at IS NULL)
 - Batch size: 2500 posts per run (optimized for t4g.small)
-- Trigger: Runs after extract_reddit_posts completes
+- Trigger: Auto-materializes when extract_reddit_posts completes (eager policy)
 
 Transform Logic:
 - Reddit: score + num_comments → engagement_score
 - Bluesky: likeCount + replyCount → engagement_score
 - Normalizes post text: Reddit (title + selftext), Bluesky (post_text)
-- Maintains game matching metadata (matched_to_game, match_confidence)
+- Team matching: Identifies team mentions in post text, stores team IDs for game resolution
+- Maintains game matching metadata (matched_to_game, match_confidence, matched_teams)
 """
 
 from datetime import datetime, timezone
@@ -21,6 +23,7 @@ from typing import Any
 import structlog
 from dagster import (
     AssetExecutionContext,
+    AutoMaterializePolicy,
     Backoff,
     RetryPolicy,
     asset,
@@ -36,6 +39,7 @@ from app.services.engagement import (
     calculate_bluesky_engagement,
     calculate_reddit_engagement,
 )
+from app.services.game_matcher import GameMatcher
 
 logger = structlog.get_logger()
 
@@ -53,7 +57,9 @@ BATCH_SIZE = 2500
         delay=2,
         backoff=Backoff.EXPONENTIAL,
     ),
-    # Dependency: Run after Reddit extract completes
+    # Auto-materialize: Trigger when reddit/bluesky extract completes
+    auto_materialize_policy=AutoMaterializePolicy.eager(),
+    # Dependency: Runs after Reddit extract completes
     deps=["extract_reddit_posts"],
 )
 async def transform_social_posts(
@@ -141,6 +147,10 @@ async def _transform_reddit_posts(
     posts_transformed = 0
     now = datetime.now(timezone.utc)
 
+    # Initialize GameMatcher once for batch (loads teams cache)
+    matcher = GameMatcher(session)
+    await matcher.initialize()
+
     for post in reddit_posts:
         # Calculate engagement score
         engagement_score = calculate_reddit_engagement(post.score, post.num_comments)
@@ -154,6 +164,18 @@ async def _transform_reddit_posts(
                 post_text += "\n\n"  # Separate title and body
             post_text += post.selftext
 
+        # Match post to teams (Story 4-5 prerequisite)
+        matched_teams: list[str] | None = None
+        matched_to_game = False
+        match_confidence = None
+
+        if post_text:
+            match_result = matcher.match_post_to_teams(post_text)
+            if match_result.matched_teams:
+                matched_teams = match_result.matched_teams
+                matched_to_game = True
+                match_confidence = match_result.match_confidence
+
         # Build StgSocialPost data dict
         stg_post: dict[str, Any] = {
             "platform": "reddit",
@@ -163,8 +185,9 @@ async def _transform_reddit_posts(
             "author_handle": post.author,
             "post_text": post_text if post_text else None,
             "engagement_score": engagement_score,
-            "matched_to_game": post.matched_to_game,
-            "match_confidence": post.match_confidence,
+            "matched_to_game": matched_to_game,
+            "match_confidence": match_confidence,
+            "matched_teams": matched_teams,
             "processed_at": post.processed_at,
             "raw_json": post.raw_json,
         }
@@ -234,9 +257,25 @@ async def _transform_bluesky_posts(
     posts_transformed = 0
     now = datetime.now(timezone.utc)
 
+    # Initialize GameMatcher once for batch (loads teams cache)
+    matcher = GameMatcher(session)
+    await matcher.initialize()
+
     for post in bluesky_posts:
         # Calculate engagement score from raw_json
         engagement_score = calculate_bluesky_engagement(post.raw_json)
+
+        # Match post to teams (Story 4-5 prerequisite)
+        matched_teams: list[str] | None = None
+        matched_to_game = False
+        match_confidence = None
+
+        if post.post_text:
+            match_result = matcher.match_post_to_teams(post.post_text)
+            if match_result.matched_teams:
+                matched_teams = match_result.matched_teams
+                matched_to_game = True
+                match_confidence = match_result.match_confidence
 
         # Build StgSocialPost data dict
         stg_post: dict[str, Any] = {
@@ -247,8 +286,9 @@ async def _transform_bluesky_posts(
             "author_handle": post.author_handle,
             "post_text": post.post_text,
             "engagement_score": engagement_score,
-            "matched_to_game": post.matched_to_game,
-            "match_confidence": post.match_confidence,
+            "matched_to_game": matched_to_game,
+            "match_confidence": match_confidence,
+            "matched_teams": matched_teams,
             "processed_at": post.processed_at,
             "raw_json": post.raw_json,
         }

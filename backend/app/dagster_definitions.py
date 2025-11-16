@@ -16,6 +16,7 @@ from dagster import (
 from app.assets import bluesky_posts as bluesky_posts_module
 from app.assets import ncaa_games as ncaa_games_module
 from app.assets import reddit_posts as reddit_posts_module
+from app.assets import social_sentiment as social_sentiment_module
 from app.assets import transform_social_posts as transform_social_posts_module
 from app.assets.bluesky_posts import bluesky_posts_job, bluesky_posts_schedule
 from app.assets.reddit_posts import reddit_posts_job, reddit_posts_schedule
@@ -28,6 +29,7 @@ all_assets = load_assets_from_modules(
         reddit_posts_module,
         bluesky_posts_module,
         transform_social_posts_module,
+        social_sentiment_module,
     ]
 )
 
@@ -38,9 +40,17 @@ ncaa_games_job = define_asset_job(
     description="Manually materialize NCAA games asset",
 )
 
-# Reddit job and schedule imported from reddit_posts module
+# Reddit and Bluesky jobs and schedules imported from their modules
 
-# Define schedule: every 1 minute (starts RUNNING automatically)
+# Define sentiment analysis job for manual materialization (Story 4-5)
+# NOTE: Auto-materialize policy triggers this automatically when transform_social_posts completes
+calculate_sentiment_job = define_asset_job(
+    name="materialize_calculate_sentiment",
+    selection="calculate_sentiment",
+    description="Analyze sentiment of social posts and link to games",
+)
+
+# Define NCAA games schedule: every 1 minute (starts RUNNING automatically)
 # RATIONALE: Schedule auto-starts on daemon initialization to ensure continuous
 # game data ingestion during NCAA basketball season. The retry policy (3 attempts,
 # exponential backoff: 2s, 4s, 8s) handles API failures gracefully, making
@@ -62,10 +72,19 @@ database_resource = DatabaseResource()
 # Dagster definitions
 defs = Definitions(
     assets=all_assets,
-    schedules=[ncaa_games_schedule, reddit_posts_schedule, bluesky_posts_schedule],
+    schedules=[
+        ncaa_games_schedule,
+        reddit_posts_schedule,
+        bluesky_posts_schedule,
+    ],
     resources={
         "database": database_resource,
     },
-    jobs=[ncaa_games_job, reddit_posts_job, bluesky_posts_job],
+    jobs=[
+        ncaa_games_job,
+        reddit_posts_job,
+        bluesky_posts_job,
+        calculate_sentiment_job,  # Manual materialization only
+    ],
     executor=in_process_executor,
 )

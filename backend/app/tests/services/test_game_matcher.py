@@ -63,6 +63,43 @@ def seed_teams(db: Session) -> dict[str, DimTeam]:
             aliases=["kansas", "jayhawks", "ku", "kansas jayhawks"],
             is_current=True,
         ),
+        # Teams for false positive testing
+        DimTeam(
+            team_id="ncaam_umbc",
+            espn_team_id="2390",
+            sport="ncaam",
+            team_name="UMBC",
+            team_abbr="UMBC",
+            aliases=["umbc", "retrievers", "umbc retrievers"],
+            is_current=True,
+        ),
+        DimTeam(
+            team_id="ncaam_wagner",
+            espn_team_id="2729",
+            sport="ncaam",
+            team_name="Wagner",
+            team_abbr="WAG",
+            aliases=["wagner", "seahawks", "wagner seahawks"],
+            is_current=True,
+        ),
+        DimTeam(
+            team_id="ncaam_ulm",
+            espn_team_id="309",
+            sport="ncaam",
+            team_name="ULM",
+            team_abbr="ULM",
+            aliases=["ulm", "la-monroe", "louisiana monroe", "warhawks"],
+            is_current=True,
+        ),
+        DimTeam(
+            team_id="ncaam_baylor",
+            espn_team_id="239",
+            sport="ncaam",
+            team_name="Baylor",
+            team_abbr="BAY",
+            aliases=["baylor", "bears", "baylor bears"],
+            is_current=True,
+        ),
     ]
 
     for team in teams:
@@ -324,6 +361,98 @@ class TestGameMatcherTeamMatching:
         assert result2.match_confidence >= 0.8  # High quality single match
         assert result2.match_confidence <= 1.0
         assert result2.is_game_related is True
+
+    def test_umbc_wagner_game_post_exact_match(
+        self, db: Session, seed_teams: dict[str, DimTeam]
+    ) -> None:
+        """
+        Test real-world case: UMBC defeats Wagner post should match exactly 2 teams.
+
+        This is the production issue we're fixing:
+        Post: "UMBC defeats Wagner 71-70 with one handed buzzer beater in OT (.1 seconds on clock)"
+        Expected: Match UMBC + Wagner (2 teams)
+        Current behavior: Matches 5 teams (UMBC, Wagner, Baylor, Kentucky, ULM)
+        """
+        matcher = GameMatcher(db)
+
+        result = matcher.match_post_to_teams(
+            "UMBC defeats Wagner 71-70 with one handed buzzer beater in OT (.1 seconds on clock)"
+        )
+
+        # Should match exactly 2 teams
+        assert len(result.matched_teams) == 2
+        assert "ncaam_umbc" in result.matched_teams
+        assert "ncaam_wagner" in result.matched_teams
+
+        # Should NOT match false positives
+        assert (
+            "ncaam_baylor" not in result.matched_teams
+        )  # False match from "buzzer beater"
+        assert "ncaam_ulm" not in result.matched_teams  # False match from "UMBC"
+        assert "ncaam_kentucky" not in result.matched_teams
+
+        # High confidence for clear game post
+        assert result.match_confidence >= 0.7
+        assert result.is_game_related is True
+
+    def test_short_acronym_exact_match_required(
+        self, db: Session, seed_teams: dict[str, DimTeam]
+    ) -> None:
+        """
+        Test short acronyms (≤3 chars) require exact match, not fuzzy.
+
+        Prevents false positives like:
+        - "UMBC" matching "ULM" (2/3 character overlap)
+        - "UK" matching "UNC"
+        """
+        matcher = GameMatcher(db)
+
+        # Test 1: "UMBC" should NOT match "ULM"
+        result1 = matcher.match_post_to_teams("UMBC wins big tonight!")
+        assert "ncaam_umbc" in result1.matched_teams
+        assert "ncaam_ulm" not in result1.matched_teams  # Should NOT fuzzy match
+
+        # Test 2: "ULM" should NOT match "UMBC"
+        result2 = matcher.match_post_to_teams("ULM defeats rival on the road")
+        assert "ncaam_ulm" in result2.matched_teams
+        assert "ncaam_umbc" not in result2.matched_teams  # Should NOT fuzzy match
+
+        # Test 3: "UK" should NOT match "UNC" (different teams)
+        result3 = matcher.match_post_to_teams("UK dominates in Rupp Arena")
+        assert "ncaam_kentucky" in result3.matched_teams
+        assert "ncaam_unc" not in result3.matched_teams  # Should NOT fuzzy match
+
+    def test_substring_false_positive_prevention(
+        self, db: Session, seed_teams: dict[str, DimTeam]
+    ) -> None:
+        """
+        Test fuzzy matching doesn't create false positives from substring similarity.
+
+        Prevents matches like:
+        - "buzzer beater" → "Baylor Bears" (substring "bear" in "beater")
+        - "dinner" → "Denver" (character overlap)
+        """
+        matcher = GameMatcher(db)
+
+        # Test 1: "buzzer beater" should NOT match Baylor
+        result1 = matcher.match_post_to_teams(
+            "What an incredible buzzer beater to win the game!"
+        )
+        # Should have low/no matches (no team names in text)
+        if len(result1.matched_teams) > 0:
+            # If any matches, Baylor should NOT be one of them
+            assert "ncaam_baylor" not in result1.matched_teams
+
+        # Test 2: Generic text with "bears" (animal) should NOT match Baylor
+        result2 = matcher.match_post_to_teams(
+            "The Chicago Bears are playing today in the NFL"
+        )
+        # Should not match NCAA basketball team "Baylor Bears"
+        # (This is a context problem - NFL vs NCAA - but at minimum
+        # the confidence should be low due to lack of other NCAA signals)
+        if "ncaam_baylor" in result2.matched_teams:
+            # If it does match due to "Bears", confidence should be lower
+            assert result2.match_confidence < 0.9
 
 
 class TestGameKeyResolution:

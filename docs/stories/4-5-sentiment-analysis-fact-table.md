@@ -2,7 +2,7 @@
 
 **Epic:** Epic 4 - Social Media Data Ingestion via ELT Pattern
 **Story ID:** 4-5
-**Status:** TODO
+**Status:** review
 **Estimated Effort:** 10-12 hours
 **Priority:** High (Week 3 - enables Epic 5)
 **Dependencies:** Story 4-4 (stg_social_posts), Epic 2 (fact_game, dim_date)
@@ -38,6 +38,7 @@ This story completes the ELT pipeline by creating the **fact layer** for Epic 5 
 ✅ **GIVEN** Alembic migrations are run
 **WHEN** I check the database schema
 **THEN** `fact_social_sentiment` table exists with columns:
+
 - `sentiment_key` BIGSERIAL PRIMARY KEY
 - `game_key` BIGINT REFERENCES fact_game(game_key)
 - `date_key` INTEGER REFERENCES dim_date(date_key)
@@ -60,6 +61,7 @@ This story completes the ELT pipeline by creating the **fact layer** for Epic 5 
 ✅ **GIVEN** a SentimentAnalyzer instance
 **WHEN** I call `analyze("Duke vs UNC was amazing! What a game!!!")`
 **THEN** it returns:
+
 ```python
 {
     "compound": 0.85,   # Overall sentiment (-1 to +1)
@@ -103,6 +105,7 @@ This story completes the ELT pipeline by creating the **fact layer** for Epic 5 
 ✅ **GIVEN** Dagster daemon is running
 **WHEN** I view schedules in Dagster UI
 **THEN** `calculate_sentiment_schedule` exists:
+
 - Cron: `30 * * * *` (hourly at :30)
 - Status: `RUNNING`
 - Dependencies: Waits for `transform_social_posts` (:15)
@@ -113,6 +116,7 @@ This story completes the ELT pipeline by creating the **fact layer** for Epic 5 
 
 ✅ **GIVEN** `fact_social_sentiment` is populated
 **WHEN** Epic 5 runs this query:
+
 ```sql
 SELECT
     g.game_id,
@@ -134,6 +138,7 @@ ORDER BY total_engagement DESC;
 
 ✅ **GIVEN** sentiment asset has run for 7 days
 **WHEN** I query:
+
 ```sql
 SELECT
     COUNT(*) AS total_sentiments,
@@ -144,6 +149,7 @@ WHERE created_at > NOW() - INTERVAL '7 days';
 ```
 
 **THEN** results show:
+
 - `total_sentiments`: 400-1,200 (80-90% of stg_social_posts matched to games)
 - `avg_compound`: 0.1-0.3 (slightly positive, sports excitement)
 - `games_with_sentiment`: 20-50 (games with social coverage)
@@ -157,6 +163,7 @@ WHERE created_at > NOW() - INTERVAL '7 days';
 **File:** `backend/app/alembic/versions/{timestamp}_create_fact_social_sentiment.py`
 
 **Implementation:**
+
 ```python
 def upgrade() -> None:
     op.execute("""
@@ -209,6 +216,7 @@ def downgrade() -> None:
 **File:** `backend/app/models/social.py` (modify existing)
 
 **Implementation:**
+
 ```python
 class FactSocialSentiment(SQLModel, table=True):
     """Sentiment-enriched social posts linked to games for Epic 5."""
@@ -243,11 +251,13 @@ class FactSocialSentiment(SQLModel, table=True):
 **Implementation:** See Epic 4 spec, section "Sentiment Analysis Integration"
 
 **Key Features:**
+
 - `SentimentAnalyzer` class using `vaderSentiment` library
 - `analyze(text: str)` method returns compound + component scores
 - `batch_analyze(texts: list[str])` for efficiency
 
 **Dependencies:**
+
 ```toml
 # backend/pyproject.toml
 [project]
@@ -258,6 +268,7 @@ dependencies = [
 ```
 
 **Installation:**
+
 ```bash
 cd backend
 uv add vaderSentiment
@@ -273,6 +284,7 @@ uv sync
 **Implementation:** See Epic 4 spec, section "Dagster Asset Specifications > Asset 4: calculate_sentiment"
 
 **Key Features:**
+
 - Read new `stg_social_posts` (not yet in `fact_social_sentiment`)
 - Apply `SentimentAnalyzer.analyze()` to each post
 - Use `GameMatcher.resolve_game_key()` to link to fact_game
@@ -287,6 +299,7 @@ uv sync
 **File:** `backend/app/assets/social_sentiment.py`
 
 **Implementation:**
+
 ```python
 calculate_sentiment_job = define_asset_job(
     name="materialize_calculate_sentiment",
@@ -303,6 +316,7 @@ calculate_sentiment_schedule = ScheduleDefinition(
 ```
 
 **Add to dagster_definitions.py:**
+
 ```python
 from app.assets.social_sentiment import calculate_sentiment, calculate_sentiment_schedule
 
@@ -321,6 +335,7 @@ all_schedules = [
 **File:** `backend/app/tests/services/test_sentiment_analyzer.py`
 
 **Test Cases:**
+
 1. `test_analyze_positive_sentiment()` - "What an amazing game!"
 2. `test_analyze_negative_sentiment()` - "Terrible refs, worst game ever"
 3. `test_analyze_neutral_sentiment()` - "Duke vs UNC tonight at 7pm"
@@ -329,6 +344,7 @@ all_schedules = [
 **File:** `backend/app/tests/assets/test_calculate_sentiment.py`
 
 **Test Cases:**
+
 1. `test_sentiment_calculates_for_new_posts()` - Verify VADER scores
 2. `test_game_key_resolution_two_teams()` - Verify FK linkage
 3. `test_skips_posts_without_game_key()` - Verify NULL handling
@@ -338,11 +354,13 @@ all_schedules = [
 ## Dependencies
 
 ### Upstream (Must Complete First)
+
 - Story 4-4: Unified Transform Layer (`stg_social_posts`) ✅
 - Epic 2: `fact_game` table ✅
 - Epic 2: `dim_date` table ✅
 
 ### Downstream (Enables)
+
 - Epic 5: Moment Detection & Excitement Scoring (queries `fact_social_sentiment`)
 
 ---
@@ -379,6 +397,7 @@ all_schedules = [
 ### Game Resolution Failure Rate
 
 Expected **10-20% of posts fail game_key resolution**:
+
 - Generic posts ("Can't wait for March Madness!")
 - Posts created days before game (date inference inaccurate)
 - Multi-game days (ambiguous team mention)
@@ -390,3 +409,11 @@ Expected **10-20% of posts fail game_key resolution**:
 **Story Created:** 2025-11-15
 **Story Owner:** Developer
 **Estimated Completion:** End of Week 3 (Epic 4 sprint)
+
+---
+
+## Dev Agent Record
+
+### Context Reference
+
+- [4-5-sentiment-analysis-fact-table.context.xml](4-5-sentiment-analysis-fact-table.context.xml) - Generated 2025-11-16

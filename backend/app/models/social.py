@@ -4,6 +4,7 @@ Social media data models for GamePulse (Epic 4).
 Contains models for:
 - Raw social media posts: RawBlueskyPost
 - Unified transform layer: StgSocialPost (Story 4-4)
+- Sentiment fact table: FactSocialSentiment (Story 4-5)
 
 Each model uses dual storage strategy:
 1. Parsed columns for efficient querying and game matching
@@ -15,8 +16,8 @@ All tables are TimescaleDB hypertables for time-series optimization.
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Column, DateTime, Numeric, PrimaryKeyConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, DateTime, Numeric, PrimaryKeyConstraint, String
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlmodel import Field, SQLModel
 
 
@@ -131,6 +132,13 @@ class StgSocialPost(SQLModel, table=True):
         ),
     )
 
+    # Surrogate key for foreign key relationships (Story 4-5)
+    social_post_key: int | None = Field(
+        default=None,
+        index=True,
+        description="Auto-increment surrogate key for FK relationships with fact_social_sentiment",
+    )
+
     # Composite primary key columns
     platform: str = Field(
         max_length=20,
@@ -178,6 +186,11 @@ class StgSocialPost(SQLModel, table=True):
         sa_column=Column(Numeric(precision=3, scale=2)),  # 0.00-1.00
         description="Game matching confidence (0.00-1.00)",
     )
+    matched_teams: list[str] | None = Field(
+        default=None,
+        sa_column=Column(ARRAY(String(50))),
+        description="Team IDs matched in post text (e.g., ['ncaam_duke', 'ncaam_unc']) for game_key resolution (Story 4-5)",
+    )
     processed_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True)),
@@ -188,6 +201,88 @@ class StgSocialPost(SQLModel, table=True):
     raw_json: dict[str, Any] = Field(
         sa_column=Column(JSONB, nullable=False),
         description="Original platform JSON for debugging and future ML",
+    )
+
+    class Config:
+        arbitrary_types_allowed = True  # Allow JSONB type
+
+
+class FactSocialSentiment(SQLModel, table=True):
+    """
+    Sentiment-enriched social posts linked to games for Epic 5 (Story 4-5).
+
+    Fact table combining:
+    - VADER sentiment analysis scores (compound, positive, negative, neutral)
+    - Game key FK resolution for Epic 5 excitement scoring
+    - Date key for time-series queries
+    - Denormalized post_text and engagement_score for analytics
+
+    TimescaleDB hypertable partitioned on created_at (1-day chunks).
+    Retention: 90 days, compression after 7 days.
+
+    Business Logic:
+    - Compound >= 0.05: Positive sentiment (excitement, enthusiasm)
+    - Compound <= -0.05: Negative sentiment (frustration, disappointment)
+    - -0.05 to 0.05: Neutral sentiment (informational)
+    - Unique constraint on social_post_key: one sentiment record per post
+    """
+
+    __tablename__ = "fact_social_sentiment"
+
+    # Primary key
+    sentiment_key: int | None = Field(default=None, primary_key=True)
+
+    # Foreign keys
+    game_key: int = Field(foreign_key="fact_game.game_key", index=True)
+    date_key: int = Field(foreign_key="dim_date.date_key", index=True)
+
+    # References stg_social_posts.social_post_key (no FK due to TimescaleDB hypertable limitation)
+    social_post_key: int = Field(
+        index=True,
+        description="References stg_social_posts.social_post_key (enforced by app, not FK)",
+    )
+
+    # VADER sentiment scores
+    sentiment_compound: float = Field(
+        sa_column=Column(Numeric(precision=5, scale=4)),
+        description="Overall sentiment (-1 to +1): >= 0.05 positive, <= -0.05 negative",
+    )
+    sentiment_positive: float | None = Field(
+        default=None,
+        sa_column=Column(Numeric(precision=5, scale=4)),
+        description="Positive component (0-1)",
+    )
+    sentiment_negative: float | None = Field(
+        default=None,
+        sa_column=Column(Numeric(precision=5, scale=4)),
+        description="Negative component (0-1)",
+    )
+    sentiment_neutral: float | None = Field(
+        default=None,
+        sa_column=Column(Numeric(precision=5, scale=4)),
+        description="Neutral component (0-1)",
+    )
+
+    # Denormalized fields for Epic 5 queries
+    platform: str = Field(
+        max_length=20,
+        description="Source platform: reddit or bluesky",
+    )
+    post_text: str = Field(description="Post text content (denormalized for Epic 5)")
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+        description="When user created post (partitioning column for TimescaleDB)",
+    )
+    engagement_score: float | None = Field(
+        default=None,
+        description="Platform-normalized engagement (denormalized for Epic 5)",
+    )
+
+    # Metadata
+    analyzed_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="When sentiment analysis was performed",
     )
 
     class Config:
