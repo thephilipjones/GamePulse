@@ -23,6 +23,7 @@ dependencies = [
     "dagster-webserver>=1.12.1",
     "dagster-postgres>=0.28.1",
     "asyncpg>=0.30.0",
+    "rapidfuzz>=3.14.3",
 ]
 
 [dependency-groups]

@@ -1,0 +1,340 @@
+<story-context id="4-3-game-matching-service" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>3</storyId>
+    <title>Game Matching Service</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-3-game-matching-service.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>data engineer</asA>
+    <iWant>a fuzzy team name matching service that detects NCAA teams in social post text</iWant>
+    <soThat>I can filter out irrelevant posts during transformation and link posts to specific games</soThat>
+    <tasks>
+      <task id="1" ac="3">
+        <description>Add RapidFuzz dependency</description>
+        <subtasks>
+          <subtask>Run `uv add rapidfuzz` in backend directory</subtask>
+          <subtask>Verify dependency appears in pyproject.toml</subtask>
+          <subtask>Run `uv sync` to update lockfile</subtask>
+        </subtasks>
+      </task>
+      <task id="2" ac="1,2,3,4">
+        <description>Implement GameMatcher service class</description>
+        <subtasks>
+          <subtask>Create `backend/app/services/game_matcher.py`</subtask>
+          <subtask>Implement `__init__(self, session: Session)` with teams cache loading</subtask>
+          <subtask>Implement `_load_teams_cache()` private method</subtask>
+          <subtask>Implement `match_post_to_teams(post_text: str)` with RapidFuzz</subtask>
+          <subtask>Add structlog logging for events (teams_loaded, match_result)</subtask>
+          <subtask>Add comprehensive docstrings with Args/Returns</subtask>
+        </subtasks>
+      </task>
+      <task id="3" ac="5">
+        <description>Implement game_key resolution</description>
+        <subtasks>
+          <subtask>Implement `resolve_game_key(team_ids, post_date)` method</subtask>
+          <subtask>Handle 2-team case: query fact_game for head-to-head match</subtask>
+          <subtask>Handle 1-team case: query fact_game for any game (home or away)</subtask>
+          <subtask>Handle 0 or 3+ team case: return None with warning log</subtask>
+          <subtask>Add type hints for return value `int | None`</subtask>
+        </subtasks>
+      </task>
+      <task id="4" ac="1-6">
+        <description>Create unit tests</description>
+        <subtasks>
+          <subtask>Create `backend/app/tests/services/test_game_matcher.py`</subtask>
+          <subtask>Test: `test_match_two_teams_high_confidence()` - Duke vs UNC</subtask>
+          <subtask>Test: `test_match_single_team()` - "Go Blue Devils"</subtask>
+          <subtask>Test: `test_irrelevant_post_filtered()` - pizza post returns empty</subtask>
+          <subtask>Test: `test_false_positive_duke_energy()` - non-sports "Duke" filtered</subtask>
+          <subtask>Test: `test_resolve_game_key_head_to_head()` - 2 teams → game_key</subtask>
+          <subtask>Test: `test_resolve_game_key_single_team()` - 1 team → game_key</subtask>
+          <subtask>Test: `test_resolve_game_key_ambiguous()` - 3+ teams → None</subtask>
+          <subtask>Test: `test_confidence_scoring()` - verify top-2 average formula</subtask>
+          <subtask>Run tests with `uv run pytest -v app/tests/services/test_game_matcher.py`</subtask>
+        </subtasks>
+      </task>
+      <task id="5" ac="1-6">
+        <description>Manual integration testing</description>
+        <subtasks>
+          <subtask>Verify dim_team.aliases populated (check seed data migration)</subtask>
+          <subtask>Test with sample posts from Epic 4 spec fixtures</subtask>
+          <subtask>Verify confidence scores are reasonable (0.6-1.0 for game posts)</subtask>
+          <subtask>Test edge cases: empty text, very long text, emojis, special chars</subtask>
+          <subtask>Measure performance: 1000 matches in &lt;1 second</subtask>
+        </subtasks>
+      </task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="1">
+      <title>GameMatcher Class - Team Detection</title>
+      <given>a GameMatcher instance with loaded teams cache</given>
+      <when>I call `match_post_to_teams("Duke vs UNC tonight!")`</when>
+      <then>it returns matched teams ["duke", "unc"], confidence score (0.6-1.0), and is_game_related flag</then>
+      <and>confidence >= 0.6 sets is_game_related = True</and>
+    </criterion>
+    <criterion id="2">
+      <title>Team Aliases Loading</title>
+      <given>dim_team table has teams with aliases populated</given>
+      <when>GameMatcher initializes</when>
+      <then>it loads all NCAA basketball teams (sport='ncaam', is_current=True) into memory cache</then>
+      <and>cache includes team names + all aliases from TEXT[] column</and>
+      <and>logs game_matcher_teams_loaded event with teams_count</and>
+    </criterion>
+    <criterion id="3">
+      <title>Fuzzy Matching Algorithm</title>
+      <given>a social post with text "Go Blue Devils! #MarchMadness"</given>
+      <when>fuzzy matching runs</when>
+      <then>it uses rapidfuzz.fuzz.partial_ratio scorer (allows substring matches)</then>
+      <and>matches against lowercase aliases</and>
+      <and>returns top 5 matches with scores >= 60 (out of 100)</and>
+      <and>deduplicates multiple aliases for same team</and>
+    </criterion>
+    <criterion id="4">
+      <title>Confidence Scoring</title>
+      <given>multiple team matches with scores [95, 90, 50]</given>
+      <when>overall confidence is calculated</when>
+      <then>it averages the top 2 scores: (95 + 90) / 2 / 100 = 0.925</then>
+      <and>normalizes to 0-1 scale</and>
+      <and>filters matches below 60/100 threshold</and>
+    </criterion>
+    <criterion id="5">
+      <title>Game Key Resolution (Optional)</title>
+      <given>matched teams ["duke", "unc"] and post date 2025-11-15</given>
+      <when>I call resolve_game_key(team_ids, post_date)</when>
+      <then>it queries fact_game for: (1) 2 teams: head-to-head game on that date, (2) 1 team: any game for that team, (3) 0 or 3+ teams: returns None (ambiguous)</then>
+      <and>returns game_key if unique match found, else None</and>
+    </criterion>
+    <criterion id="6">
+      <title>Irrelevant Post Filtering</title>
+      <given>a post "Just had pizza for dinner. Great day!"</given>
+      <when>matched</when>
+      <then>matched_teams = [], match_confidence = 0.0, is_game_related = False</then>
+      <and>transform layer (Story 4-4) skips this post</and>
+    </criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Game Matching Algorithm</section>
+        <snippet>Complete specification for GameMatcher class including fuzzy string matching with RapidFuzz, confidence scoring (average of top 2 matches), game_key resolution logic for 2-team/1-team/ambiguous cases, and performance requirements (1000 matches in &lt;1 second). Lines 819-1051.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Data Schema Specifications - Transform Layer</section>
+        <snippet>stg_social_posts table schema (lines 273-323) defines matched_teams TEXT[], match_confidence NUMERIC(3,2) columns that GameMatcher populates. Engagement score formulas and platform normalization strategy.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>Backend Architecture - Service Layer</section>
+        <snippet>Service layer patterns for business logic separation. Services use dependency injection for database sessions. Examples: RedditClient, BlueskyClient with async context managers and rate limiting.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-2-bluesky-data-pipeline.md</path>
+        <title>Story 4-2: Bluesky Data Pipeline</title>
+        <section>Learnings from Previous Story</section>
+        <snippet>Established patterns for Story 4-3: (1) Service class structure in backend/app/services/, (2) Structured logging with structlog, (3) Comprehensive docstrings with Args/Returns, (4) Type hints for MyPy compliance, (5) Dependencies added via uv add before implementation.</snippet>
+      </doc>
+      <doc>
+        <path>backend/app/data/teams.json</path>
+        <title>Team Seed Data</title>
+        <section>NCAA Team Aliases</section>
+        <snippet>Source data for dim_team.aliases column. Example for Duke: aliases include ["duke", "Duke", "Blue Devils", "The Blue Devils", "GoDuke", "#GoDuke"]. Migration 7a8f23177a57 performs idempotent upsert.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/bluesky_client.py</path>
+        <kind>service</kind>
+        <symbol>BlueskyClient</symbol>
+        <lines>87-156</lines>
+        <reason>Reference implementation for service class pattern: async context manager, structured logging, comprehensive docstrings, type hints. GameMatcher follows similar structure but synchronous (no async needed).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/bluesky_client.py</path>
+        <kind>service</kind>
+        <symbol>BlueskyRateLimiter</symbol>
+        <lines>24-85</lines>
+        <reason>Example of helper class with in-memory state management (token bucket). GameMatcher uses similar pattern for teams cache.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/services/reddit_client.py</path>
+        <kind>service</kind>
+        <symbol>RedditClient</symbol>
+        <lines>491-598</lines>
+        <reason>Alternative service pattern example. Shows structlog usage, retry decorators, and docstring conventions to follow.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/team.py</path>
+        <kind>model</kind>
+        <symbol>DimTeam</symbol>
+        <lines>1-50</lines>
+        <reason>Source model for teams cache. GameMatcher loads sport='ncaam', is_current=True teams. Uses SQLModel ORM for querying.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/game.py</path>
+        <kind>model</kind>
+        <symbol>FactGame</symbol>
+        <lines>1-80</lines>
+        <reason>Target model for game_key resolution. Contains game_key PK, home_team_key, away_team_key FKs, and game_date for matching logic.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/7a8f23177a57_seed_dimensional_data.py</path>
+        <kind>migration</kind>
+        <symbol>upgrade</symbol>
+        <lines>20-120</lines>
+        <reason>Populates dim_team.aliases from backend/app/data/teams.json. Idempotent ON CONFLICT DO UPDATE pattern. Verify aliases populated before GameMatcher implementation.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/pyproject.toml</path>
+        <kind>config</kind>
+        <symbol>dependencies</symbol>
+        <lines>10-30</lines>
+        <reason>Dependencies list. Task 1 adds rapidfuzz>=3.0.0 here via uv add rapidfuzz command.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="rapidfuzz" version=">=3.0.0" usage="Fuzzy string matching for team name detection. C++ implementation provides 4-10x speedup over FuzzyWuzzy." />
+        <package name="sqlmodel" version="0.0.22" usage="ORM for dim_team and fact_game queries. Combines Pydantic + SQLAlchemy." />
+        <package name="structlog" version="24.4.0" usage="Structured logging for teams_loaded, match_result events." />
+        <package name="pytest" version="8.3.3" usage="Test framework for unit tests in test_game_matcher.py." />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="architecture">
+      <title>Service Layer Pattern</title>
+      <description>GameMatcher is a service class in backend/app/services/ directory. Synchronous (no async/await) since no I/O operations. Uses dependency injection for database session.</description>
+    </constraint>
+    <constraint type="architecture">
+      <title>In-Memory Cache Strategy</title>
+      <description>Load all NCAA teams into memory at __init__ time. No database queries during match_post_to_teams() calls. Cache invalidation not required (teams data stable).</description>
+    </constraint>
+    <constraint type="performance">
+      <title>Match Performance Requirement</title>
+      <description>1000 matches must complete in less than 1 second. Use RapidFuzz C++ implementation, in-memory cache, and lowercase preprocessing to meet target.</description>
+    </constraint>
+    <constraint type="testing">
+      <title>Unit Test Coverage Target</title>
+      <description>Achieve >80% coverage on match logic. Use Epic 4 spec fixtures (lines 1034-1050) for sample posts. Test both game-related and irrelevant posts.</description>
+    </constraint>
+    <constraint type="data">
+      <title>Team Aliases Prerequisite</title>
+      <description>dim_team.aliases column must be populated before GameMatcher can function. Verify migration 7a8f23177a57 applied and backend/app/data/teams.json loaded.</description>
+    </constraint>
+    <constraint type="logging">
+      <title>Structured Logging Events</title>
+      <description>Use structlog.get_logger(__name__). Log game_matcher_teams_loaded (teams_count), game_match_result (post_text_preview, result). Use debug level for match results.</description>
+    </constraint>
+    <constraint type="code-quality">
+      <title>Type Hints and Docstrings</title>
+      <description>Add full type annotations to all public methods (Args, Returns). Follow bluesky_client.py docstring style. Avoid MyPy errors (unlike Story 4-2 atproto SDK issues).</description>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GameMatcher.__init__</name>
+      <kind>class-constructor</kind>
+      <signature>def __init__(self, session: Session) -> None</signature>
+      <path>backend/app/services/game_matcher.py</path>
+      <description>Initialize GameMatcher with database session. Loads teams cache via _load_teams_cache(). Session used for dim_team and fact_game queries.</description>
+    </interface>
+    <interface>
+      <name>GameMatcher.match_post_to_teams</name>
+      <kind>public-method</kind>
+      <signature>def match_post_to_teams(self, post_text: str) -> dict[str, Any]</signature>
+      <path>backend/app/services/game_matcher.py</path>
+      <description>Core matching method. Returns: {"matched_teams": list[str], "match_confidence": float, "is_game_related": bool, "match_details": dict}. Uses rapidfuzz.fuzz.partial_ratio scorer.</description>
+    </interface>
+    <interface>
+      <name>GameMatcher.resolve_game_key</name>
+      <kind>public-method</kind>
+      <signature>def resolve_game_key(self, team_ids: list[str], post_date: date) -> int | None</signature>
+      <path>backend/app/services/game_matcher.py</path>
+      <description>Resolve matched teams to game_key FK. Logic: 2 teams → head-to-head, 1 team → any game, 0/3+ teams → None. Queries fact_game table.</description>
+    </interface>
+    <interface>
+      <name>DimTeam Query Interface</name>
+      <kind>database-query</kind>
+      <signature>SELECT team_id, team_name, aliases FROM dim_team WHERE sport='ncaam' AND is_current=True</signature>
+      <path>backend/app/models/team.py</path>
+      <description>Query to populate teams cache. Returns all active NCAA men's basketball teams with aliases TEXT[] column.</description>
+    </interface>
+    <interface>
+      <name>FactGame Query Interface (2-team case)</name>
+      <kind>database-query</kind>
+      <signature>SELECT game_key FROM fact_game WHERE game_date=? AND ((home_team_key=? AND away_team_key=?) OR (home_team_key=? AND away_team_key=?))</signature>
+      <path>backend/app/models/game.py</path>
+      <description>Head-to-head game lookup for 2 matched teams. Checks both home/away orderings.</description>
+    </interface>
+    <interface>
+      <name>FactGame Query Interface (1-team case)</name>
+      <kind>database-query</kind>
+      <signature>SELECT game_key FROM fact_game WHERE game_date=? AND (home_team_key=? OR away_team_key=?)</signature>
+      <path>backend/app/models/game.py</path>
+      <description>Any game lookup for single matched team. Returns first match (arbitrary if multiple games).</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      GamePulse uses pytest (v8.3.3) with parallel execution support (pytest-xdist). Tests are marked with @pytest.mark.unit or @pytest.mark.integration. Unit tests mock database connections; integration tests use test database. Follow existing test patterns from backend/app/tests/services/test_*.py for structure and naming conventions. Use structlog for test logging.
+    </standards>
+    <locations>
+      <location>backend/app/tests/services/test_game_matcher.py</location>
+      <location>backend/app/tests/integration/test_game_matcher_with_db.py</location>
+    </locations>
+    <ideas>
+      <idea ac="1" priority="high">
+        <name>test_match_two_teams_high_confidence</name>
+        <description>Fixture: "Duke vs UNC tonight! Cameron Indoor is going to be electric!". Assert matched_teams=["duke", "unc"], confidence >= 0.90, is_game_related=True.</description>
+      </idea>
+      <idea ac="1" priority="high">
+        <name>test_match_single_team</name>
+        <description>Fixture: "Go Blue Devils! Ready for tip-off at 7pm #MarchMadness". Assert matched_teams=["duke"], confidence >= 0.85, is_game_related=True.</description>
+      </idea>
+      <idea ac="6" priority="high">
+        <name>test_irrelevant_post_filtered</name>
+        <description>Fixture: "Just had pizza for dinner. Great day!". Assert matched_teams=[], confidence=0.0, is_game_related=False.</description>
+      </idea>
+      <idea ac="6" priority="high">
+        <name>test_false_positive_duke_energy</name>
+        <description>Fixture: "Duke Energy stock is up 5% today!". Assert matched_teams=[], confidence=0.0, is_game_related=False. Critical: verify non-sports "Duke" doesn't match.</description>
+      </idea>
+      <idea ac="5" priority="medium">
+        <name>test_resolve_game_key_head_to_head</name>
+        <description>Mock fact_game with Duke vs UNC game on 2025-11-15. Assert resolve_game_key(["duke", "unc"], date(2025, 11, 15)) returns game_key.</description>
+      </idea>
+      <idea ac="5" priority="medium">
+        <name>test_resolve_game_key_single_team</name>
+        <description>Mock fact_game with Duke game on 2025-11-15. Assert resolve_game_key(["duke"], date(2025, 11, 15)) returns game_key.</description>
+      </idea>
+      <idea ac="5" priority="medium">
+        <name>test_resolve_game_key_ambiguous</name>
+        <description>Test 3+ teams case. Assert resolve_game_key(["duke", "unc", "syracuse"], date(2025, 11, 15)) returns None with warning log.</description>
+      </idea>
+      <idea ac="4" priority="high">
+        <name>test_confidence_scoring</name>
+        <description>Mock RapidFuzz to return scores [95, 90, 50]. Verify confidence calculation: (95 + 90) / 2 / 100 = 0.925. Assert match below threshold (50) filtered out.</description>
+      </idea>
+      <idea ac="3" priority="medium">
+        <name>test_performance_benchmark</name>
+        <description>Loop 1000 matches with sample post. Assert total time less than 1 second. Use time.time() for measurement. Log performance metric.</description>
+      </idea>
+    </ideas>
+  </tests>
+</story-context>
