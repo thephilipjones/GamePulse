@@ -36,12 +36,13 @@ output "cloudwatch_log_groups" {
   }
 }
 
-output "cloudtrail_name" {
-  description = "CloudTrail name for SSM session auditing"
-  value       = aws_cloudtrail.main.name
-}
-
-output "cloudtrail_s3_bucket" {
-  description = "S3 bucket for CloudTrail logs"
-  value       = aws_s3_bucket.cloudtrail.id
-}
+# Disabled 2025-11-15 - CloudTrail removed to reduce S3 PUT costs
+# output "cloudtrail_name" {
+#   description = "CloudTrail name for SSM session auditing"
+#   value       = aws_cloudtrail.main.name
+# }
+#
+# output "cloudtrail_s3_bucket" {
+#   description = "S3 bucket for CloudTrail logs"
+#   value       = aws_s3_bucket.cloudtrail.id
+# }

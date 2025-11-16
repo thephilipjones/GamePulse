@@ -36,13 +36,13 @@ module "vpc" {
 module "secrets" {
   source = "./modules/secrets"
 
-  project_name           = var.project_name
-  environment            = var.environment
-  domain                 = var.domain
-  first_superuser_email  = var.first_superuser_email
-  ecr_backend_url        = module.ecr.backend_repository_url
-  ecr_frontend_url       = module.ecr.frontend_repository_url
-  tags                   = local.common_tags
+  project_name          = var.project_name
+  environment           = var.environment
+  domain                = var.domain
+  first_superuser_email = var.first_superuser_email
+  ecr_backend_url       = module.ecr.backend_repository_url
+  ecr_frontend_url      = module.ecr.frontend_repository_url
+  tags                  = local.common_tags
 }
 
 # ============================================================================
