@@ -27,11 +27,14 @@ run_coordinator:
   class: QueuedRunCoordinator
   config:
     #  max_concurrent_runs: 10
-    max_concurrent_runs: 1 # STRICT LIMIT for t2.micro
+    # Current: 3 concurrent runs (safe for t2.micro with async cleanup + 8 max DB connections)
+    # Assets don't use "database=main" tag, so tag limit below doesn't apply
+    # To enforce stricter DB concurrency: add tags={"database": "main"} to @asset decorators
+    max_concurrent_runs: 3 # STRICT LIMIT for t2.micro
     tag_concurrency_limits:
       - key: "database"
         value: "main"
-        limit: 1
+        limit: 1 # Only enforced if assets have tags={"database": "main"}
 
 run_launcher:
   module: dagster.core.launcher
@@ -47,4 +50,4 @@ retention:
     purge_after_days: 30
 
 code_servers:
-  local_startup_timeout: 300  # 5 minutes for slow cold starts on t2.micro
+  local_startup_timeout: 300 # 5 minutes for slow cold starts on t2.micro
