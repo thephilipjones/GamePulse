@@ -102,7 +102,7 @@ resource "aws_iam_policy" "github_actions_deployment" {
         ]
         Condition = {
           StringEquals = {
-            "ssm:resourceTag/Project" = var.project_name
+            "ec2:ResourceTag/Project" = var.project_name
           }
         }
       },
