@@ -14,9 +14,9 @@ variable "subnet_id" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type"
+  description = "EC2 instance type (ARM64 Graviton2)"
   type        = string
-  default     = "t2.micro"
+  default     = "t4g.small"
 }
 
 variable "ami_id" {

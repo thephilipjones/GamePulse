@@ -57,13 +57,13 @@ variable "private_subnet_cidr" {
 # ============================================================================
 
 variable "instance_type" {
-  description = "EC2 instance type (t2.micro for AWS free tier)"
+  description = "EC2 instance type (t2.micro for free tier, t4g.* for ARM64 Graviton2)"
   type        = string
   default     = "t2.micro"
 
   validation {
-    condition     = var.instance_type == "t2.micro"
-    error_message = "Only t2.micro is allowed to stay within AWS free tier budget constraints."
+    condition     = can(regex("^(t2\\.micro|t4g\\.(micro|small|medium))$", var.instance_type))
+    error_message = "Only t2.micro (free tier) or t4g.micro/small/medium (ARM64 Graviton2) are allowed for cost efficiency."
   }
 }
 

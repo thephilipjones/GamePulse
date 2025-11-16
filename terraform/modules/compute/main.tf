@@ -5,14 +5,14 @@
 # Data Sources
 # ============================================================================
 
-# Get latest Ubuntu 24.04 LTS AMI
+# Get latest Ubuntu 24.04 LTS AMI (ARM64 for Graviton2)
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical official
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-arm64-server-*"]
   }
 
   filter {
