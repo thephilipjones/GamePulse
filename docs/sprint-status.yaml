@@ -82,7 +82,7 @@ development_status:
   4-1-reddit-data-pipeline: done # Review complete - approved (AC-2 updated to match implementation)
   4-2-bluesky-data-pipeline: done # Review complete - approved (281 posts extracted, 181% over target)
   4-3-game-matching-service: done # GameMatcher service + 18 tests, all passing (2025-11-15)
-  4-4-unified-transform-layer: drafted
+  4-4-unified-transform-layer: in-progress # Dev started 2025-11-16
   4-5-sentiment-analysis-fact-table: drafted
   4-6-orchestration-data-management: drafted
   epic-4-retrospective: optional

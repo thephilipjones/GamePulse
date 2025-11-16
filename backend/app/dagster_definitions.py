@@ -16,13 +16,19 @@ from dagster import (
 from app.assets import bluesky_posts as bluesky_posts_module
 from app.assets import ncaa_games as ncaa_games_module
 from app.assets import reddit_posts as reddit_posts_module
+from app.assets import transform_social_posts as transform_social_posts_module
 from app.assets.bluesky_posts import bluesky_posts_job, bluesky_posts_schedule
 from app.assets.reddit_posts import reddit_posts_job, reddit_posts_schedule
 from app.resources.database import DatabaseResource
 
 # Load all assets from assets module
 all_assets = load_assets_from_modules(
-    [ncaa_games_module, reddit_posts_module, bluesky_posts_module]
+    [
+        ncaa_games_module,
+        reddit_posts_module,
+        bluesky_posts_module,
+        transform_social_posts_module,
+    ]
 )
 
 # Define asset job for manual materialization (NCAA)

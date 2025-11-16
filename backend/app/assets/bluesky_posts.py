@@ -34,6 +34,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.models.keywords import DimKeyword
 from app.models.social import RawBlueskyPost
 from app.resources.database import DatabaseResource
 from app.services.bluesky_client import BlueskyClient
@@ -85,22 +86,33 @@ async def extract_bluesky_posts(
         "extract_bluesky_posts_started",
         extra={
             "handle": settings.BLUESKY_HANDLE,
-            "hashtags": settings.BLUESKY_HASHTAGS,
         },
     )
 
-    # Parse hashtags from comma-separated env var
-    hashtags = [h.strip() for h in settings.BLUESKY_HASHTAGS.split(",") if h.strip()]
-
-    if not hashtags:
-        context.log.warning("No hashtags configured in BLUESKY_HASHTAGS")
-        return {
-            "posts_extracted": 0,
-            "posts_inserted": 0,
-            "hashtags_searched": 0,
-        }
-
+    # Query active hashtags from dim_keyword
     async with database.get_session() as session:
+        active_keywords = await _get_active_keywords(
+            session, platform="bluesky", keyword_type="hashtag"
+        )
+
+        if not active_keywords:
+            context.log.warning(
+                "No active Bluesky hashtag keywords found in dim_keyword"
+            )
+            return {
+                "posts_extracted": 0,
+                "posts_inserted": 0,
+                "hashtags_searched": 0,
+            }
+
+        context.log.info(
+            f"active_keywords_loaded count={len(active_keywords)} platform=bluesky keyword_type=hashtag "
+            f"keywords={[k.keyword_value for k in active_keywords]}"
+        )
+
+        # Create hashtags list from keywords
+        hashtags = [k.keyword_value for k in active_keywords]
+
         # Step 1: Get incremental cursor (last fetched time across ALL posts)
         cursor = await _get_cursor(session, context)
 
@@ -240,6 +252,28 @@ async def _insert_posts(
     await session.commit()
 
     return posts_inserted
+
+
+async def _get_active_keywords(
+    session: AsyncSession,
+    platform: str = "bluesky",
+    keyword_type: str = "hashtag",
+) -> list[DimKeyword]:
+    """
+    Query all active keywords for Bluesky hashtags from dim_keyword.
+
+    Filters by platform='bluesky' AND keyword_type='hashtag' AND is_active=true
+    to support future expansion (e.g., custom feeds, user mentions).
+    """
+    stmt = (
+        select(DimKeyword)
+        .where(DimKeyword.platform == platform)  # type: ignore[arg-type]
+        .where(DimKeyword.keyword_type == keyword_type)  # type: ignore[arg-type]
+        .where(DimKeyword.is_active)  # type: ignore[arg-type]
+    )
+    result = await session.execute(stmt)
+    keywords = list(result.scalars().all())
+    return keywords
 
 
 # Dagster job and schedule definitions

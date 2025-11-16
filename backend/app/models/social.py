@@ -1,8 +1,9 @@
 """
 Social media data models for GamePulse (Epic 4).
 
-Contains raw social media post storage models for:
-- Bluesky (atproto): RawBlueskyPost
+Contains models for:
+- Raw social media posts: RawBlueskyPost
+- Unified transform layer: StgSocialPost (Story 4-4)
 
 Each model uses dual storage strategy:
 1. Parsed columns for efficient querying and game matching
@@ -98,6 +99,95 @@ class RawBlueskyPost(SQLModel, table=True):
         default=None,
         sa_column=Column(DateTime(timezone=True)),
         description="When this post was processed by transform layer",
+    )
+
+    class Config:
+        arbitrary_types_allowed = True  # Allow JSONB type
+
+
+class StgSocialPost(SQLModel, table=True):
+    """
+    Unified staging table for Reddit and Bluesky posts (Story 4-4).
+
+    Transform layer that:
+    - Normalizes Reddit and Bluesky posts into common schema
+    - Calculates engagement scores for prioritization
+    - Maintains game matching metadata
+    - Partitioned by created_at for time-series queries (TimescaleDB hypertable)
+
+    Business Logic:
+    - Engagement score = platform-specific calculation (Reddit: score + comments, Bluesky: likes + replies)
+    - Posts processed incrementally: SELECT WHERE processed_at IS NULL
+    - Deduplication by composite PK (platform, post_id)
+
+    Note: Composite PK (platform, post_id) required for cross-platform deduplication.
+    """
+
+    __tablename__ = "stg_social_posts"
+    __table_args__ = (
+        # Composite PK must include created_at for TimescaleDB hypertable partitioning
+        PrimaryKeyConstraint(
+            "platform", "post_id", "created_at", name="stg_social_posts_pkey"
+        ),
+    )
+
+    # Composite primary key columns
+    platform: str = Field(
+        max_length=20,
+        description="Source platform: reddit or bluesky",
+    )
+    post_id: str = Field(
+        max_length=300,
+        description="Platform-specific post ID (Reddit: t3_abc, Bluesky: URI)",
+    )
+
+    # Temporal columns
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+        description="When user created post (partitioning column for TimescaleDB)",
+    )
+    fetched_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+        description="When we extracted this post",
+    )
+
+    # Normalized post content
+    author_handle: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Platform-specific author handle",
+    )
+    post_text: str | None = Field(
+        default=None,
+        description="Post text content (Reddit: title + selftext, Bluesky: post_text)",
+    )
+
+    # Engagement metrics for prioritization
+    engagement_score: float = Field(
+        description="Platform-normalized engagement (Reddit: score + comments, Bluesky: likes + replies)"
+    )
+
+    # Game matching metadata
+    matched_to_game: bool = Field(
+        default=False,
+        index=True,
+        description="Has this been matched to a game?",
+    )
+    match_confidence: float | None = Field(
+        default=None,
+        sa_column=Column(Numeric(precision=3, scale=2)),  # 0.00-1.00
+        description="Game matching confidence (0.00-1.00)",
+    )
+    processed_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True)),
+        description="When transform layer processed this (partial index created in migration)",
+    )
+
+    # Complete raw data for debugging and ML
+    raw_json: dict[str, Any] = Field(
+        sa_column=Column(JSONB, nullable=False),
+        description="Original platform JSON for debugging and future ML",
     )
 
     class Config:

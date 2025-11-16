@@ -1,0 +1,464 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>4</storyId>
+    <title>Unified Transform Layer</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-16</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-4-unified-transform-layer.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a data engineer</asA>
+    <iWant>to transform raw multi-platform social posts into a unified schema with game matching filter</iWant>
+    <soThat>only game-related posts are stored and normalized for downstream sentiment analysis (Story 4-5)</soThat>
+    <tasks>
+### Task 1: Database Migration - stg_social_posts Table (AC: #1)
+- Create Alembic migration file: {timestamp}_create_stg_social_posts.py
+- Execute CREATE TABLE with all columns matching AC #1
+- Convert to TimescaleDB hypertable (1-day chunks on created_at)
+- Create indexes: created_at, matched_teams GIN, platform+date, engagement
+- Add retention policy: 90 days (no compression - active queries)
+- Create UNIQUE constraint: (platform, platform_post_id)
+- Run migration: alembic upgrade head
+- Verify table in psql: \d stg_social_posts
+
+### Task 2: SQLModel - StgSocialPost Model (AC: #1, #2)
+- Open backend/app/models/social.py (existing file with Raw models)
+- Add StgSocialPost class with all columns from AC #1
+- Use Field() with descriptions for documentation
+- Add ARRAY(String) for matched_teams column
+- Add JSONB Column() for platform_metadata
+- Add type hints for all fields (int | None, str, datetime, etc.)
+- Verify MyPy validation passes
+
+### Task 3: Engagement Score Calculation Functions (AC: #4)
+- Create helper functions in transform asset file:
+  - calculate_reddit_engagement(post_json: dict) -> float
+  - calculate_bluesky_engagement(post_json: dict) -> float
+- Implement Reddit formula: (score * 1.0) + (num_comments * 2.0) + (upvote_ratio * 10.0)
+- Implement Bluesky formula: (likes * 1.5) + (replies * 3.0) + (reposts * 2.5)
+- Add docstrings explaining weight rationale
+- Handle missing fields with .get(key, default_value)
+
+### Task 4: Dagster Asset - transform_social_posts (AC: #2, #3, #5, #7)
+- Create file: backend/app/assets/social_transform.py
+- Import dependencies:
+  - from app.services.game_matcher import GameMatcher
+  - from app.models.social import RawRedditPost, RawBlueskyPost, StgSocialPost
+- Define @asset with:
+  - name="transform_social_posts"
+  - description="Transform raw social posts into unified schema with game matching filter"
+  - group_name="social_media_transformation"
+  - compute_kind="python"
+  - deps=[extract_reddit_posts, extract_bluesky_posts]
+  - retry_policy=RetryPolicy(max_retries=2, delay=10, backoff=Backoff.LINEAR)
+- Initialize GameMatcher(session) once at start
+- Process Reddit posts:
+  - SELECT from raw_reddit_posts WHERE matched_to_game = FALSE LIMIT 1000
+  - For each post: extract text, match teams, filter by confidence
+  - Calculate engagement score
+  - INSERT into stg_social_posts (ON CONFLICT DO NOTHING)
+  - UPDATE raw post with matched_to_game, match_confidence, processed_at
+  - Track metrics: posts_processed, posts_matched, posts_filtered
+- Process Bluesky posts (same logic, different engagement formula)
+- Commit after each batch
+- Return metadata dict with counts and match_rate %
+- Add structured logging (context.log.info) at key points
+
+### Task 5: Dagster Schedule Definition (AC: #6)
+- Define schedule in social_transform.py:
+  - transform_social_posts_schedule
+  - Cron: 15 * * * *
+  - Timezone: America/New_York
+  - DefaultScheduleStatus: RUNNING
+- Register in backend/app/dagster_definitions.py:
+  - Import transform_social_posts asset
+  - Import transform_social_posts_schedule
+  - Add to all_assets list
+  - Add to all_schedules list
+- Restart Dagster daemon
+- Verify schedule in Dagster UI
+
+### Task 6: Unit Tests (AC: #2, #3, #4)
+- Create file: backend/app/tests/assets/test_transform_social_posts.py
+- Test: test_calculate_reddit_engagement() - Verify formula with AC #4 values
+- Test: test_calculate_bluesky_engagement() - Verify formula with AC #4 values
+- Test: test_filters_low_confidence() - Mock GameMatcher returning 0.5, verify not inserted
+- Test: test_inserts_high_confidence() - Mock GameMatcher returning 0.95, verify inserted
+- Test: test_marks_raw_posts_processed() - Verify matched_to_game and processed_at updated
+- Test: test_batch_processing() - Create 2500 raw posts, verify 3 batches executed
+- Run tests: uv run pytest -v app/tests/assets/test_transform_social_posts.py
+
+### Task 7: Integration Testing (AC: #8)
+- Manually insert sample raw Reddit posts (high and low confidence text)
+- Manually insert sample raw Bluesky posts
+- Run: dagster asset materialize -m app.dagster_definitions transform_social_posts
+- Verify high-confidence posts in stg_social_posts
+- Verify low-confidence posts NOT in stg_social_posts
+- Verify raw posts marked matched_to_game appropriately
+- Verify engagement scores are reasonable (>0, <1000)
+- Run Week 2 success metric query (AC #8), verify expected results
+
+### Task 8 (Optional): Cleanup Job - Unmatched Raw Posts (Future Story 4-6)
+- Note: This task is deferred to Story 4-6 (Orchestration & Data Management)
+- Documented in "Out of Scope" section
+- If time permits in Story 4-4: Create cleanup_unmatched_raw_posts asset
+  - Daily schedule at 2 AM
+  - DELETE FROM raw_reddit_posts WHERE created_at < NOW() - INTERVAL '7 days' AND matched_to_game = FALSE
+  - Same for raw_bluesky_posts
+  - Return {reddit_deleted, bluesky_deleted} counts
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### 1. Database Table - stg_social_posts
+
+**GIVEN** Alembic migrations are run
+**WHEN** I check the database schema
+**THEN** stg_social_posts table exists with columns:
+- social_post_key BIGSERIAL PRIMARY KEY (surrogate key)
+- platform TEXT CHECK (platform IN ('reddit', 'bluesky'))
+- platform_post_id TEXT NOT NULL (original post ID/URI)
+- author_username TEXT
+- post_text TEXT NOT NULL (full post content)
+- created_at TIMESTAMPTZ NOT NULL (post creation time)
+- fetched_at TIMESTAMPTZ NOT NULL
+- matched_teams TEXT[] (array of team_ids: ["duke", "unc"])
+- match_confidence NUMERIC(3,2) NOT NULL (0.6-1.0)
+- matched_game_date DATE (inferred game date for FK resolution)
+- engagement_score NUMERIC(10,2) (platform-normalized)
+- likes_count INTEGER
+- comments_count INTEGER
+- shares_count INTEGER
+- platform_metadata JSONB (platform-specific extras)
+- source_table TEXT NOT NULL ('raw_reddit_posts' | 'raw_bluesky_posts')
+- source_row_id TEXT NOT NULL (PK from source table)
+- transformed_at TIMESTAMPTZ DEFAULT NOW()
+
+**AND** table is a TimescaleDB hypertable partitioned on created_at (1-day chunks)
+**AND** UNIQUE constraint on (platform, platform_post_id) prevents duplicates
+**AND** indexes on:
+- created_at DESC (time-series queries)
+- matched_teams GIN (array search)
+- platform, matched_game_date (FK resolution prep)
+- engagement_score DESC, created_at DESC (top posts queries)
+**AND** 90-day retention policy configured (no compression - active querying)
+
+### 2. Dagster Asset - transform_social_posts
+
+**GIVEN** raw posts exist in raw_reddit_posts AND raw_bluesky_posts
+**WHEN** transform_social_posts asset materializes
+**THEN** it reads unprocessed posts (matched_to_game = FALSE) in batches of 1000
+**AND** applies GameMatcher.match_post_to_teams() to each post
+**AND** filters out posts with match_confidence < 0.6 (not game-related)
+**AND** calculates platform-specific engagement scores:
+- Reddit: (upvotes * 1.0) + (comments * 2.0) + (upvote_ratio * 10.0)
+- Bluesky: (likes * 1.5) + (replies * 3.0) + (reposts * 2.5)
+**AND** inserts matched posts into stg_social_posts using ON CONFLICT DO NOTHING
+**AND** updates raw posts with:
+- matched_to_game = is_game_related (TRUE/FALSE)
+- match_confidence = confidence score (0-1)
+- processed_at = NOW()
+**AND** commits each batch separately (memory efficiency)
+**AND** logs structured metadata: {posts_processed, posts_matched, posts_filtered, match_rate}
+
+### 3. Game Matching Filter (Using Story 4-3 GameMatcher)
+
+**GIVEN** a raw Reddit post with text: "Duke vs UNC tonight! Cameron Indoor is going to be electric!"
+**WHEN** GameMatcher analyzes the post
+**THEN** it returns:
+- matched_teams = ["duke", "unc"]
+- match_confidence = 0.95
+- is_game_related = True (confidence >= 0.6 threshold)
+**AND** post is inserted into stg_social_posts
+
+**AND GIVEN** a raw post with text: "Just had pizza for dinner. Great day!"
+**WHEN** GameMatcher analyzes the post
+**THEN** it returns:
+- matched_teams = []
+- match_confidence = 0.0
+- is_game_related = False
+**AND** post is NOT inserted into stg_social_posts (filtered out)
+**AND** raw post marked matched_to_game = FALSE for cleanup job
+
+### 4. Multi-Platform Engagement Normalization
+
+**GIVEN** a Reddit post with score=100, num_comments=20, upvote_ratio=0.9
+**WHEN** transform calculates engagement
+**THEN** engagement_score = (100 * 1.0) + (20 * 2.0) + (0.9 * 10.0) = 149.0
+
+**AND GIVEN** a Bluesky post with likeCount=50, replyCount=10, repostCount=5
+**WHEN** transform calculates engagement
+**THEN** engagement_score = (50 * 1.5) + (10 * 3.0) + (5 * 2.5) = 117.5
+
+**Rationale:** Platform-specific weights adjust for different user bases (Reddit larger than Bluesky). No cross-platform normalization - preserve platform context for Epic 5 credibility scoring.
+
+### 5. Platform Metadata Preservation (JSONB)
+
+**GIVEN** a Reddit post
+**WHEN** inserted into stg_social_posts
+**THEN** platform_metadata JSONB contains:
+{
+  "upvote_ratio": 0.94,
+  "link_flair_text": "Post Game Thread",
+  "permalink": "/r/CollegeBasketball/comments/..."
+}
+
+**AND GIVEN** a Bluesky post
+**THEN** platform_metadata contains:
+{
+  "facets": [...],
+  "author_did": "did:plc:..."
+}
+
+**Purpose:** Raw platform-specific attributes preserved for future ML experiments and Epic 5 credibility scoring.
+
+### 6. Dagster Schedule - Hourly at :15
+
+**GIVEN** Dagster daemon is running
+**WHEN** I view schedules in Dagster UI
+**THEN** transform_social_posts_schedule exists with:
+- Cron: 15 * * * * (hourly at :15)
+- Status: RUNNING (default)
+- Dependencies: deps=[extract_reddit_posts, extract_bluesky_posts]
+**AND** schedule triggers 15 minutes after extraction schedules complete:
+- Reddit: every 10 min (last run ~:05)
+- Bluesky: every 5 min (last run ~:10)
+- Transform: :15 (waits for both extracts)
+
+**Rationale:** Hourly batching (vs real-time transform) reduces compute, allows GameMatcher teams cache to load once per run. Epic 5 doesn't require sub-hour freshness.
+
+### 7. Batch Processing for Memory Constraints
+
+**GIVEN** 10,000 unprocessed raw posts exist
+**WHEN** transform runs
+**THEN** it processes in batches of 1000 posts (t2.micro 1GB RAM + 4GB swap constraint)
+**AND** commits each batch separately (incremental progress)
+**AND** continues until all posts processed
+**AND** logs batch progress: transform_batch_completed: batch=3/10, posts_in_batch=1000, posts_matched=420
+
+### 8. Week 2 Success Metric (30-50% Match Rate)
+
+**GIVEN** transform has run for 7 days
+**WHEN** I query:
+SELECT
+    COUNT(*) AS total_posts,
+    COUNT(*) FILTER (WHERE platform = 'reddit') AS reddit_posts,
+    COUNT(*) FILTER (WHERE platform = 'bluesky') AS bluesky_posts,
+    AVG(match_confidence) AS avg_confidence
+FROM stg_social_posts
+WHERE created_at > NOW() - INTERVAL '7 days';
+
+**THEN** results show:
+- total_posts: 500-1,500 (30-50% of raw posts matched)
+- avg_confidence: 0.75-0.85 (high-quality matches)
+- Both platforms represented (not 100% from single platform)
+
+**Expected match rates** (from Epic 4 spec):
+- Reddit /r/CollegeBasketball: 50-70% game-related (focused subreddit)
+- Bluesky #CollegeBasketball: 20-40% game-related (broader hashtag usage)
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Data Schema Specifications - stg_social_posts</section>
+        <snippet>Unified multi-platform schema with game-matched posts only. Includes engagement score formulas, platform metadata preservation, and retention policies. Lines 273-347 define complete table structure.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4 Tech Spec</title>
+        <section>Asset 3: transform_social_posts</section>
+        <snippet>Complete asset implementation specification (lines 1434-1631). Includes batch processing logic, GameMatcher integration, engagement calculation, and dual-platform processing patterns.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>Data Modeling Approach - Dimensional Schema Design</section>
+        <snippet>Hybrid dimensional + time-series architecture using Kimball star schema with TimescaleDB hypertables. dim_team provides aliases for GameMatcher, fact_game for FK resolution in Story 4-5.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-3-game-matching-service.md</path>
+        <title>Story 4-3: Game Matching Service</title>
+        <section>Dev Notes - Learnings from Previous Story</section>
+        <snippet>GameMatcher service usage patterns, performance characteristics (1000 matches <1s), confidence threshold (0.6), and integration warnings. DO NOT recreate - import and use existing service.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-1-reddit-data-pipeline.md</path>
+        <title>Story 4-1: Reddit Data Pipeline</title>
+        <section>Acceptance Criteria - Database Table & Migration</section>
+        <snippet>RawRedditPost model structure, composite PK pattern, TimescaleDB hypertable creation, and game matching field placeholders (matched_to_game, match_confidence, processed_at).</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-2-bluesky-data-pipeline.md</path>
+        <title>Story 4-2: Bluesky Data Pipeline</title>
+        <section>Acceptance Criteria - Database Table</section>
+        <snippet>RawBlueskyPost model structure with same game matching field pattern as Reddit. Provides engagement metric extraction guidance (likeCount, replyCount, repostCount).</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/game_matcher.py</path>
+        <kind>service</kind>
+        <symbol>GameMatcher</symbol>
+        <lines>1-346</lines>
+        <reason>Core dependency for team matching. Use match_post_to_teams() method - returns {matched_teams, match_confidence, is_game_related}. Initialize once per transform run, not per post.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/social.py</path>
+        <kind>model</kind>
+        <symbol>RawBlueskyPost</symbol>
+        <lines>22-105</lines>
+        <reason>Existing raw model with game matching fields (matched_to_game, match_confidence, processed_at). StgSocialPost will be added to this file following same SQLModel patterns.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/reddit_posts.py</path>
+        <kind>asset</kind>
+        <symbol>extract_reddit_posts</symbol>
+        <lines>43-183</lines>
+        <reason>Reference pattern for Dagster asset structure: @asset decorator, async session handling, structured logging, metadata return, idempotent inserts (ON CONFLICT DO NOTHING).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/bluesky_posts.py</path>
+        <kind>asset</kind>
+        <symbol>extract_bluesky_posts</symbol>
+        <lines>1-200</lines>
+        <reason>Dependency asset for transform. Provides RawBlueskyPost extraction pattern with JSONB raw_json storage and parsed columns.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/ncaa_games.py</path>
+        <kind>asset</kind>
+        <symbol>extract_ncaa_games</symbol>
+        <lines>1-150</lines>
+        <reason>Example Dagster asset with schedule definition pattern - shows retry_policy, schedule cron syntax, DefaultScheduleStatus usage.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="dagster" version=">=1.12.1">Orchestration framework for asset definitions, schedules, retry policies</package>
+        <package name="dagster-postgres" version=">=0.28.1">Dagster PostgreSQL integration for database resources</package>
+        <package name="sqlmodel" version=">=0.0.22">Type-safe ORM for StgSocialPost model definition</package>
+        <package name="asyncpg" version=">=0.30.0">Async PostgreSQL driver for SQLAlchemy/SQLModel</package>
+        <package name="rapidfuzz" version=">=3.14.3">GameMatcher dependency - already installed in Story 4-3</package>
+        <package name="structlog" version=">=24.0.0">Structured logging for transform events</package>
+        <package name="alembic" version=">=1.13.0">Database migration tool for stg_social_posts table creation</package>
+        <package name="pytest" version=">=8.3.0">Testing framework for unit tests</package>
+        <package name="pytest-asyncio" version=">=0.24.0">Async test support for Dagster assets</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>
+      <category>architecture</category>
+      <rule>ELT Pattern Adherence: Transform layer reads raw tables only, does NOT call external APIs. All API interaction happens in extraction layer (Stories 4-1, 4-2).</rule>
+    </constraint>
+    <constraint>
+      <category>architecture</category>
+      <rule>Module Boundaries: Transform asset depends on extract_reddit_posts and extract_bluesky_posts. Story 4-5 (sentiment) will depend on this transform asset. No circular dependencies.</rule>
+    </constraint>
+    <constraint>
+      <category>performance</category>
+      <rule>Batch Size: Process raw posts in batches of 1000 (t2.micro memory constraint: 1GB RAM + 4GB swap). Commit after each batch for incremental progress.</rule>
+    </constraint>
+    <constraint>
+      <category>performance</category>
+      <rule>GameMatcher Initialization: Initialize GameMatcher(session) once at asset start, NOT per post. Teams cache loads ~323 teams, ~372 aliases - reuse across all posts in batch.</rule>
+    </constraint>
+    <constraint>
+      <category>data_quality</category>
+      <rule>Confidence Threshold: Filter posts with match_confidence < 0.6. This threshold was tuned in Story 4-3 and balances precision/recall for game-related content.</rule>
+    </constraint>
+    <constraint>
+      <category>data_quality</category>
+      <rule>Idempotency: Use ON CONFLICT DO NOTHING on (platform, platform_post_id) UNIQUE constraint. Transform can be re-run without creating duplicates.</rule>
+    </constraint>
+    <constraint>
+      <category>testing</category>
+      <rule>Unit Test Priority: Test engagement formulas, confidence filtering, batch processing, raw post updates. Skip E2E Dagster asset tests (too heavyweight for sprint timeline).</rule>
+    </constraint>
+    <constraint>
+      <category>testing</category>
+      <rule>Test Markers: Use @pytest.mark.unit for tests without database, @pytest.mark.integration for tests requiring database. Run parallel: pytest -v -n auto -m unit</rule>
+    </constraint>
+    <constraint>
+      <category>schema</category>
+      <rule>TimescaleDB Hypertable: Partition on created_at (not fetched_at) with 1-day chunks. No compression policy - stg table actively queried by Story 4-5.</rule>
+    </constraint>
+    <constraint>
+      <category>schema</category>
+      <rule>Surrogate Key: Use BIGSERIAL social_post_key as PK (not composite). Story 4-5 will FK reference this for fact_social_sentiment table.</rule>
+    </constraint>
+    <constraint>
+      <category>logging</category>
+      <rule>Structured Logging: Use context.log.info() for Dagster events. Include structured fields: posts_processed, posts_matched, posts_filtered, match_rate. Visible in Dagster UI.</rule>
+    </constraint>
+    <constraint>
+      <category>schedule</category>
+      <rule>Hourly Transform at :15: Schedule runs 15 * * * * to allow extraction schedules to complete. Reddit runs every 10min (last ~:05), Bluesky every 5min (last ~:10).</rule>
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GameMatcher.match_post_to_teams()</name>
+      <kind>service_method</kind>
+      <signature>def match_post_to_teams(self, post_text: str) -> GameMatchResult</signature>
+      <path>backend/app/services/game_matcher.py</path>
+      <description>Core team matching service. Returns GameMatchResult with matched_teams (list[str]), match_confidence (float 0-1), is_game_related (bool). Threshold: 0.6 for game-related flag.</description>
+    </interface>
+    <interface>
+      <name>DatabaseResource.get_session()</name>
+      <kind>dagster_resource</kind>
+      <signature>async def get_session(self) -> AsyncSession</signature>
+      <path>backend/app/resources/database.py</path>
+      <description>Dagster database resource providing async SQLModel session. Use in 'async with database.get_session() as session:' context manager.</description>
+    </interface>
+    <interface>
+      <name>StgSocialPost</name>
+      <kind>sqlmodel</kind>
+      <signature>class StgSocialPost(SQLModel, table=True)</signature>
+      <path>backend/app/models/social.py</path>
+      <description>SQLModel for stg_social_posts table (to be created). Must include: platform, platform_post_id, post_text, matched_teams (TEXT[]), engagement_score, platform_metadata (JSONB).</description>
+    </interface>
+    <interface>
+      <name>RawRedditPost</name>
+      <kind>sqlmodel</kind>
+      <signature>class RawRedditPost(SQLModel, table=True)</signature>
+      <path>backend/app/models/reddit.py</path>
+      <description>Source model for Reddit raw posts. Has fields: raw_json (JSONB), matched_to_game (bool), match_confidence (float), processed_at (datetime). Update these during transform.</description>
+    </interface>
+    <interface>
+      <name>RawBlueskyPost</name>
+      <kind>sqlmodel</kind>
+      <signature>class RawBlueskyPost(SQLModel, table=True)</signature>
+      <path>backend/app/models/social.py</path>
+      <description>Source model for Bluesky raw posts. Same game matching fields as Reddit. Extract engagement from raw_json: likeCount, replyCount, repostCount.</description>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+GamePulse uses pytest with async support (pytest-asyncio). Tests are organized by markers: @pytest.mark.unit (no database), @pytest.mark.integration (requires database). Run tests in parallel with pytest -v -n auto for speed. Backend tests follow AAA pattern (Arrange-Act-Assert). Use structlog for test logging. Mock external dependencies (GameMatcher can be mocked for unit tests). Integration tests use real database with test fixtures. Test files mirror app structure: app/assets/social_transform.py → app/tests/assets/test_transform_social_posts.py.
+    </standards>
+    <locations>
+      <location>backend/app/tests/assets/ - Dagster asset tests</location>
+      <location>backend/app/tests/services/ - Service layer tests (see test_game_matcher.py for reference patterns)</location>
+      <location>backend/app/tests/models/ - SQLModel tests</location>
+    </locations>
+    <ideas>
+      <idea ac="2" test="test_filters_low_confidence">Mock GameMatcher to return confidence=0.5. Assert post NOT inserted into stg_social_posts, but raw post marked matched_to_game=FALSE.</idea>
+      <idea ac="2" test="test_inserts_high_confidence">Mock GameMatcher to return confidence=0.95 with matched_teams=["duke", "unc"]. Assert post inserted into stg_social_posts with correct teams array.</idea>
+      <idea ac="4" test="test_calculate_reddit_engagement">Test formula with AC #4 values (score=100, num_comments=20, upvote_ratio=0.9). Assert engagement_score=149.0.</idea>
+      <idea ac="4" test="test_calculate_bluesky_engagement">Test formula with AC #4 values (likes=50, replies=10, reposts=5). Assert engagement_score=117.5.</idea>
+      <idea ac="2" test="test_marks_raw_posts_processed">After transform runs, assert raw posts have matched_to_game, match_confidence, and processed_at populated.</idea>
+      <idea ac="7" test="test_batch_processing">Create 2500 raw posts. Run transform. Assert 3 batches executed (1000 + 1000 + 500). Verify all posts processed.</idea>
+      <idea ac="5" test="test_platform_metadata_preservation">Verify Reddit post platform_metadata contains upvote_ratio, link_flair_text, permalink. Verify Bluesky contains facets, author_did.</idea>
+      <idea ac="1" test="test_stg_table_schema">Query database to verify stg_social_posts has all columns, correct types, indexes, hypertable configuration.</idea>
+    </ideas>
+  </tests>
+</story-context>

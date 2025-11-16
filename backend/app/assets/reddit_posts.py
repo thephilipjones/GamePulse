@@ -33,7 +33,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.reddit import DimSubreddit, RawRedditPost
+from app.models.keywords import DimKeyword
+from app.models.reddit import RawRedditPost
 from app.resources.database import DatabaseResource
 from app.services.reddit_client import RedditClient
 
@@ -93,11 +94,15 @@ async def extract_reddit_posts(
     cursor_times: dict[str, str] = {}
 
     async with database.get_session() as session:
-        # Step 1: Query active subreddits
-        active_subreddits = await _get_active_subreddits(session)
+        # Step 1: Query active keywords (Reddit subreddits)
+        active_keywords = await _get_active_keywords(
+            session, platform="reddit", keyword_type="subreddit"
+        )
 
-        if not active_subreddits:
-            context.log.warning("No active subreddits found in dim_subreddit")
+        if not active_keywords:
+            context.log.warning(
+                "No active Reddit subreddit keywords found in dim_keyword"
+            )
             return {
                 "subreddits_fetched": 0,
                 "total_posts_fetched": 0,
@@ -107,22 +112,22 @@ async def extract_reddit_posts(
             }
 
         context.log.info(
-            f"active_subreddits_loaded count={len(active_subreddits)} "
-            f"subreddits={[s.subreddit_name for s in active_subreddits]}"
+            f"active_keywords_loaded count={len(active_keywords)} platform=reddit keyword_type=subreddit "
+            f"keywords={[k.keyword_value for k in active_keywords]}"
         )
 
         # Step 2: Fetch posts from each subreddit
         async with RedditClient() as reddit:
-            for subreddit in active_subreddits:
+            for keyword in active_keywords:
                 try:
                     # Get incremental cursor (last fetched time for this subreddit)
                     cursor = await _get_cursor_for_subreddit(
-                        session, subreddit.subreddit_name, context
+                        session, keyword.keyword_value, context
                     )
 
                     # Fetch posts from Reddit API
                     response = await reddit.fetch_posts(
-                        subreddit=subreddit.subreddit_name,
+                        subreddit=keyword.keyword_value,
                         limit=100,
                     )
 
@@ -133,49 +138,49 @@ async def extract_reddit_posts(
 
                     if posts_fetched == 0:
                         context.log.info(
-                            f"no_posts_fetched subreddit={subreddit.subreddit_name}"
+                            f"no_posts_fetched subreddit={keyword.keyword_value}"
                         )
-                        posts_by_subreddit[subreddit.subreddit_name] = 0
+                        posts_by_subreddit[keyword.keyword_value] = 0
                         continue
 
                     # Step 3: Transform and insert posts
                     posts_inserted = await _insert_posts(
                         session,
                         children,
-                        subreddit.subreddit_name,
+                        keyword.keyword_value,
                         cursor,
                         context,
                     )
 
                     total_posts_inserted += posts_inserted
-                    posts_by_subreddit[subreddit.subreddit_name] = posts_inserted
+                    posts_by_subreddit[keyword.keyword_value] = posts_inserted
 
                     # Store cursor time for metadata
-                    cursor_times[subreddit.subreddit_name] = (
+                    cursor_times[keyword.keyword_value] = (
                         cursor.isoformat() if cursor else "null"
                     )
 
                     context.log.info(
-                        f"subreddit_extraction_completed subreddit={subreddit.subreddit_name} "
+                        f"subreddit_extraction_completed subreddit={keyword.keyword_value} "
                         f"posts_fetched={posts_fetched} posts_inserted={posts_inserted}"
                     )
 
                 except Exception as e:
                     context.log.error(
-                        f"subreddit_extraction_failed subreddit={subreddit.subreddit_name} "
+                        f"subreddit_extraction_failed subreddit={keyword.keyword_value} "
                         f"error={str(e)} error_type={type(e).__name__}"
                     )
                     # Continue to next subreddit instead of failing entire asset
-                    posts_by_subreddit[subreddit.subreddit_name] = 0
+                    posts_by_subreddit[keyword.keyword_value] = 0
                     continue
 
     context.log.info(
-        f"extract_reddit_posts_completed subreddits_fetched={len(active_subreddits)} "
+        f"extract_reddit_posts_completed subreddits_fetched={len(active_keywords)} "
         f"total_posts_fetched={total_posts_fetched} total_posts_inserted={total_posts_inserted}"
     )
 
     return {
-        "subreddits_fetched": len(active_subreddits),
+        "subreddits_fetched": len(active_keywords),
         "total_posts_fetched": total_posts_fetched,
         "total_posts_inserted": total_posts_inserted,
         "posts_by_subreddit": posts_by_subreddit,
@@ -183,14 +188,26 @@ async def extract_reddit_posts(
     }
 
 
-async def _get_active_subreddits(
+async def _get_active_keywords(
     session: AsyncSession,
-) -> list[DimSubreddit]:
-    """Query all active subreddits from dim_subreddit."""
-    stmt = select(DimSubreddit).where(DimSubreddit.is_active)  # type: ignore[arg-type]
+    platform: str = "reddit",
+    keyword_type: str = "subreddit",
+) -> list[DimKeyword]:
+    """
+    Query all active keywords for Reddit subreddits from dim_keyword.
+
+    Filters by platform='reddit' AND keyword_type='subreddit' AND is_active=true
+    to support future expansion (e.g., user searches, custom feeds).
+    """
+    stmt = (
+        select(DimKeyword)
+        .where(DimKeyword.platform == platform)  # type: ignore[arg-type]
+        .where(DimKeyword.keyword_type == keyword_type)  # type: ignore[arg-type]
+        .where(DimKeyword.is_active)  # type: ignore[arg-type]
+    )
     result = await session.execute(stmt)
-    subreddits = list(result.scalars().all())
-    return subreddits
+    keywords = list(result.scalars().all())
+    return keywords
 
 
 async def _get_cursor_for_subreddit(
