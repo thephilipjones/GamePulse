@@ -136,5 +136,51 @@ After executing recovery commands:
 
 ---
 
-**Last Updated**: 2025-11-13
+**Last Updated**: 2025-11-15
 **Tested On**: Ubuntu 24.04 LTS, t2.micro EC2 instance
+
+---
+
+## Manual Operations Reference
+
+### Docker Compose Commands
+
+Standard production operations (use these anytime):
+
+```bash
+# Start services in production mode
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+# Stop all services
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+
+# View backend logs (follow mode)
+docker compose logs -f backend
+
+# Restart specific service
+docker compose restart backend
+
+# Access backend shell
+docker compose exec backend bash
+```
+
+### Systemd Commands (Optional)
+
+Alternative service management via systemd:
+
+```bash
+# Start GamePulse service
+sudo systemctl start gamepulse
+
+# Stop GamePulse service
+sudo systemctl stop gamepulse
+
+# Restart GamePulse service
+sudo systemctl restart gamepulse
+
+# Check service status
+sudo systemctl status gamepulse
+
+# View service logs (follow mode)
+sudo journalctl -u gamepulse -f
+```
