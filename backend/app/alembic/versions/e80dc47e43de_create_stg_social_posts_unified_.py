@@ -178,6 +178,33 @@ def upgrade():
         """
     )
 
+    # Verification queries (run after migration):
+    # 1. Check hypertable configuration:
+    #    SELECT * FROM timescaledb_information.hypertables
+    #    WHERE hypertable_name = 'stg_social_posts';
+    #
+    # Expected result:
+    #    - compression_enabled: t (true)
+    #    - primary_dimension: created_at
+    #    - num_chunks: varies (1 chunk per day)
+    #
+    # 2. Check retention and compression policies:
+    #    SELECT * FROM timescaledb_information.jobs
+    #    WHERE hypertable_name = 'stg_social_posts';
+    #
+    # Expected result (2 rows):
+    #    - Retention Policy: schedule_interval=1 day, drop_after=90 days
+    #    - Columnstore Policy: schedule_interval=12 hours, compress_after=7 days
+    #
+    # 3. Check compression status (after 7 days):
+    #    SELECT * FROM timescaledb_information.compressed_chunk_stats
+    #    WHERE hypertable_name = 'stg_social_posts';
+    #
+    # Notes:
+    # - Retention policy runs daily (deletes chunks older than 90 days)
+    # - Compression policy runs every 12 hours (compresses chunks older than 7 days)
+    # - Compression segments by 'platform' for better compression ratio
+
 
 def downgrade():
     """

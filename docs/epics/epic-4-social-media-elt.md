@@ -98,10 +98,11 @@ GamePulse's excitement scoring algorithm (Epic 5) requires social sentiment sign
 │                                                                           │
 │  transform_social_posts (Hourly)                                        │
 │  ├─ Read: raw_reddit_posts, raw_bluesky_posts                           │
-│  ├─ Game Matcher: Fuzzy team name matching (dim_team.aliases)           │
-│  ├─ Filter: Only game-related posts (confidence > 0.6)                  │
 │  ├─ Normalize: Engagement scoring (platform-aware formulas)             │
-│  └─ Write: stg_social_posts (unified multi-platform schema)             │
+│  └─ Write: stg_social_posts (all posts, matched_to_game=FALSE)         │
+│                                                                           │
+│  Note: Game matching deferred to Story 4-5 (FK resolution layer)        │
+│        and optional Story 4-7 (transform-layer optimization)             │
 │                                                                           │
 │  Cleanup Job (Daily):                                                    │
 │  └─ Delete unmatched raw posts older than 7 days                        │
