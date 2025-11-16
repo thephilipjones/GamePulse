@@ -42,13 +42,26 @@ export class GamesService {
     }
     
     /**
+     * @deprecated
      * Get Games Today
      * Get today's NCAA Men's Basketball games (convenience endpoint).
      *
-     * Note: "Today" is determined using UTC timezone. Frontend should handle
-     * timezone conversion for user display.
+     * **DEPRECATED:** This endpoint uses UTC timezone to determine "today", which
+     * causes incorrect results for users in western timezones during evening hours.
      *
-     * This endpoint is equivalent to calling GET /games without a date parameter.
+     * **Recommended:** Use `GET /games?date={YYYY-MM-DD}` instead, calculating the
+     * date parameter in the user's local timezone on the client side.
+     *
+     * Example (JavaScript):
+     * ```js
+     * // Get local date in YYYY-MM-DD format (not UTC!)
+     * const localDate = new Date().toLocaleDateString('en-CA');  // en-CA uses YYYY-MM-DD
+     * fetch(`/api/v1/games?date=${localDate}`);
+     *
+     * // Or with date-fns:
+     * // import { format } from 'date-fns';
+     * // const localDate = format(new Date(), 'yyyy-MM-dd');
+     * ```
      *
      * Args:
      * session: Database session (injected)
