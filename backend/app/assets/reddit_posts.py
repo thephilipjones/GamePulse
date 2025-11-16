@@ -30,7 +30,7 @@ from dagster import (
 )
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.reddit import DimSubreddit, RawRedditPost
@@ -184,17 +184,17 @@ async def extract_reddit_posts(
 
 
 async def _get_active_subreddits(
-    session: Session,
+    session: AsyncSession,
 ) -> list[DimSubreddit]:
     """Query all active subreddits from dim_subreddit."""
-    stmt = select(DimSubreddit).where(DimSubreddit.is_active == True)  # noqa: E712
+    stmt = select(DimSubreddit).where(DimSubreddit.is_active)  # type: ignore[arg-type]
     result = await session.execute(stmt)
     subreddits = list(result.scalars().all())
     return subreddits
 
 
 async def _get_cursor_for_subreddit(
-    session: Session,
+    session: AsyncSession,
     subreddit_name: str,
     context: AssetExecutionContext,
 ) -> datetime | None:
@@ -204,9 +204,9 @@ async def _get_cursor_for_subreddit(
     Returns MAX(fetched_at) for posts from this subreddit, or None if no posts exist.
     """
     stmt = (
-        select(RawRedditPost.fetched_at)
+        select(RawRedditPost.fetched_at)  # type: ignore[call-overload]
         .where(RawRedditPost.subreddit == subreddit_name)
-        .order_by(RawRedditPost.fetched_at.desc())
+        .order_by(RawRedditPost.fetched_at.desc())  # type: ignore[attr-defined]
         .limit(1)
     )
     result = await session.execute(stmt)
@@ -226,8 +226,8 @@ async def _get_cursor_for_subreddit(
 
 
 async def _insert_posts(
-    session: Session,
-    children: list[dict],
+    session: AsyncSession,
+    children: list[dict[str, Any]],
     subreddit_name: str,
     cursor: datetime | None,
     context: AssetExecutionContext,
@@ -266,7 +266,7 @@ async def _insert_posts(
             continue
 
         # Build RawRedditPost data dict for insert
-        raw_post = {
+        raw_post: dict[str, Any] = {
             "post_id": post_data.get("id"),
             "fetched_at": now,
             "subreddit": subreddit_name,
@@ -296,7 +296,7 @@ async def _insert_posts(
         result = await session.execute(stmt)
 
         # PostgreSQL returns rowcount=0 for ON CONFLICT DO NOTHING skips
-        if result.rowcount > 0:
+        if result.rowcount > 0:  # type: ignore[attr-defined]
             posts_inserted += 1
 
     await session.commit()
@@ -304,7 +304,7 @@ async def _insert_posts(
     return posts_inserted
 
 
-def _determine_post_type(post_data: dict) -> str | None:
+def _determine_post_type(post_data: dict[str, Any]) -> str | None:
     """
     Determine Reddit post type from API response.
 

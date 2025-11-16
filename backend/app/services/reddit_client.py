@@ -92,7 +92,7 @@ class RedditClient:
     BASE_URL = "https://www.reddit.com"
     DEFAULT_TIMEOUT = 30.0  # Reddit can be slow
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Reddit client with httpx AsyncClient and token bucket."""
         self.client: httpx.AsyncClient | None = None
         self.rate_limiter = TokenBucket(
@@ -195,7 +195,7 @@ class RedditClient:
                 has_more=data.get("data", {}).get("after") is not None,
             )
 
-            return data
+            return data  # type: ignore[no-any-return]
 
         except httpx.HTTPStatusError as e:
             logger.error(

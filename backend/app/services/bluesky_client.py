@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from atproto import Client
+from atproto import Client  # type: ignore[import-untyped]
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
@@ -103,7 +103,7 @@ class BlueskyClient:
             all_posts = await client.fetch_all_hashtags(["CollegeBasketball", "NCAAM"])
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Bluesky client with atproto Client and rate limiter."""
         self.client: Client | None = None
         self.rate_limiter = BlueskyRateLimiter(
@@ -209,12 +209,15 @@ class BlueskyClient:
         )
 
         try:
+            # Type narrowing: client is guaranteed non-None after check above
+            client = self.client
+
             # atproto SDK's search_posts is synchronous
             # We need to run it in executor to avoid blocking
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(
                 None,
-                lambda: self.client.app.bsky.feed.search_posts(
+                lambda: client.app.bsky.feed.search_posts(
                     params={"q": query, "limit": limit}
                 ),
             )

@@ -17,6 +17,7 @@ Schedule: extract_bluesky_posts_schedule
 """
 
 from datetime import datetime, timezone
+from typing import Any
 
 import structlog
 from dagster import (
@@ -30,7 +31,7 @@ from dagster import (
 )
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
-from sqlmodel import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.social import RawBlueskyPost
@@ -156,7 +157,7 @@ async def extract_bluesky_posts(
 
 
 async def _get_cursor(
-    session: Session,
+    session: AsyncSession,
     context: AssetExecutionContext,
 ) -> datetime | None:
     """
@@ -165,8 +166,8 @@ async def _get_cursor(
     Returns MAX(fetched_at) across all Bluesky posts, or None if no posts exist.
     """
     stmt = (
-        select(RawBlueskyPost.fetched_at)
-        .order_by(RawBlueskyPost.fetched_at.desc())
+        select(RawBlueskyPost.fetched_at)  # type: ignore[call-overload]
+        .order_by(RawBlueskyPost.fetched_at.desc())  # type: ignore[attr-defined]
         .limit(1)
     )
     result = await session.execute(stmt)
@@ -187,8 +188,8 @@ async def _get_cursor(
 
 
 async def _insert_posts(
-    session: Session,
-    posts: list[dict],
+    session: AsyncSession,
+    posts: list[dict[str, Any]],
 ) -> int:
     """
     Transform Bluesky API response to RawBlueskyPost and insert with idempotency.
@@ -208,7 +209,7 @@ async def _insert_posts(
         created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
 
         # Build RawBlueskyPost data dict for insert
-        raw_post = {
+        raw_post: dict[str, Any] = {
             "post_uri": post["uri"],
             "post_cid": post["cid"],
             "created_at": created_at,
@@ -233,7 +234,7 @@ async def _insert_posts(
         result = await session.execute(stmt)
 
         # PostgreSQL returns rowcount=0 for ON CONFLICT DO NOTHING skips
-        if result.rowcount > 0:
+        if result.rowcount > 0:  # type: ignore[attr-defined]
             posts_inserted += 1
 
     await session.commit()
