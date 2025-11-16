@@ -383,20 +383,19 @@ class TestTeamEnricher:
             mock_response.raise_for_status = Mock()
             mock_get.return_value = mock_response
 
-            # Run dry run
-            report = enricher.enrich_all_teams(sport="ncaam", dry_run=True, force=False)
+            # Mock session.commit to verify it's not called in dry_run mode
+            with patch.object(db, "commit", wraps=db.commit) as mock_commit:
+                # Run dry run
+                report = enricher.enrich_all_teams(
+                    sport="ncaam", dry_run=True, force=False
+                )
 
-            # Verify report
-            assert report.teams_processed > 0
-            assert report.teams_enriched > 0
+                # Verify report shows enrichment happened
+                assert report.teams_processed > 0
+                assert report.teams_enriched > 0
 
-            # Verify no changes persisted (check original team in fresh query)
-            db.rollback()  # Rollback any uncommitted changes
-            fresh_team = db.exec(
-                select(DimTeam).where(DimTeam.team_id == "ncaam_duke")
-            ).first()
-            assert fresh_team is not None
-            assert fresh_team.primary_color is None  # Should be unchanged
+                # Verify commit was NOT called in dry_run mode
+                mock_commit.assert_not_called()
 
     def test_enrich_all_teams_success(
         self,

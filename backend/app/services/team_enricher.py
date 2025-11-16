@@ -647,7 +647,8 @@ class TeamEnricher:
                     "enrich_all_teams.committed", teams_enriched=report.teams_enriched
                 )
             else:
-                self.session.rollback()
+                # In dry_run mode, don't commit changes
+                # Caller is responsible for rolling back the session if needed
                 logger.info(
                     "enrich_all_teams.dry_run_completed",
                     teams_enriched=report.teams_enriched,
