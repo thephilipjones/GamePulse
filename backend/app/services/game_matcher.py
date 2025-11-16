@@ -8,7 +8,7 @@ Optionally resolves matched teams to specific game keys.
 Performance: 1000 matches in <1 second via in-memory cache and C++ RapidFuzz.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import structlog
 from rapidfuzz import fuzz
@@ -119,7 +119,7 @@ class GameMatcher:
                 DimTeam.sport == "ncaam",
                 DimTeam.is_current == True,  # noqa: E712
             )
-            result = self.session.execute(statement)  # type: ignore
+            result = self.session.execute(statement)
             teams = result.scalars().all()
 
             if not teams:
@@ -342,7 +342,7 @@ class GameMatcher:
             team_keys: list[int] = []
             for team_id in team_ids:
                 statement = select(DimTeam.team_key).where(DimTeam.team_id == team_id)
-                result = self.session.execute(statement)  # type: ignore
+                result = self.session.execute(statement)
                 team_key = result.scalar_one_or_none()
                 if team_key:
                     team_keys.append(team_key)
@@ -357,15 +357,16 @@ class GameMatcher:
 
             # Case 1: Two teams - query for head-to-head game
             if len(team_keys) == 2:
+                start_of_day = post_date.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                end_of_day = start_of_day + timedelta(days=1)
+
                 statement = (
                     select(FactGame.game_key)
                     .where(
-                        FactGame.game_date
-                        >= post_date.replace(hour=0, minute=0, second=0, microsecond=0),
-                        FactGame.game_date
-                        < post_date.replace(
-                            hour=0, minute=0, second=0, microsecond=0
-                        ).replace(day=post_date.day + 1),
+                        FactGame.game_date >= start_of_day,
+                        FactGame.game_date < end_of_day,
                     )
                     .where(
                         (
@@ -378,33 +379,34 @@ class GameMatcher:
                         )
                     )
                 )
-                result = self.session.execute(statement)  # type: ignore
+                result = self.session.execute(statement)
                 game_key = result.scalar_one_or_none()
-                return game_key
+                return game_key  # type: ignore[return-value]
 
             # Case 2: One team - query for any game (home or away)
             elif len(team_keys) == 1:
+                start_of_day = post_date.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                end_of_day = start_of_day + timedelta(days=1)
+
                 statement = (
                     select(FactGame.game_key)
                     .where(
-                        FactGame.game_date
-                        >= post_date.replace(hour=0, minute=0, second=0, microsecond=0),
-                        FactGame.game_date
-                        < post_date.replace(
-                            hour=0, minute=0, second=0, microsecond=0
-                        ).replace(day=post_date.day + 1),
+                        FactGame.game_date >= start_of_day,
+                        FactGame.game_date < end_of_day,
                     )
                     .where(
                         (FactGame.home_team_key == team_keys[0])
                         | (FactGame.away_team_key == team_keys[0])
                     )
                 )
-                result = self.session.execute(statement)  # type: ignore
+                result = self.session.execute(statement)
                 games = list(result.scalars().all())
 
                 # Return game_key only if exactly one game found (unambiguous)
                 if len(games) == 1:
-                    return games[0]
+                    return games[0]  # type: ignore[return-value]
                 elif len(games) > 1:
                     logger.warning(
                         "game_resolution_ambiguous",
@@ -468,7 +470,7 @@ class GameMatcher:
             team_keys: list[int] = []
             for team_id in team_ids:
                 statement = select(DimTeam.team_key).where(DimTeam.team_id == team_id)
-                result = await self.session.execute(statement)
+                result = await self.session.execute(statement)  # type: ignore[misc]
                 team_key = result.scalar_one_or_none()
                 if team_key:
                     team_keys.append(team_key)
@@ -483,15 +485,16 @@ class GameMatcher:
 
             # Case 1: Two teams - query for head-to-head game
             if len(team_keys) == 2:
+                start_of_day = post_date.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                end_of_day = start_of_day + timedelta(days=1)
+
                 statement = (
                     select(FactGame.game_key)
                     .where(
-                        FactGame.game_date
-                        >= post_date.replace(hour=0, minute=0, second=0, microsecond=0),
-                        FactGame.game_date
-                        < post_date.replace(
-                            hour=0, minute=0, second=0, microsecond=0
-                        ).replace(day=post_date.day + 1),
+                        FactGame.game_date >= start_of_day,
+                        FactGame.game_date < end_of_day,
                     )
                     .where(
                         (
@@ -504,33 +507,34 @@ class GameMatcher:
                         )
                     )
                 )
-                result = await self.session.execute(statement)
+                result = await self.session.execute(statement)  # type: ignore[misc]
                 game_key = result.scalar_one_or_none()
-                return game_key
+                return game_key  # type: ignore[return-value]
 
             # Case 2: One team - query for any game (home or away)
             elif len(team_keys) == 1:
+                start_of_day = post_date.replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+                end_of_day = start_of_day + timedelta(days=1)
+
                 statement = (
                     select(FactGame.game_key)
                     .where(
-                        FactGame.game_date
-                        >= post_date.replace(hour=0, minute=0, second=0, microsecond=0),
-                        FactGame.game_date
-                        < post_date.replace(
-                            hour=0, minute=0, second=0, microsecond=0
-                        ).replace(day=post_date.day + 1),
+                        FactGame.game_date >= start_of_day,
+                        FactGame.game_date < end_of_day,
                     )
                     .where(
                         (FactGame.home_team_key == team_keys[0])
                         | (FactGame.away_team_key == team_keys[0])
                     )
                 )
-                result = await self.session.execute(statement)
+                result = await self.session.execute(statement)  # type: ignore[misc]
                 games = list(result.scalars().all())
 
                 # Return game_key only if exactly one game found (unambiguous)
                 if len(games) == 1:
-                    return games[0]
+                    return games[0]  # type: ignore[return-value]
                 elif len(games) > 1:
                     logger.warning(
                         "game_resolution_ambiguous",

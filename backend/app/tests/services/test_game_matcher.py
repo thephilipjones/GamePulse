@@ -576,6 +576,112 @@ class TestGameKeyResolution:
         # Verify None returned (no game found)
         assert game_key is None
 
+    def test_resolve_game_key_last_day_of_month(
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+    ) -> None:
+        """
+        Test game key resolution works on last day of month (regression test).
+
+        This tests the fix for the date range bug where .replace(day=day+1)
+        would crash on month boundaries (e.g., Nov 30, Dec 31, Feb 28).
+        """
+        matcher = GameMatcher(db)
+
+        duke = seed_teams["ncaam_duke"]
+        unc = seed_teams["ncaam_unc"]
+
+        # Create games on last days of various months
+        month_boundary_games = [
+            # November 30 (30-day month)
+            FactGame(
+                game_id="ncaam_game_nov30",
+                sport="ncaam",
+                home_team_key=duke.team_key,
+                away_team_key=unc.team_key,
+                game_date=datetime(2025, 11, 30, 19, 0, 0, tzinfo=UTC),
+                game_status="scheduled",
+            ),
+            # December 31 (31-day month)
+            FactGame(
+                game_id="ncaam_game_dec31",
+                sport="ncaam",
+                home_team_key=duke.team_key,
+                away_team_key=unc.team_key,
+                game_date=datetime(2025, 12, 31, 19, 0, 0, tzinfo=UTC),
+                game_status="scheduled",
+            ),
+            # February 28 (non-leap year)
+            FactGame(
+                game_id="ncaam_game_feb28",
+                sport="ncaam",
+                home_team_key=duke.team_key,
+                away_team_key=unc.team_key,
+                game_date=datetime(2025, 2, 28, 19, 0, 0, tzinfo=UTC),
+                game_status="scheduled",
+            ),
+        ]
+
+        for game in month_boundary_games:
+            db.add(game)
+        db.flush()
+
+        # Test 1: November 30 (30-day month)
+        post_date_nov = datetime(2025, 11, 30, 18, 0, 0, tzinfo=UTC)
+        game_key_nov = matcher.resolve_game_key_sync(
+            ["ncaam_duke", "ncaam_unc"], post_date_nov
+        )
+        assert game_key_nov is not None  # Should NOT crash, should find game
+
+        # Test 2: December 31 (31-day month)
+        post_date_dec = datetime(2025, 12, 31, 18, 0, 0, tzinfo=UTC)
+        game_key_dec = matcher.resolve_game_key_sync(
+            ["ncaam_duke", "ncaam_unc"], post_date_dec
+        )
+        assert game_key_dec is not None  # Should NOT crash, should find game
+
+        # Test 3: February 28 (non-leap year)
+        post_date_feb = datetime(2025, 2, 28, 18, 0, 0, tzinfo=UTC)
+        game_key_feb = matcher.resolve_game_key_sync(
+            ["ncaam_duke", "ncaam_unc"], post_date_feb
+        )
+        assert game_key_feb is not None  # Should NOT crash, should find game
+
+    def test_resolve_game_key_leap_year_feb_29(
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+    ) -> None:
+        """
+        Test game key resolution works on Feb 29 (leap year edge case).
+
+        Regression test for date range bug on leap year boundary.
+        """
+        matcher = GameMatcher(db)
+
+        duke = seed_teams["ncaam_duke"]
+        unc = seed_teams["ncaam_unc"]
+
+        # Create game on February 29, 2024 (leap year)
+        leap_year_game = FactGame(
+            game_id="ncaam_game_feb29_2024",
+            sport="ncaam",
+            home_team_key=duke.team_key,
+            away_team_key=unc.team_key,
+            game_date=datetime(2024, 2, 29, 19, 0, 0, tzinfo=UTC),
+            game_status="scheduled",
+        )
+        db.add(leap_year_game)
+        db.flush()
+
+        # Test February 29 (leap year)
+        post_date = datetime(2024, 2, 29, 18, 0, 0, tzinfo=UTC)
+        game_key = matcher.resolve_game_key_sync(["ncaam_duke", "ncaam_unc"], post_date)
+
+        # Should NOT crash, should find game
+        assert game_key is not None
+
 
 class TestGameMatchResultClass:
     """Tests for GameMatchResult data class."""

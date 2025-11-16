@@ -84,8 +84,8 @@ development_status:
   4-3-game-matching-service: done # GameMatcher service + 18 tests, all passing (2025-11-15)
   4-4-unified-transform-layer: done # AC updates complete, tests passing (11 unit tests), TimescaleDB policies verified (2025-11-16)
   4-5-sentiment-analysis-fact-table: done # Review complete - approved with documented design refinements (regular table, auto-materialize policy) (2025-11-16)
-  4-6-improve-game-matching-quality: done # Multi-tier matching strategy (exact match for short acronyms), threshold 60→70, 21 tests passing (2025-11-16)
-  4-7-orchestration-data-management: drafted
+  4-6-improve-game-matching-quality: done # Review approved with bug fix - 23 tests passing, date range bug fixed (2025-11-16)
+  4-7-orchestration-data-management: ready-for-dev # Context generated 2025-11-16 (validation: 3 critical + 4 major issues resolved, story improved to BMM standards)
   4-8-game-matching-post-processor: drafted # Optimization - batch match stg_social_posts to games
   epic-4-retrospective: optional
 
