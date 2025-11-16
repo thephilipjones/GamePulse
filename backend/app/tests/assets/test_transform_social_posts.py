@@ -316,7 +316,7 @@ class TestAssetReturnValue:
         """
         # Access the underlying function (not the AssetsDefinition wrapper)
         assets_def = transform_social_posts
-        fn = assets_def.op.compute_fn.decorated_fn  # Get the original function
+        fn = assets_def.op.compute_fn.decorated_fn  # type: ignore[union-attr]  # Get the original function
 
         # Verify function has docstring
         assert fn.__doc__ is not None, (

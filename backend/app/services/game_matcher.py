@@ -120,7 +120,7 @@ class GameMatcher:
                 DimTeam.is_current == True,  # noqa: E712
             )
             result = self.session.execute(statement)
-            teams = result.scalars().all()
+            teams = result.scalars().all()  # type: ignore[union-attr]
 
             if not teams:
                 raise RuntimeError(
@@ -167,7 +167,7 @@ class GameMatcher:
                 DimTeam.sport == "ncaam",
                 DimTeam.is_current == True,  # noqa: E712
             )
-            result = await self.session.execute(statement)
+            result = await self.session.execute(statement)  # type: ignore[misc]
             teams = result.scalars().all()
 
             if not teams:
@@ -343,7 +343,7 @@ class GameMatcher:
             for team_id in team_ids:
                 statement = select(DimTeam.team_key).where(DimTeam.team_id == team_id)
                 result = self.session.execute(statement)
-                team_key = result.scalar_one_or_none()
+                team_key = result.scalar_one_or_none()  # type: ignore[union-attr]
                 if team_key:
                     team_keys.append(team_key)
 
@@ -380,8 +380,8 @@ class GameMatcher:
                     )
                 )
                 result = self.session.execute(statement)
-                game_key = result.scalar_one_or_none()
-                return game_key  # type: ignore[return-value]
+                game_key = result.scalar_one_or_none()  # type: ignore[union-attr]
+                return game_key
 
             # Case 2: One team - query for any game (home or away)
             elif len(team_keys) == 1:
@@ -402,11 +402,11 @@ class GameMatcher:
                     )
                 )
                 result = self.session.execute(statement)
-                games = list(result.scalars().all())
+                games = list(result.scalars().all())  # type: ignore[union-attr]
 
                 # Return game_key only if exactly one game found (unambiguous)
                 if len(games) == 1:
-                    return games[0]  # type: ignore[return-value]
+                    return games[0]  # type: ignore[no-any-return]
                 elif len(games) > 1:
                     logger.warning(
                         "game_resolution_ambiguous",
@@ -509,7 +509,7 @@ class GameMatcher:
                 )
                 result = await self.session.execute(statement)  # type: ignore[misc]
                 game_key = result.scalar_one_or_none()
-                return game_key  # type: ignore[return-value]
+                return game_key  # type: ignore[no-any-return]
 
             # Case 2: One team - query for any game (home or away)
             elif len(team_keys) == 1:
@@ -534,7 +534,7 @@ class GameMatcher:
 
                 # Return game_key only if exactly one game found (unambiguous)
                 if len(games) == 1:
-                    return games[0]  # type: ignore[return-value]
+                    return games[0]  # type: ignore[no-any-return]
                 elif len(games) > 1:
                     logger.warning(
                         "game_resolution_ambiguous",

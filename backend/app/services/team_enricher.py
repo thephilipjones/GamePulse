@@ -130,7 +130,7 @@ class TeamEnricher:
             )
 
             self.colors_data = data
-            return data
+            return list(data)  # Explicit cast to list[dict[str, Any]]
 
         except httpx.HTTPError as e:
             logger.error(
@@ -443,7 +443,10 @@ class TeamEnricher:
             logger.warning(
                 "detect_duplicates.found",
                 duplicate_count=len(duplicates),
-                total_duplicate_teams=sum(d["count"] for d in duplicates),
+                total_duplicate_teams=sum(
+                    int(d["count"]) if isinstance(d["count"], (int, float)) else 0
+                    for d in duplicates
+                ),
             )
 
         return duplicates
@@ -482,7 +485,7 @@ class TeamEnricher:
 
         # Load all teams
         stmt = select(DimTeam).where(DimTeam.sport == "ncaam", DimTeam.is_current)
-        teams = self.session.exec(stmt).all()
+        teams = list(self.session.exec(stmt).all())
 
         # Detect duplicates
         duplicates = self.detect_duplicates(teams)
@@ -514,8 +517,12 @@ class TeamEnricher:
 
             # Delete numeric teams (seed data), keep slug teams (API data)
             for team in numeric_teams:
-                result["deleted_team_ids"].append(team.team_id)
-                result["teams_deleted"] += 1
+                deleted_ids = result["deleted_team_ids"]
+                if isinstance(deleted_ids, list):
+                    deleted_ids.append(team.team_id)
+                teams_deleted = result["teams_deleted"]
+                if isinstance(teams_deleted, int):
+                    result["teams_deleted"] = teams_deleted + 1
 
                 logger.info(
                     "delete_duplicate_teams.deleting",
@@ -529,10 +536,13 @@ class TeamEnricher:
                     self.session.delete(team)
 
             if numeric_teams:
-                result["duplicate_groups_resolved"] += 1
+                groups_resolved = result["duplicate_groups_resolved"]
+                if isinstance(groups_resolved, int):
+                    result["duplicate_groups_resolved"] = groups_resolved + 1
 
         # Commit changes (unless dry run)
-        if not dry_run and result["teams_deleted"] > 0:
+        teams_deleted = result["teams_deleted"]
+        if not dry_run and isinstance(teams_deleted, int) and teams_deleted > 0:
             self.session.commit()
             logger.info(
                 "delete_duplicate_teams.committed",
@@ -586,7 +596,7 @@ class TeamEnricher:
 
             # Load all teams for sport
             stmt = select(DimTeam).where(DimTeam.sport == sport, DimTeam.is_current)
-            teams = self.session.exec(stmt).all()
+            teams = list(self.session.exec(stmt).all())
 
             logger.info("enrich_all_teams.teams_loaded", count=len(teams))
 
@@ -614,7 +624,7 @@ class TeamEnricher:
                         # Track specific enrichments
                         if team.primary_color:
                             report.colors_added += 1
-                        if team.aliases and len(team.aliases) > 0:
+                        if team.aliases is not None and len(team.aliases) > 0:
                             report.aliases_added += 1
                     else:
                         report.teams_skipped += 1
@@ -622,7 +632,8 @@ class TeamEnricher:
                 except Exception as e:
                     report.teams_failed += 1
                     error_msg = f"Failed to enrich {team.team_id}: {e}"
-                    report.errors.append(error_msg)
+                    if report.errors is not None:
+                        report.errors.append(error_msg)
                     logger.error(
                         "enrich_team.error",
                         team_id=team.team_id,
@@ -644,7 +655,8 @@ class TeamEnricher:
 
         except Exception as e:
             error_msg = f"Critical error during enrichment: {e}"
-            report.errors.append(error_msg)
+            if report.errors is not None:
+                report.errors.append(error_msg)
             logger.error("enrich_all_teams.critical_error", error=str(e))
             self.session.rollback()
 

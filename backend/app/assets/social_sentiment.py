@@ -195,16 +195,15 @@ async def _find_unprocessed_posts(
     Returns:
         List of unprocessed StgSocialPost records
     """
+    join_condition = (
+        StgSocialPost.social_post_key == FactSocialSentiment.social_post_key
+    ) & (StgSocialPost.created_at == FactSocialSentiment.created_at)
     stmt = (
         select(StgSocialPost)
-        .outerjoin(
-            FactSocialSentiment,
-            (StgSocialPost.social_post_key == FactSocialSentiment.social_post_key)
-            & (StgSocialPost.created_at == FactSocialSentiment.created_at),
-        )
+        .outerjoin(FactSocialSentiment, join_condition)  # type: ignore[arg-type]
         .where(FactSocialSentiment.sentiment_key.is_(None))  # type: ignore[union-attr]
         .where(StgSocialPost.matched_to_game == True)  # type: ignore[arg-type] # noqa: E712
-        .order_by(StgSocialPost.created_at.asc())  # type: ignore[arg-type]
+        .order_by(StgSocialPost.created_at)  # type: ignore[arg-type]
         .limit(BATCH_SIZE)
     )
 

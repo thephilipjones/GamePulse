@@ -19,7 +19,7 @@ UTC = timezone.utc
 
 
 @pytest.fixture
-def mock_colors_dataset():
+def mock_colors_dataset() -> list[dict[str, object]]:
     """
     Mock NCAA team colors dataset (GitHub format).
 
@@ -135,7 +135,9 @@ def seed_teams(db: Session) -> dict[str, DimTeam]:
 class TestTeamEnricher:
     """Test suite for TeamEnricher service."""
 
-    def test_fetch_colors_dataset(self, db: Session, mock_colors_dataset):
+    def test_fetch_colors_dataset(
+        self, db: Session, mock_colors_dataset: list[dict[str, object]]
+    ) -> None:
         """Test fetching external colors dataset from GitHub."""
         enricher = TeamEnricher(db)
 
@@ -157,8 +159,11 @@ class TestTeamEnricher:
             mock_get.assert_called_once()
 
     def test_match_team_to_colors_dataset_exact(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test exact team name matching to colors dataset."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -173,8 +178,11 @@ class TestTeamEnricher:
         assert colors["secondary"] == "#FFFFFF"
 
     def test_match_team_to_colors_dataset_fuzzy(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test fuzzy team name matching to colors dataset."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -189,8 +197,11 @@ class TestTeamEnricher:
         assert colors["secondary"] == "#FFFFFF"
 
     def test_match_team_to_colors_dataset_no_match(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test no match returns None."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -201,7 +212,7 @@ class TestTeamEnricher:
 
         assert colors is None
 
-    def test_generate_aliases_simple(self, db: Session):
+    def test_generate_aliases_simple(self, db: Session) -> None:
         """Test alias generation for simple team names."""
         enricher = TeamEnricher(db)
 
@@ -210,7 +221,7 @@ class TestTeamEnricher:
         assert "duke" in aliases
         assert len(aliases) == 1
 
-    def test_generate_aliases_compound(self, db: Session):
+    def test_generate_aliases_compound(self, db: Session) -> None:
         """Test alias generation for compound team names."""
         enricher = TeamEnricher(db)
 
@@ -221,7 +232,7 @@ class TestTeamEnricher:
         assert "blue devils" in aliases  # Mascot
         assert len(aliases) >= 3
 
-    def test_generate_aliases_multi_word_school(self, db: Session):
+    def test_generate_aliases_multi_word_school(self, db: Session) -> None:
         """Test alias generation for multi-word school names."""
         enricher = TeamEnricher(db)
 
@@ -232,7 +243,7 @@ class TestTeamEnricher:
         assert "north" in aliases  # First word
         assert "tar heels" in aliases  # Mascot
 
-    def test_generate_aliases_abbreviation(self, db: Session):
+    def test_generate_aliases_abbreviation(self, db: Session) -> None:
         """Test alias generation handles abbreviations correctly."""
         enricher = TeamEnricher(db)
 
@@ -242,7 +253,7 @@ class TestTeamEnricher:
         aliases = enricher.generate_aliases("A&M-Corpus Christi")
         assert "a&m-corpus christi" in aliases
 
-    def test_merge_aliases_no_duplicates(self, db: Session):
+    def test_merge_aliases_no_duplicates(self, db: Session) -> None:
         """Test alias merging removes duplicates (case-insensitive)."""
         enricher = TeamEnricher(db)
 
@@ -260,7 +271,7 @@ class TestTeamEnricher:
         merged_lower = [alias.lower() for alias in merged]
         assert len(merged_lower) == len(set(merged_lower))
 
-    def test_merge_aliases_preserves_existing(self, db: Session):
+    def test_merge_aliases_preserves_existing(self, db: Session) -> None:
         """Test alias merging preserves existing aliases."""
         enricher = TeamEnricher(db)
 
@@ -274,8 +285,11 @@ class TestTeamEnricher:
         assert "generated_alias" in merged
 
     def test_enrich_team_with_colors(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test enriching a team with colors from external dataset."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -294,8 +308,11 @@ class TestTeamEnricher:
         assert team.updated_at is not None
 
     def test_enrich_team_with_aliases(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test enriching a team with programmatic aliases."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -312,8 +329,11 @@ class TestTeamEnricher:
         assert "unknown state" in team.aliases
 
     def test_enrich_team_skip_if_already_enriched(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test team is skipped if already enriched (unless force=True)."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -330,8 +350,11 @@ class TestTeamEnricher:
         assert len(team.aliases) >= original_aliases_count
 
     def test_enrich_team_force_update(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test force=True updates even if already enriched."""
         enricher = TeamEnricher(db)
         enricher.colors_data = mock_colors_dataset
@@ -346,8 +369,11 @@ class TestTeamEnricher:
         assert team.updated_at is not None
 
     def test_enrich_all_teams_dry_run(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test dry run mode doesn't commit changes."""
         enricher = TeamEnricher(db)
 
@@ -369,11 +395,15 @@ class TestTeamEnricher:
             fresh_team = db.exec(
                 select(DimTeam).where(DimTeam.team_id == "ncaam_duke")
             ).first()
+            assert fresh_team is not None
             assert fresh_team.primary_color is None  # Should be unchanged
 
     def test_enrich_all_teams_success(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test successful enrichment of all teams."""
         enricher = TeamEnricher(db)
 
@@ -394,17 +424,23 @@ class TestTeamEnricher:
                 report.teams_enriched >= 3
             )  # At least duke, unc, unknown should be enriched
             assert report.teams_failed == 0
+            assert report.errors is not None
             assert len(report.errors) == 0
 
             # Verify database changes persisted
             db.commit()
             db.refresh(seed_teams["ncaam_duke"])
             assert seed_teams["ncaam_duke"].primary_color is not None
-            assert len(seed_teams["ncaam_duke"].aliases) > 0
+            aliases = seed_teams["ncaam_duke"].aliases
+            assert aliases is not None
+            assert len(aliases) > 0
 
     def test_enrich_all_teams_idempotency(
-        self, db: Session, seed_teams, mock_colors_dataset
-    ):
+        self,
+        db: Session,
+        seed_teams: dict[str, DimTeam],
+        mock_colors_dataset: list[dict[str, object]],
+    ) -> None:
         """Test enrichment is idempotent (same result when run multiple times)."""
         enricher = TeamEnricher(db)
 
@@ -424,6 +460,8 @@ class TestTeamEnricher:
             team_after_first = db.exec(
                 select(DimTeam).where(DimTeam.team_id == "ncaam_duke")
             ).first()
+            assert team_after_first is not None
+            assert team_after_first.aliases is not None
             aliases_after_first = team_after_first.aliases.copy()
             color_after_first = team_after_first.primary_color
 
@@ -440,11 +478,15 @@ class TestTeamEnricher:
             team_after_second = db.exec(
                 select(DimTeam).where(DimTeam.team_id == "ncaam_duke")
             ).first()
+            assert team_after_second is not None
             assert team_after_second.primary_color == color_after_first
             # Aliases might have minimal additions but should not differ significantly
+            assert team_after_second.aliases is not None
             assert set(aliases_after_first).issubset(set(team_after_second.aliases))
 
-    def test_enrich_all_teams_handles_errors(self, db: Session, seed_teams):
+    def test_enrich_all_teams_handles_errors(
+        self, db: Session, seed_teams: dict[str, DimTeam]
+    ) -> None:
         """Test enrichment handles errors gracefully."""
         enricher = TeamEnricher(db)
 
@@ -458,10 +500,11 @@ class TestTeamEnricher:
             )
 
             # Should have errors but not crash
+            assert report.errors is not None
             assert len(report.errors) > 0
             assert "Network error" in str(report.errors)
 
-    def test_is_abbreviation(self, db: Session):
+    def test_is_abbreviation(self, db: Session) -> None:
         """Test abbreviation detection helper."""
         enricher = TeamEnricher(db)
 
@@ -474,7 +517,7 @@ class TestTeamEnricher:
         assert enricher._is_abbreviation("Blue") is False  # Normal word
         assert enricher._is_abbreviation("UMBC") is True  # 4-char uppercase
 
-    def test_enrichment_report_initialization(self):
+    def test_enrichment_report_initialization(self) -> None:
         """Test EnrichmentReport dataclass initialization."""
         report = EnrichmentReport()
 

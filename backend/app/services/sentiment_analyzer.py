@@ -9,7 +9,9 @@ Story 4-5: Sentiment Analysis & Fact Table
 """
 
 import structlog
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from vaderSentiment.vaderSentiment import (  # type: ignore[import-untyped]
+    SentimentIntensityAnalyzer,
+)
 
 logger = structlog.get_logger()
 

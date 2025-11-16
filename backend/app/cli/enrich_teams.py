@@ -26,7 +26,7 @@ import structlog
 from sqlmodel import Session, create_engine
 
 from app.core.config import settings
-from app.services.team_enricher import TeamEnricher
+from app.services.team_enricher import EnrichmentReport, TeamEnricher
 
 logger = structlog.get_logger(__name__)
 
@@ -116,22 +116,22 @@ def main() -> None:
                 stmt = select(DimTeam).where(
                     DimTeam.sport == args.sport, DimTeam.is_current
                 )
-                teams = session.exec(stmt).all()
+                teams = list(session.exec(stmt).all())
                 duplicates = enricher.detect_duplicates(teams)
 
                 # Create minimal report for display
-                class MockReport:
-                    teams_processed = len(teams)
-                    teams_enriched = 0
-                    teams_skipped = len(teams)
-                    teams_failed = 0
-                    colors_added = 0
-                    aliases_added = 0
-                    duplicates_found = len(duplicates)
-                    duplicate_groups = duplicates
-                    errors = []
-
-                report = MockReport()
+                mock_report = EnrichmentReport(
+                    teams_processed=len(teams),
+                    teams_enriched=0,
+                    teams_skipped=len(teams),
+                    teams_failed=0,
+                    colors_added=0,
+                    aliases_added=0,
+                    duplicates_found=len(duplicates),
+                    duplicate_groups=duplicates,
+                    errors=[],
+                )
+                report = mock_report
 
             # Print report
             print()

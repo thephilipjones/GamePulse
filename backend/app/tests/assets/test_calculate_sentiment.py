@@ -5,6 +5,7 @@ Tests sentiment analysis asset with test database fixtures.
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -25,7 +26,7 @@ class TestCalculateSentiment:
     async def test_process_matched_posts(
         self,
         session: AsyncSession,
-        test_context: any,
+        test_context: Any,
     ) -> None:
         """Test processing posts that match to games."""
         # Setup: Create test teams
@@ -89,7 +90,7 @@ class TestCalculateSentiment:
         from app.resources.database import DatabaseResource
 
         database = DatabaseResource()
-        result = await calculate_sentiment(test_context, database)
+        result = await calculate_sentiment(test_context, database)  # type: ignore[misc]
 
         # Verify results
         assert result["posts_analyzed"] == 1
@@ -110,6 +111,9 @@ class TestCalculateSentiment:
         assert sentiment.social_post_key == post.social_post_key
 
         # Verify sentiment scores (positive text should have positive compound)
+        assert sentiment.sentiment_compound is not None
+        assert sentiment.sentiment_positive is not None
+        assert sentiment.sentiment_negative is not None
         assert sentiment.sentiment_compound > 0.05  # Positive sentiment
         assert sentiment.sentiment_positive > sentiment.sentiment_negative
 
@@ -122,7 +126,7 @@ class TestCalculateSentiment:
     async def test_skip_posts_without_game_match(
         self,
         session: AsyncSession,
-        test_context: any,
+        test_context: Any,
     ) -> None:
         """Test posts without valid game_key are skipped."""
         # Create post with matched_teams but no corresponding game
@@ -146,7 +150,7 @@ class TestCalculateSentiment:
         from app.resources.database import DatabaseResource
 
         database = DatabaseResource()
-        result = await calculate_sentiment(test_context, database)
+        result = await calculate_sentiment(test_context, database)  # type: ignore[misc]
 
         # Verify post was skipped
         assert result["posts_analyzed"] == 1
@@ -162,14 +166,14 @@ class TestCalculateSentiment:
     async def test_no_unprocessed_posts(
         self,
         session: AsyncSession,
-        test_context: any,
+        test_context: Any,
     ) -> None:
         """Test asset handles no unprocessed posts gracefully."""
         # Execute asset with empty database
         from app.resources.database import DatabaseResource
 
         database = DatabaseResource()
-        result = await calculate_sentiment(test_context, database)
+        result = await calculate_sentiment(test_context, database)  # type: ignore[misc]
 
         # Verify zero counts
         assert result["posts_analyzed"] == 0
@@ -179,7 +183,7 @@ class TestCalculateSentiment:
     async def test_idempotency(
         self,
         session: AsyncSession,
-        test_context: any,
+        test_context: Any,
     ) -> None:
         """Test asset is idempotent (running twice doesn't duplicate records)."""
         # Setup: Create minimal test data
@@ -236,11 +240,11 @@ class TestCalculateSentiment:
 
         database = DatabaseResource()
 
-        result1 = await calculate_sentiment(test_context, database)
+        result1 = await calculate_sentiment(test_context, database)  # type: ignore[misc]
         assert result1["posts_analyzed"] == 1
         assert result1["posts_matched_to_games"] == 1
 
-        result2 = await calculate_sentiment(test_context, database)
+        result2 = await calculate_sentiment(test_context, database)  # type: ignore[misc]
         assert result2["posts_analyzed"] == 0  # No unprocessed posts left
 
         # Verify only one sentiment record exists
