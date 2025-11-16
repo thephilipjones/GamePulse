@@ -1183,6 +1183,95 @@ curl https://api.gamepulse.top/api/v1/health | jq .
 - **Monitoring:** Foundation for future CloudWatch health checks (Epic 9)
 - **Deployment Validation:** Verifies application and database connectivity
 
+### Enriching Team Data (Colors & Aliases)
+
+GamePulse provides an idempotent team enrichment service that adds colors and aliases to teams discovered via NCAA API.
+
+**What it does:**
+- Fetches team colors from external dataset (GitHub: glidej/ncaa-team-colors - 347 teams)
+- Matches GamePulse teams to external data using fuzzy name matching (RapidFuzz)
+- Generates programmatic aliases from team names for all teams
+- Updates `dim_team` table with primary_color, secondary_color, and aliases
+- Fully idempotent - safe to run multiple times without data loss or duplicates
+
+**Run enrichment:**
+
+```bash
+# Via Docker (production/development)
+docker compose exec backend python -m app.cli.enrich_teams
+
+# Dry run (preview changes without committing)
+docker compose exec backend python -m app.cli.enrich_teams --dry-run
+
+# Force re-enrichment (update even if already enriched)
+docker compose exec backend python -m app.cli.enrich_teams --force
+
+# Verbose output
+docker compose exec backend python -m app.cli.enrich_teams --verbose
+```
+
+**Check enrichment status:**
+
+```bash
+docker compose exec -T db psql -U postgres -d app -c "
+  SELECT
+    COUNT(*) FILTER (WHERE array_length(aliases, 1) > 0) AS enriched,
+    COUNT(*) FILTER (WHERE array_length(aliases, 1) = 0 OR aliases IS NULL) AS not_enriched,
+    COUNT(*) FILTER (WHERE primary_color IS NOT NULL) AS with_colors
+  FROM dim_team WHERE sport='ncaam';
+"
+```
+
+**Expected results (371 NCAA teams):**
+- **Colors:** ~292 teams matched (79% coverage from external dataset)
+- **Aliases:** 371 teams (100% via programmatic generation)
+- **Match quality:** High confidence (>85% fuzzy match threshold)
+- **Duplicates:** ~17 team names with multiple team_id values (seed data + API ingestion)
+
+**Duplicate Team Detection:**
+
+The enrichment service automatically detects and reports duplicate teams that share the same name but have different `team_id` values. This occurs when:
+- Seed data creates teams with numeric IDs (e.g., `ncaam_150` for Duke)
+- NCAA API ingestion creates teams with slug-based IDs (e.g., `ncaam_duke`)
+
+Both versions are enriched independently. The duplicate report shows which teams have multiple entries:
+
+```
+⚠️  Duplicate Teams Detected:
+  • Duke: 2 teams found
+    - ncaam_duke
+    - ncaam_150
+```
+
+**When to run:**
+- After initial database setup (populate all teams with colors/aliases)
+- When new teams are discovered by NCAA games ingestion
+- After updating external data source (colors dataset changes)
+- To regenerate aliases with improved algorithm
+
+**How it works:**
+1. Fetches NCAA team colors JSON from GitHub
+2. Loads all teams from `dim_team` table
+3. For each team:
+   - Fuzzy match team name to external dataset (RapidFuzz partial_ratio)
+   - Extract primary and secondary colors if match found (score >= 85)
+   - Generate aliases programmatically from team name
+   - Merge new aliases with existing (preserves manual overrides)
+   - Update database record with new data
+4. Commits all changes (or rolls back if dry-run)
+
+**Idempotency guarantee:**
+- Running 10 times = same result as running once
+- No duplicate aliases (case-insensitive merge)
+- Existing manual aliases preserved
+- Colors only updated if NULL or force=True
+- Safe to run in production without side effects
+
+**See also:**
+- Service implementation: [backend/app/services/team_enricher.py](backend/app/services/team_enricher.py)
+- CLI command: [backend/app/cli/enrich_teams.py](backend/app/cli/enrich_teams.py)
+- Tests: [backend/app/tests/services/test_team_enricher.py](backend/app/tests/services/test_team_enricher.py)
+
 ### Adding a New API Endpoint
 
 1. Define route in `backend/app/api/routes/<resource>.py`
