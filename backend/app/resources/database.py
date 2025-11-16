@@ -3,9 +3,8 @@
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any
 
-from dagster import ConfigurableResource
+from dagster import ConfigurableResource, InitResourceContext
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -55,22 +54,28 @@ class DatabaseResource(ConfigurableResource):  # type: ignore[type-arg]
 
             self._pid = current_pid
 
-    def teardown_after_execution(self, context: Any) -> None:
-        """Dispose of async engine when resource is unloaded."""
-        if self._engine and self._pid == os.getpid():
-            import asyncio
+    @asynccontextmanager
+    async def yield_for_execution(  # type: ignore[override]
+        self, context: InitResourceContext
+    ) -> AsyncGenerator["DatabaseResource", None]:
+        """Async context manager for resource lifecycle with proper cleanup.
 
-            # Only dispose if we're in the same process that created it
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Can't run sync in async context, engine will be garbage collected
-                    pass
-                else:
-                    asyncio.run(self._engine.dispose())
-            except Exception:
-                # Best effort cleanup
-                pass
+        This replaces teardown_after_execution to properly handle async engine
+        disposal in the same event loop where the engine was created. This
+        prevents "RuntimeError: got Future attached to a different loop" errors.
+
+        Per SQLAlchemy docs: "It's advisable to invoke AsyncEngine.dispose()
+        using await when the AsyncEngine will go out of context."
+        """
+        self._ensure_engine()
+        try:
+            yield self
+        finally:
+            # Dispose engine when execution completes
+            if self._engine and self._pid == os.getpid():
+                await self._engine.dispose()
+                self._engine = None
+                self._session_factory = None
 
     @asynccontextmanager
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
