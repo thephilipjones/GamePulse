@@ -1,7 +1,7 @@
-# Story 4-6: Orchestration & Data Management
+# Story 4-7: Orchestration & Data Management
 
 **Epic:** Epic 4 - Social Media Data Ingestion via ELT Pattern
-**Story ID:** 4-6
+**Story ID:** 4-7
 **Status:** TODO
 **Estimated Effort:** 10-15 hours
 **Priority:** Medium (Week 3 - polish & operational readiness)

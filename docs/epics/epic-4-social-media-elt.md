@@ -20,8 +20,8 @@ Epic 4 implements a **multi-platform social media data pipeline** using Extract-
 - **Sentiment-enriched fact table** with VADER analysis, ready for Epic 5 integration (Week 3)
 - **Portfolio-quality data engineering** demonstrating ELT patterns, Dagster orchestration, TimescaleDB partitioning
 
-**Timeline:** 3 weeks (6 stories)
-**Effort Estimate:** 60-80 hours
+**Timeline:** 3 weeks (8 stories)
+**Effort Estimate:** 68-92 hours
 
 ---
 
@@ -102,7 +102,7 @@ GamePulse's excitement scoring algorithm (Epic 5) requires social sentiment sign
 │  └─ Write: stg_social_posts (all posts, matched_to_game=FALSE)         │
 │                                                                           │
 │  Note: Game matching deferred to Story 4-5 (FK resolution layer)        │
-│        and optional Story 4-7 (transform-layer optimization)             │
+│        and optional Story 4-8 (transform-layer optimization)             │
 │                                                                           │
 │  Cleanup Job (Daily):                                                    │
 │  └─ Delete unmatched raw posts older than 7 days                        │
@@ -2056,7 +2056,7 @@ Epic 5 requirements for `fact_social_sentiment`:
 
 ## Story Breakdown
 
-Epic 4 decomposes into **6 coarse-grained stories**:
+Epic 4 decomposes into **8 coarse-grained stories**:
 
 | Story | Title | Effort (hrs) | Dependencies |
 |-------|-------|--------------|--------------|
@@ -2065,9 +2065,11 @@ Epic 4 decomposes into **6 coarse-grained stories**:
 | **4-3** | Game Matching Service | 8-10 | Epic 2 (dim_team) |
 | **4-4** | Unified Transform Layer | 12-16 | 4-1, 4-2, 4-3 |
 | **4-5** | Sentiment Analysis & Fact Table | 10-12 | 4-4, Epic 2 (fact_game) |
-| **4-6** | Orchestration & Data Management | 8-12 | 4-1, 4-2, 4-4, 4-5 |
+| **4-6** | Improve Game Matching Quality | 8-12 | 4-3, 4-4 |
+| **4-7** | Orchestration & Data Management | 8-12 | 4-1, 4-2, 4-4, 4-5 |
+| **4-8** | Game Matching Post-Processor (Optional) | 8-12 | 4-4, 4-6 |
 
-**Total Effort:** 60-80 hours (3 weeks @ 20-27 hrs/week)
+**Total Effort:** 68-92 hours (3 weeks @ 23-31 hrs/week, or 4 weeks @ 17-23 hrs/week)
 
 **Sprint Velocity:** Assumes solo developer with existing Epic 2 patterns to replicate.
 
