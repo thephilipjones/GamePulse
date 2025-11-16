@@ -2,7 +2,7 @@
 
 **Epic:** Epic 4 - Social Media Data Ingestion via ELT Pattern
 **Story ID:** 4-2
-**Status:** TODO
+**Status:** ready-for-dev
 **Estimated Effort:** 10-14 hours
 **Priority:** High (Week 1-2 - blocks 4-4)
 **Dependencies:** Epic 2 (dim_team, fact_game completed)
@@ -570,6 +570,30 @@ Future expansion (Story 4-6):
 ### Incremental Extraction Logic
 
 Asset queries `MAX(fetched_at)` from database to establish cursor. Only fetches posts with `created_at > cursor`. Bluesky SDK's `since` parameter provides native incremental support (unlike Reddit's pagination).
+
+---
+
+## Dev Agent Record
+
+### Context Reference
+
+- Story Context XML: [4-2-bluesky-data-pipeline.context.xml](4-2-bluesky-data-pipeline.context.xml)
+
+### Agent Model Used
+
+_To be filled by dev agent_
+
+### Debug Log References
+
+_To be filled by dev agent_
+
+### Completion Notes List
+
+_To be filled by dev agent_
+
+### File List
+
+_To be filled by dev agent_
 
 ---
 

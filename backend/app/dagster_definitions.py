@@ -13,13 +13,17 @@ from dagster import (
     load_assets_from_modules,
 )
 
+from app.assets import bluesky_posts as bluesky_posts_module
 from app.assets import ncaa_games as ncaa_games_module
 from app.assets import reddit_posts as reddit_posts_module
+from app.assets.bluesky_posts import bluesky_posts_job, bluesky_posts_schedule
 from app.assets.reddit_posts import reddit_posts_job, reddit_posts_schedule
 from app.resources.database import DatabaseResource
 
 # Load all assets from assets module
-all_assets = load_assets_from_modules([ncaa_games_module, reddit_posts_module])
+all_assets = load_assets_from_modules(
+    [ncaa_games_module, reddit_posts_module, bluesky_posts_module]
+)
 
 # Define asset job for manual materialization (NCAA)
 ncaa_games_job = define_asset_job(
@@ -52,10 +56,10 @@ database_resource = DatabaseResource()
 # Dagster definitions
 defs = Definitions(
     assets=all_assets,
-    schedules=[ncaa_games_schedule, reddit_posts_schedule],
+    schedules=[ncaa_games_schedule, reddit_posts_schedule, bluesky_posts_schedule],
     resources={
         "database": database_resource,
     },
-    jobs=[ncaa_games_job, reddit_posts_job],
+    jobs=[ncaa_games_job, reddit_posts_job, bluesky_posts_job],
     executor=in_process_executor,
 )

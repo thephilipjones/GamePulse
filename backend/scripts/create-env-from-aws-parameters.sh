@@ -144,6 +144,12 @@ map_parameter_name() {
         APP_REDDIT_USER_AGENT)     echo "REDDIT_USER_AGENT" ;;
         APP_REDDIT_RATE_LIMIT_QPM) echo "REDDIT_RATE_LIMIT_QPM" ;;
 
+        # Epic 4: Bluesky Data Pipeline mappings
+        APP_BLUESKY_HANDLE)        echo "BLUESKY_HANDLE" ;;
+        APP_BLUESKY_APP_PASSWORD)  echo "BLUESKY_APP_PASSWORD" ;;
+        APP_BLUESKY_RATE_LIMIT_POINTS_PER_HOUR) echo "BLUESKY_RATE_LIMIT_POINTS_PER_HOUR" ;;
+        APP_BLUESKY_HASHTAGS)      echo "BLUESKY_HASHTAGS" ;;
+
         # Docker mappings
         DOCKER_BACKEND_IMAGE)      echo "DOCKER_IMAGE_BACKEND" ;;
         DOCKER_FRONTEND_IMAGE)     echo "DOCKER_IMAGE_FRONTEND" ;;

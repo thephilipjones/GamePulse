@@ -102,6 +102,12 @@ class Settings(BaseSettings):
     )
     REDDIT_RATE_LIMIT_QPM: int = 10  # Queries per minute
 
+    # Epic 4: Bluesky Data Pipeline
+    BLUESKY_HANDLE: str = ""
+    BLUESKY_APP_PASSWORD: str = ""
+    BLUESKY_RATE_LIMIT_POINTS_PER_HOUR: int = 5000
+    BLUESKY_HASHTAGS: str = "CollegeBasketball,MarchMadness,NCAAM"
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (

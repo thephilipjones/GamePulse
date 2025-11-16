@@ -104,6 +104,32 @@ locals {
       value       = "latest"
       description = "Docker image tag"
     }
+    # Epic 4: Reddit Data Pipeline - Non-sensitive configuration
+    "/gamepulse/${var.environment}/app/reddit_polling_enabled" = {
+      value       = "true"
+      description = "Enable/disable Reddit polling (true/false)"
+    }
+    "/gamepulse/${var.environment}/app/reddit_user_agent" = {
+      value       = "GamePulse/1.0 (Educational portfolio project; +https://gamepulse.top)"
+      description = "Reddit API user agent string (required for respectful scraping)"
+    }
+    "/gamepulse/${var.environment}/app/reddit_rate_limit_qpm" = {
+      value       = "10"
+      description = "Reddit rate limit (queries per minute)"
+    }
+    # Epic 4: Bluesky Data Pipeline - Non-sensitive configuration
+    "/gamepulse/${var.environment}/app/bluesky_handle" = {
+      value       = "PLACEHOLDER-UPDATE-VIA-AWS-CLI"
+      description = "Bluesky account handle (e.g., user.bsky.social)"
+    }
+    "/gamepulse/${var.environment}/app/bluesky_rate_limit_points_per_hour" = {
+      value       = "5000"
+      description = "Bluesky API rate limit (points per hour)"
+    }
+    "/gamepulse/${var.environment}/app/bluesky_hashtags" = {
+      value       = "CollegeBasketball,MarchMadness,NCAAM"
+      description = "Comma-separated list of Bluesky hashtags to monitor"
+    }
   }
 
   # Sensitive parameters that will be populated via AWS CLI (placeholders only)
@@ -117,6 +143,10 @@ locals {
     }
     "/gamepulse/${var.environment}/database/password" = {
       description = "PostgreSQL password (populate via AWS CLI)"
+    }
+    # Epic 4: Bluesky Data Pipeline - Sensitive credentials
+    "/gamepulse/${var.environment}/app/bluesky_app_password" = {
+      description = "Bluesky app password (populate via AWS CLI)"
     }
     "/gamepulse/shared/infrastructure/tailscale_authkey" = {
       description = "Tailscale auth key for EC2 auto-join (populate via AWS CLI)"

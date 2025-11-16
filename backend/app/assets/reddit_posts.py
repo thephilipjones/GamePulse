@@ -16,6 +16,7 @@ Schedule: extract_reddit_posts_schedule
 """
 
 from datetime import datetime, timezone
+from typing import Any
 
 import structlog
 from dagster import (
@@ -53,7 +54,7 @@ logger = structlog.get_logger()
 async def extract_reddit_posts(
     context: AssetExecutionContext,
     database: DatabaseResource,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """
     Extract Reddit posts from all active subreddits with incremental extraction.
 

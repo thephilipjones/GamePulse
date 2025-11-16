@@ -1,0 +1,236 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>2</storyId>
+    <title>Bluesky Data Pipeline</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-15</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-2-bluesky-data-pipeline.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>data engineer</asA>
+    <iWant>to extract NCAA basketball posts from Bluesky using hashtag search with keyword filtering during fetch</iWant>
+    <soThat>I have compliant, multi-platform social media data for game excitement scoring and reduce Reddit dependency risk</soThat>
+    <tasks>
+      - Task 1: Database Migration - raw_bluesky_posts Table
+      - Task 2: SQLModel - RawBlueskyPost Model
+      - Task 3: Bluesky Client - atproto SDK Integration
+      - Task 4: Dagster Asset - extract_bluesky_posts
+      - Task 5: Dagster Schedule - extract_bluesky_posts_schedule
+      - Task 6: Environment Variables Configuration
+      - Task 7: Keyword Filtering Logic
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    1. Bluesky Client Implementation - Authenticated client with app password, hashtag search, 5000 points/hour rate limit, 24-hour incremental extraction, 3 retries with exponential backoff, structured logging
+    2. Keyword Filtering During Fetch - Searches hashtags: CollegeBasketball, MarchMadness, NCAAM with deduplication by URI
+    3. Database Table &amp; Migration - raw_bluesky_posts TimescaleDB hypertable with columns: post_uri (PK), post_cid, raw_json (JSONB), created_at, fetched_at, matched_to_game, match_confidence. 1-day chunks, 90-day retention, 7-day compression, GIN index on raw_json
+    4. Dagster Asset - extract_bluesky_posts with incremental extraction, ON CONFLICT DO NOTHING idempotency, metadata logging
+    5. Dagster Schedule - Every 5 minutes (*/5 * * * *), auto-start on daemon init, America/New_York timezone
+    6. Environment Configuration - BLUESKY_HANDLE, BLUESKY_APP_PASSWORD, BLUESKY_RATE_LIMIT_POINTS_PER_HOUR, BLUESKY_HASHTAGS
+    7. Week 1-2 Success Metric - 500-2,000 posts collected in 7 days, no data loss, no authentication errors
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>API Client Specifications &gt; Bluesky Client</section>
+        <snippet>Bluesky client uses atproto SDK (v0.0.63+) with app password authentication. Rate limit: 5000 points/hour. Hashtag search with keyword filtering. Early-stage SDK - expect breaking changes in minor versions.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4 Tech Spec</title>
+        <section>Data Schema Specifications &gt; raw_bluesky_posts</section>
+        <snippet>TimescaleDB hypertable with post_uri PK, raw_json JSONB, 1-day chunks, 90-day retention, 7-day compression. Storage estimate: ~100 MB compressed for 90 days. Average post JSON: 1.5 KB.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4 Tech Spec</title>
+        <section>Dagster Asset Specifications &gt; extract_bluesky_posts</section>
+        <snippet>Asset runs every 5 minutes with incremental extraction (query MAX(fetched_at)). Credential validation raises ValueError if missing. Retry policy: 3 attempts, exponential backoff. Returns metadata: posts_extracted, posts_inserted.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-1-reddit-data-pipeline.md</path>
+        <title>Story 4-1: Reddit Data Pipeline (Previous Story)</title>
+        <section>Implementation Pattern</section>
+        <snippet>Completed story implementing Reddit extraction. Follow same architectural patterns: TokenBucket rate limiter, dual storage (parsed + raw_json), incremental extraction via cursor, Dagster asset with retry policy, structured logging.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture</title>
+        <section>Database</section>
+        <snippet>PostgreSQL 16+ with TimescaleDB 2.23.0 extension. SQLModel ORM with Alembic migrations. Hypertables use 1-day chunks for time-series optimization.</snippet>
+      </doc>
+      <doc>
+        <path>CLAUDE.md</path>
+        <title>Project Instructions</title>
+        <section>Dagster Development</section>
+        <snippet>Dagster UI at localhost:3000 (dev) / dagster.gamepulse.top (prod). Materialize assets via UI or CLI: docker compose exec dagster-daemon dagster asset materialize. Check logs: docker compose logs -f dagster-daemon.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/reddit_client.py</path>
+        <kind>service</kind>
+        <symbol>TokenBucket, RedditClient</symbol>
+        <lines>23-73</lines>
+        <reason>Pattern to follow for BlueskyClient rate limiting. TokenBucket implements burst capacity and accurate QPM enforcement. Adapt for 5000 points/hour (83.3 points/min) instead of 10 QPM.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/reddit.py</path>
+        <kind>model</kind>
+        <symbol>RawRedditPost, DimSport, DimSubreddit</symbol>
+        <lines>101-165</lines>
+        <reason>Pattern to follow for RawBlueskyPost model. Dual storage strategy (parsed columns + raw_json JSONB). Note composite PK pattern and TimescaleDB hypertable configuration. Bluesky will use similar structure with platform-specific fields.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/reddit_posts.py</path>
+        <kind>dagster_asset</kind>
+        <symbol>extract_reddit_posts</symbol>
+        <lines>41-99</lines>
+        <reason>Pattern to follow for extract_bluesky_posts asset. Shows incremental extraction via cursor, retry policy, async execution, structured logging, metadata return. Follow same patterns for Bluesky implementation.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/core/config.py</path>
+        <kind>config</kind>
+        <symbol>Settings</symbol>
+        <lines>97-99</lines>
+        <reason>Reddit config pattern at lines 97-99. Add similar Bluesky settings: BLUESKY_HANDLE, BLUESKY_APP_PASSWORD, BLUESKY_RATE_LIMIT_POINTS_PER_HOUR, BLUESKY_HASHTAGS following same naming convention.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/services/test_reddit_client.py</path>
+        <kind>test</kind>
+        <symbol>test_token_bucket_rate_limiting</symbol>
+        <lines>N/A</lines>
+        <reason>Test pattern to follow for Bluesky client tests. Create backend/app/tests/services/test_bluesky_client.py with similar structure: test rate limiter, test fetch, test authentication errors.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/</path>
+        <kind>migrations</kind>
+        <symbol>create_raw_reddit_posts_hypertable.py</symbol>
+        <lines>N/A</lines>
+        <reason>Migration pattern for TimescaleDB hypertables. Follow same pattern for raw_bluesky_posts: CREATE TABLE, create_hypertable, indexes, retention/compression policies.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="atproto" version="&gt;=0.0.63" status="to-add">Official Bluesky atproto Python SDK. Required for authenticated API access. Early development - pin to specific version and test upgrades carefully.</package>
+        <package name="httpx" version="&gt;=0.27.0" status="installed">Async HTTP client - already installed for Reddit client</package>
+        <package name="structlog" version="&gt;=24.0.0" status="installed">Structured logging - already configured</package>
+        <package name="tenacity" version="&gt;=9.0.0" status="installed">Retry logic with exponential backoff - already installed</package>
+        <package name="dagster" version="&gt;=1.12.1" status="installed">Data orchestration framework - already configured</package>
+        <package name="sqlmodel" version="&gt;=0.0.22" status="installed">ORM for database models - already installed</package>
+        <package name="alembic" version="&gt;=1.13.0" status="installed">Database migrations - already configured</package>
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="rate-limiting">Bluesky API has 5000 points/hour limit (~83.3 points/min). Each search query costs ~100 points. Max 3 hashtag searches every 5 minutes = 36 searches/hour = ~3600 points/hour (within limit with buffer for retries).</constraint>
+    <constraint type="storage">EC2 t2.micro has 20GB disk. Raw Bluesky posts: ~100 MB compressed for 90 days. Total Epic 4 storage (Reddit + Bluesky + transform layers): ~350 MB well within budget.</constraint>
+    <constraint type="memory">1GB RAM + 4GB swap. Batch size limited to 1000 posts per materialization to avoid OOM.</constraint>
+    <constraint type="timescaledb">Hypertable partitioning column must be in all unique constraints. Use post_uri (PK) + created_at (partitioning column) pattern. 1-day chunks for optimal query performance.</constraint>
+    <constraint type="sdk-stability">atproto SDK is v0.0.x (early development). Expect breaking API changes in minor versions. Pin to specific version (0.0.63) and test upgrades carefully. Sparse documentation - rely on source code examples.</constraint>
+    <constraint type="credentials">Bluesky app password (NOT main account password) required. Create via Bluesky Settings → Privacy and Security → App Passwords. Format: xxxx-xxxx-xxxx-xxxx. Store in environment variables, never commit to git.</constraint>
+    <constraint type="legal-compliance">Unlike Reddit scraping (ToS violation), Bluesky API is compliant. Official SDK with proper authentication. No legal risk for production use.</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>BlueskyClient</name>
+      <kind>async context manager class</kind>
+      <signature>
+        class BlueskyClient:
+            async def __aenter__(self) -&gt; Self: ...
+            async def __aexit__(self, ...) -&gt; None: ...
+            async def fetch_posts_by_hashtag(hashtag: str, limit: int = 100, since: datetime | None = None) -&gt; list[dict[str, Any]]: ...
+            async def fetch_all_hashtags(hashtags: list[str], limit: int = 100) -&gt; list[dict[str, Any]]: ...
+      </signature>
+      <path>backend/app/services/bluesky_client.py</path>
+    </interface>
+    <interface>
+      <name>RawBlueskyPost</name>
+      <kind>SQLModel table class</kind>
+      <signature>
+        class RawBlueskyPost(SQLModel, table=True):
+            post_uri: str = Field(primary_key=True)  # atproto URI
+            post_cid: str  # Content ID (immutable hash)
+            raw_json: dict[str, Any]  # Complete post JSON (JSONB)
+            fetched_at: datetime
+            created_at: datetime
+            author_did: str
+            author_handle: str | None
+            post_text: str | None
+            matched_to_game: bool = False
+            match_confidence: float | None
+            processed_at: datetime | None
+      </signature>
+      <path>backend/app/models/social.py</path>
+    </interface>
+    <interface>
+      <name>extract_bluesky_posts</name>
+      <kind>dagster asset</kind>
+      <signature>
+        @asset(
+            name="extract_bluesky_posts",
+            group_name="social_data",
+            retry_policy=RetryPolicy(max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL),
+        )
+        async def extract_bluesky_posts(context: AssetExecutionContext, database: DatabaseResource) -&gt; dict[str, int]: ...
+      </signature>
+      <path>backend/app/assets/bluesky_posts.py</path>
+    </interface>
+    <interface>
+      <name>bluesky_posts_schedule</name>
+      <kind>dagster schedule</kind>
+      <signature>
+        bluesky_posts_schedule = ScheduleDefinition(
+            name="extract_bluesky_posts_schedule",
+            job=bluesky_posts_job,
+            cron_schedule="*/5 * * * *",  # Every 5 minutes
+            execution_timezone="America/New_York",
+            default_status=DefaultScheduleStatus.RUNNING,
+        )
+      </signature>
+      <path>backend/app/assets/bluesky_posts.py</path>
+    </interface>
+    <interface>
+      <name>Settings.BLUESKY_*</name>
+      <kind>pydantic settings</kind>
+      <signature>
+        class Settings(BaseSettings):
+            BLUESKY_HANDLE: str  # e.g., "gamepulse.bsky.social"
+            BLUESKY_APP_PASSWORD: str  # App-specific password
+            BLUESKY_RATE_LIMIT_POINTS_PER_HOUR: int = 5000
+            BLUESKY_HASHTAGS: str = "CollegeBasketball,MarchMadness,NCAAM"  # Comma-separated
+      </signature>
+      <path>backend/app/core/config.py</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>pytest framework with pytest-asyncio for async tests. Follow existing patterns in backend/app/tests/. Unit tests in tests/services/, integration tests in tests/integration/, asset tests in tests/assets/. Use structlog for test logging. Mock external APIs (atproto SDK) with httpx-mock or pytest-mock.</standards>
+    <locations>
+      - backend/app/tests/services/test_bluesky_client.py (unit tests)
+      - backend/app/tests/assets/test_extract_bluesky_posts.py (integration tests)
+      - backend/app/tests/integration/test_bluesky_integration.py (end-to-end tests)
+    </locations>
+    <ideas>
+      <test ac="1">test_bluesky_client_rate_limiter_respects_points_limit - Verify 5000 points/hour budget enforcement</test>
+      <test ac="1">test_fetch_posts_by_hashtag_success - Mock atproto SDK, verify hashtag search and parsing</test>
+      <test ac="1">test_fetch_posts_retry_on_failure - Mock network error, verify 3 retries with exponential backoff</test>
+      <test ac="2">test_fetch_all_hashtags_deduplication - Verify duplicate post URIs removed across multiple hashtag searches</test>
+      <test ac="3">test_migration_creates_hypertable - Verify TimescaleDB hypertable created with correct partitioning</test>
+      <test ac="3">test_raw_bluesky_posts_indexes - Verify GIN index on raw_json, B-tree indexes on fetched_at, matched_to_game</test>
+      <test ac="4">test_extract_bluesky_posts_incremental - Verify only posts newer than MAX(fetched_at) extracted</test>
+      <test ac="4">test_extract_bluesky_posts_idempotent - Run asset twice, verify no duplicates (ON CONFLICT DO NOTHING)</test>
+      <test ac="5">test_schedule_cron_expression - Verify schedule runs every 5 minutes with correct timezone</test>
+      <test ac="6">test_missing_credentials_raises_error - Unset BLUESKY_HANDLE, verify asset raises ValueError</test>
+    </ideas>
+  </tests>
+</story-context>
