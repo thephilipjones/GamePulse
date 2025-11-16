@@ -78,6 +78,12 @@ variable "root_volume_size" {
   }
 }
 
+variable "ami_id" {
+  description = "AMI ID for EC2 instance. If not provided, uses latest Ubuntu 24.04 LTS"
+  type        = string
+  default     = null
+}
+
 # ============================================================================
 # Security Configuration
 # ============================================================================

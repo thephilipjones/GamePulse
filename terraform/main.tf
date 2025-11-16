@@ -58,6 +58,7 @@ module "compute" {
   vpc_id               = module.vpc.vpc_id
   subnet_id            = module.vpc.public_subnet_id
   instance_type        = var.instance_type
+  ami_id               = var.ami_id
   root_volume_size     = var.root_volume_size
   admin_ip_cidrs       = var.admin_ip_cidrs
   tailscale_device_ips = var.tailscale_device_ips

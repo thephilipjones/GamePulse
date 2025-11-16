@@ -215,7 +215,7 @@ resource "aws_key_pair" "deployer" {
 # ============================================================================
 
 resource "aws_instance" "app" {
-  ami           = data.aws_ami.ubuntu.id
+  ami           = var.ami_id != null ? var.ami_id : data.aws_ami.ubuntu.id
   instance_type = var.instance_type
   subnet_id     = var.subnet_id
   key_name      = aws_key_pair.deployer.key_name
