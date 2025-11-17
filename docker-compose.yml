@@ -119,7 +119,7 @@ services:
           "CMD",
           "curl",
           "-f",
-          "http://localhost:8000/api/v1/utils/health-check/",
+          "http://localhost:8000/api/v1/health",
         ]
       interval: 10s
       timeout: 5s
