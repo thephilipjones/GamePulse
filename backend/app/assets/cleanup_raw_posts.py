@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 import structlog
 from dagster import (
+    AssetExecutionContext,
     Backoff,
     DefaultScheduleStatus,
     MaterializeResult,
@@ -53,7 +54,7 @@ UNMATCHED_RETENTION_DAYS = 7
     ),
 )
 async def cleanup_unmatched_raw_posts(
-    context,  # type: ignore[no-untyped-def]
+    context: AssetExecutionContext,
     database: DatabaseResource,
 ) -> MaterializeResult:  # type: ignore[type-arg]
     """
@@ -140,18 +141,18 @@ async def _find_unmatched_reddit_posts(session, cutoff_date: datetime) -> list[s
 
     # Subquery: Check if post exists in stg_social_posts with matched_to_game=TRUE
     matched_subquery = (
-        select(1)  # type: ignore[call-overload]
+        select(1)
         .select_from(StgSocialPost)
         .where(StgSocialPost.platform == "reddit")  # type: ignore[arg-type]
         .where(StgSocialPost.post_id == RawRedditPost.post_id)  # type: ignore[arg-type]
-        .where(StgSocialPost.matched_to_game == True)  # noqa: E712  # type: ignore[arg-type]
+        .where(StgSocialPost.matched_to_game)  # type: ignore[arg-type]
         .exists()
     )
 
     # Main query: Find unmatched old posts
     stmt = (
         select(RawRedditPost.post_id)  # type: ignore[call-overload]
-        .where(RawRedditPost.post_created_at < cutoff_date)  # type: ignore[arg-type]
+        .where(RawRedditPost.post_created_at < cutoff_date)
         .where(~matched_subquery)  # NOT EXISTS
     )
 
@@ -171,18 +172,18 @@ async def _find_unmatched_bluesky_posts(session, cutoff_date: datetime) -> list[
 
     # Subquery: Check if post exists in stg_social_posts with matched_to_game=TRUE
     matched_subquery = (
-        select(1)  # type: ignore[call-overload]
+        select(1)
         .select_from(StgSocialPost)
         .where(StgSocialPost.platform == "bluesky")  # type: ignore[arg-type]
         .where(StgSocialPost.post_id == RawBlueskyPost.post_uri)  # type: ignore[arg-type]
-        .where(StgSocialPost.matched_to_game == True)  # noqa: E712  # type: ignore[arg-type]
+        .where(StgSocialPost.matched_to_game)  # type: ignore[arg-type]
         .exists()
     )
 
     # Main query: Find unmatched old posts
     stmt = (
         select(RawBlueskyPost.post_uri)  # type: ignore[call-overload]
-        .where(RawBlueskyPost.created_at < cutoff_date)  # type: ignore[arg-type]
+        .where(RawBlueskyPost.created_at < cutoff_date)
         .where(~matched_subquery)  # NOT EXISTS
     )
 
