@@ -14,6 +14,12 @@ from app.main import app
 from app.models.dim_date import DimDate
 from app.models.dim_team import DimTeam
 from app.models.fact_game import FactGame
+from app.models.reddit import RawRedditPost
+from app.models.social import (
+    FactSocialSentiment,
+    RawBlueskyPost,
+    StgSocialPost,
+)
 
 
 @pytest.fixture(scope="function")
@@ -31,10 +37,14 @@ def db() -> Generator[Session, None, None]:
     session = Session(bind=connection)
 
     # Delete seed data within this transaction to ensure clean state
-    # Order matters: delete child tables (FactGame) before parent tables (DimTeam, DimDate)
-    session.execute(delete(FactGame))
-    session.execute(delete(DimTeam))
-    session.execute(delete(DimDate))
+    # Order matters: delete child tables first to avoid foreign key violations
+    session.execute(delete(FactSocialSentiment))  # Child of FactGame
+    session.execute(delete(FactGame))  # Child of DimTeam, DimDate
+    session.execute(delete(StgSocialPost))
+    session.execute(delete(RawBlueskyPost))
+    session.execute(delete(RawRedditPost))
+    session.execute(delete(DimTeam))  # Parent table
+    session.execute(delete(DimDate))  # Parent table
     session.flush()  # Make deletions visible within transaction
 
     yield session
@@ -91,10 +101,14 @@ async def session(async_engine) -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         async with session.begin():
             # Delete seed data within this transaction to ensure clean state
-            # Order matters: delete child tables (FactGame) before parent tables (DimTeam, DimDate)
-            await session.execute(delete(FactGame))
-            await session.execute(delete(DimTeam))
-            await session.execute(delete(DimDate))
+            # Order matters: delete child tables first to avoid foreign key violations
+            await session.execute(delete(FactSocialSentiment))  # Child of FactGame
+            await session.execute(delete(FactGame))  # Child of DimTeam, DimDate
+            await session.execute(delete(StgSocialPost))
+            await session.execute(delete(RawBlueskyPost))
+            await session.execute(delete(RawRedditPost))
+            await session.execute(delete(DimTeam))  # Parent table
+            await session.execute(delete(DimDate))  # Parent table
             await session.flush()  # Make deletions visible within transaction
 
             yield session

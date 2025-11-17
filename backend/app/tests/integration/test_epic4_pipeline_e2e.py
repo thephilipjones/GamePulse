@@ -79,16 +79,16 @@ class TestEpic4PipelineConfiguration:
         """Verify all Epic 4 schedules are registered in Dagster definitions."""
         from app.dagster_definitions import defs
 
-        schedule_names = {schedule.name for schedule in defs.get_all_schedule_defs()}  # type: ignore[attr-defined]
-
         expected_schedules = {
-            "reddit_posts_schedule",
-            "bluesky_posts_schedule",
+            "extract_reddit_posts_schedule",
+            "extract_bluesky_posts_schedule",
             "cleanup_unmatched_posts_schedule",
         }
 
         for schedule_name in expected_schedules:
-            assert schedule_name in schedule_names, (
+            # In Dagster 1.12+, use get_schedule_def() to check if schedule exists
+            schedule = defs.get_schedule_def(schedule_name)
+            assert schedule is not None, (
                 f"Schedule '{schedule_name}' not found in definitions"
             )
 
@@ -108,8 +108,8 @@ class TestEpic4PipelineConfiguration:
         transform_deps = transform_social_posts.asset_deps
         transform_dep_keys = {
             str(key.path[0])  # type: ignore[attr-defined]
-            for key in transform_deps.values()
-            for key in transform_deps.values()
+            for keys in transform_deps.values()
+            for key in (keys if isinstance(keys, set) else {keys})
         }
 
         assert "extract_reddit_posts" in transform_dep_keys, (
@@ -123,8 +123,8 @@ class TestEpic4PipelineConfiguration:
         sentiment_deps = calculate_sentiment.asset_deps
         sentiment_dep_keys = {
             str(key.path[0])  # type: ignore[attr-defined]
-            for key in sentiment_deps.values()
-            for key in sentiment_deps.values()
+            for keys in sentiment_deps.values()
+            for key in (keys if isinstance(keys, set) else {keys})
         }
 
         assert "transform_social_posts" in sentiment_dep_keys, (
@@ -136,25 +136,31 @@ class TestEpic4PipelineConfiguration:
         from app.assets.social_sentiment import calculate_sentiment
         from app.assets.transform_social_posts import transform_social_posts
 
-        # Verify transform has 30-min freshness SLA
-        assert transform_social_posts.freshness_policy is not None, (  # type: ignore[attr-defined]
+        # Verify transform has 30-min freshness SLA (Dagster 1.12+ API)
+        transform_specs = list(transform_social_posts.specs)
+        assert transform_specs[0].freshness_policy is not None, (
             "transform_social_posts missing FreshnessPolicy"
         )
-        assert transform_social_posts.freshness_policy.fail_window == timedelta(
-            minutes=30
-        ), (  # type: ignore[attr-defined]
-            "transform_social_posts should have 30-min SLA"
-        )
+        # Compare SerializableTimeDelta via days+seconds attributes
+        expected_30 = timedelta(minutes=30)
+        assert (
+            transform_specs[0].freshness_policy.fail_window.days == expected_30.days
+            and transform_specs[0].freshness_policy.fail_window.seconds
+            == expected_30.seconds
+        ), "transform_social_posts should have 30-min SLA"
 
-        # Verify sentiment has 45-min freshness SLA
-        assert calculate_sentiment.freshness_policy is not None, (  # type: ignore[attr-defined]
+        # Verify sentiment has 45-min freshness SLA (Dagster 1.12+ API)
+        sentiment_specs = list(calculate_sentiment.specs)
+        assert sentiment_specs[0].freshness_policy is not None, (
             "calculate_sentiment missing FreshnessPolicy"
         )
-        assert calculate_sentiment.freshness_policy.fail_window == timedelta(
-            minutes=45
-        ), (  # type: ignore[attr-defined]
-            "calculate_sentiment should have 45-min SLA"
-        )
+        # Compare SerializableTimeDelta via days+seconds attributes
+        expected_45 = timedelta(minutes=45)
+        assert (
+            sentiment_specs[0].freshness_policy.fail_window.days == expected_45.days
+            and sentiment_specs[0].freshness_policy.fail_window.seconds
+            == expected_45.seconds
+        ), "calculate_sentiment should have 45-min SLA"
 
 
 @pytest.mark.e2e
@@ -188,7 +194,7 @@ async def test_reddit_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     )
 
     session.add(test_post)
-    await session.commit()
+    await session.flush()
 
     # Verify post can be queried (extract layer)
     from sqlalchemy import select
@@ -202,6 +208,7 @@ async def test_reddit_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     # Simulate transform layer (normally done by Dagster)
     # This validates the transform logic can process the data
     stg_post = StgSocialPost(
+        social_post_key=1,  # Explicit value to avoid NULL constraint violation
         platform="reddit",
         post_id="e2e_test_reddit_1",
         created_at=now,
@@ -217,7 +224,7 @@ async def test_reddit_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     )
 
     session.add(stg_post)
-    await session.commit()
+    await session.flush()
 
     # Verify transformed post exists
     result = await session.execute(
@@ -246,6 +253,7 @@ async def test_bluesky_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     now = datetime.now(timezone.utc)
     test_post = RawBlueskyPost(
         post_uri="at://test.e2e.bsky.social/post1",
+        post_cid="bafyreic3z5ymxqw5k7pv2xfqhg2z5qr7jj5z3k2xfqhg2z5qr7jj5z3k2",
         author_did="did:plc:test",
         author_handle="test_bsky_user",
         post_text="Amazing performance by UNC tonight!",
@@ -255,7 +263,7 @@ async def test_bluesky_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     )
 
     session.add(test_post)
-    await session.commit()
+    await session.flush()
 
     # Verify post can be queried (extract layer)
     from sqlalchemy import select
@@ -270,6 +278,7 @@ async def test_bluesky_to_sentiment_data_flow(_db: Any, session: Any) -> None:
 
     # Simulate transform layer
     stg_post = StgSocialPost(
+        social_post_key=2,  # Explicit value to avoid NULL constraint violation
         platform="bluesky",
         post_id="at://test.e2e.bsky.social/post1",
         created_at=now,
@@ -285,7 +294,7 @@ async def test_bluesky_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     )
 
     session.add(stg_post)
-    await session.commit()
+    await session.flush()
 
     # Verify transformed post exists
     result = await session.execute(
@@ -323,15 +332,22 @@ def test_pipeline_performance_expectations() -> None:
     # - Transform processing: 1-2 min (2500 posts batch)
     # - Sentiment processing: 1-2 min (2500 posts batch)
 
-    # Verify SLA configuration
-    assert transform_social_posts.freshness_policy.fail_window == timedelta(
-        minutes=30
-    ), (  # type: ignore[attr-defined]
-        "Transform SLA should be 30 min"
-    )
-    assert calculate_sentiment.freshness_policy.fail_window == timedelta(minutes=45), (  # type: ignore[attr-defined]
-        "Sentiment SLA should be 45 min"
-    )
+    # Verify SLA configuration (Dagster 1.12+ API)
+    transform_specs = list(transform_social_posts.specs)
+    sentiment_specs = list(calculate_sentiment.specs)
+    # Compare SerializableTimeDelta via days+seconds attributes
+    expected_30 = timedelta(minutes=30)
+    expected_45 = timedelta(minutes=45)
+    assert (
+        transform_specs[0].freshness_policy.fail_window.days == expected_30.days
+        and transform_specs[0].freshness_policy.fail_window.seconds
+        == expected_30.seconds
+    ), "Transform SLA should be 30 min"
+    assert (
+        sentiment_specs[0].freshness_policy.fail_window.days == expected_45.days
+        and sentiment_specs[0].freshness_policy.fail_window.seconds
+        == expected_45.seconds
+    ), "Sentiment SLA should be 45 min"
 
     # Document expectations
     print("\nExpected Pipeline Latency:")

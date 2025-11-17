@@ -37,7 +37,8 @@ class TestAutoMaterializePolicyConfiguration:
     def test_transform_has_eager_policy(self) -> None:
         """Transform asset should use AutoMaterializePolicy.eager()."""
         asset_def = transform_social_posts
-        policy = asset_def.auto_materialize_policy  # type: ignore[attr-defined]
+        specs = list(asset_def.specs)
+        policy = specs[0].auto_materialize_policy
 
         assert policy is not None, (
             "transform_social_posts missing auto_materialize_policy"
@@ -50,7 +51,8 @@ class TestAutoMaterializePolicyConfiguration:
     def test_sentiment_has_eager_policy(self) -> None:
         """Sentiment asset should use AutoMaterializePolicy.eager()."""
         asset_def = calculate_sentiment
-        policy = asset_def.auto_materialize_policy  # type: ignore[attr-defined]
+        specs = list(asset_def.specs)
+        policy = specs[0].auto_materialize_policy
 
         assert policy is not None, "calculate_sentiment missing auto_materialize_policy"
         assert "AutoMaterializePolicy" in str(type(policy)), (
@@ -61,8 +63,10 @@ class TestAutoMaterializePolicyConfiguration:
         """Extract assets use schedules (may or may not have auto-materialize)."""
         # Extract assets use explicit schedules defined separately
         # They may have auto_materialize_policy=None, which is fine
-        _ = extract_reddit_posts.auto_materialize_policy  # type: ignore[attr-defined]
-        _ = extract_bluesky_posts.auto_materialize_policy  # type: ignore[attr-defined]
+        reddit_specs = list(extract_reddit_posts.specs)
+        bluesky_specs = list(extract_bluesky_posts.specs)
+        _ = reddit_specs[0].auto_materialize_policy
+        _ = bluesky_specs[0].auto_materialize_policy
 
         # No assertions - just verify attributes exist
         # Schedule-based assets may or may not have auto-materialize policies
@@ -87,8 +91,9 @@ class TestAssetDependencies:
         # Get dependency keys from asset definition
         deps = asset_def.asset_deps
         dependency_keys = {
-            str(key.path[0])  # type: ignore[attr-defined]
-            for key in deps.values()
+            str(key.path[0])
+            for keys in deps.values()
+            for key in (keys if isinstance(keys, set) else {keys})
         }
 
         # Verify both dependencies present
@@ -105,8 +110,9 @@ class TestAssetDependencies:
 
         deps = asset_def.asset_deps
         dependency_keys = {
-            str(key.path[0])  # type: ignore[attr-defined]
-            for key in deps.values()
+            str(key.path[0])
+            for keys in deps.values()
+            for key in (keys if isinstance(keys, set) else {keys})
         }
 
         assert "transform_social_posts" in dependency_keys, (
@@ -119,8 +125,22 @@ class TestAssetDependencies:
         bluesky_deps = extract_bluesky_posts.asset_deps
 
         # Extract assets are entry points - no upstream dependencies
-        assert len(reddit_deps) == 0, "extract_reddit_posts should have no dependencies"
-        assert len(bluesky_deps) == 0, (
+        # Get all dependency keys from the dependency sets
+        reddit_dep_keys = {
+            key
+            for keys in reddit_deps.values()
+            for key in (keys if isinstance(keys, set) else {keys})
+        }
+        bluesky_dep_keys = {
+            key
+            for keys in bluesky_deps.values()
+            for key in (keys if isinstance(keys, set) else {keys})
+        }
+
+        assert len(reddit_dep_keys) == 0, (
+            "extract_reddit_posts should have no dependencies"
+        )
+        assert len(bluesky_dep_keys) == 0, (
             "extract_bluesky_posts should have no dependencies"
         )
 
@@ -134,18 +154,24 @@ class TestFreshnessPolicyConfiguration:
 
         Requirement: Maximum 30 minutes from extract to transform complete.
         """
+        from datetime import timedelta
+
         asset_def = transform_social_posts
-        policy = asset_def.freshness_policy  # type: ignore[attr-defined]
+        specs = list(asset_def.specs)
+        policy = specs[0].freshness_policy
 
         assert policy is not None, "transform_social_posts missing freshness_policy"
         assert "FreshnessPolicy" in str(type(policy)), (
             f"Expected FreshnessPolicy, got {type(policy)}"
         )
 
-        # Verify SLA is 30 minutes
-        assert policy.maximum_lag_minutes == 30, (
-            f"Expected 30 min SLA, got {policy.maximum_lag_minutes}"
-        )
+        # Verify SLA is 30 minutes (using new API with fail_window)
+        # Dagster 1.12+ uses SerializableTimeDelta, compare via days+seconds attributes
+        expected = timedelta(minutes=30)
+        assert (
+            policy.fail_window.days == expected.days
+            and policy.fail_window.seconds == expected.seconds
+        ), f"Expected 30 min SLA, got {policy.fail_window}"
 
     def test_sentiment_has_45_minute_freshness_sla(self) -> None:
         """
@@ -154,18 +180,24 @@ class TestFreshnessPolicyConfiguration:
         Requirement: Maximum 45 minutes from extract to sentiment complete.
         Rationale: Transform (30 min) + Sentiment processing (15 min buffer) = 45 min total.
         """
+        from datetime import timedelta
+
         asset_def = calculate_sentiment
-        policy = asset_def.freshness_policy  # type: ignore[attr-defined]
+        specs = list(asset_def.specs)
+        policy = specs[0].freshness_policy
 
         assert policy is not None, "calculate_sentiment missing freshness_policy"
         assert "FreshnessPolicy" in str(type(policy)), (
             f"Expected FreshnessPolicy, got {type(policy)}"
         )
 
-        # Verify SLA is 45 minutes
-        assert policy.maximum_lag_minutes == 45, (
-            f"Expected 45 min SLA, got {policy.maximum_lag_minutes}"
-        )
+        # Verify SLA is 45 minutes (using new API with fail_window)
+        # Dagster 1.12+ uses SerializableTimeDelta, compare via days+seconds attributes
+        expected = timedelta(minutes=45)
+        assert (
+            policy.fail_window.days == expected.days
+            and policy.fail_window.seconds == expected.seconds
+        ), f"Expected 45 min SLA, got {policy.fail_window}"
 
     def test_extract_assets_may_have_no_freshness_policy(self) -> None:
         """
@@ -174,8 +206,10 @@ class TestFreshnessPolicyConfiguration:
         Freshness policies are optional for scheduled assets.
         Primary SLA enforcement is on downstream trigger-based assets.
         """
-        _ = extract_reddit_posts.freshness_policy  # type: ignore[attr-defined]
-        _ = extract_bluesky_posts.freshness_policy  # type: ignore[attr-defined]
+        reddit_specs = list(extract_reddit_posts.specs)
+        bluesky_specs = list(extract_bluesky_posts.specs)
+        _ = reddit_specs[0].freshness_policy
+        _ = bluesky_specs[0].freshness_policy
 
         # These may or may not have freshness policies - both are valid
         # Just verify we can access the attributes without error
@@ -188,7 +222,7 @@ class TestRetryPolicyConfiguration:
     def test_extract_reddit_has_retry_policy(self) -> None:
         """Extract Reddit should have exponential backoff retry policy."""
         asset_def = extract_reddit_posts
-        policy = asset_def.retry_policy  # type: ignore[attr-defined]
+        policy = asset_def.op.retry_policy
 
         assert policy is not None, "extract_reddit_posts missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -203,7 +237,7 @@ class TestRetryPolicyConfiguration:
     def test_extract_bluesky_has_retry_policy(self) -> None:
         """Extract Bluesky should have exponential backoff retry policy."""
         asset_def = extract_bluesky_posts
-        policy = asset_def.retry_policy  # type: ignore[attr-defined]
+        policy = asset_def.op.retry_policy
 
         assert policy is not None, "extract_bluesky_posts missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -217,7 +251,7 @@ class TestRetryPolicyConfiguration:
     def test_transform_has_retry_policy(self) -> None:
         """Transform should have exponential backoff retry policy."""
         asset_def = transform_social_posts
-        policy = asset_def.retry_policy  # type: ignore[attr-defined]
+        policy = asset_def.op.retry_policy
 
         assert policy is not None, "transform_social_posts missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -231,7 +265,7 @@ class TestRetryPolicyConfiguration:
     def test_sentiment_has_retry_policy(self) -> None:
         """Sentiment should have exponential backoff retry policy."""
         asset_def = calculate_sentiment
-        policy = asset_def.retry_policy  # type: ignore[attr-defined]
+        policy = asset_def.op.retry_policy
 
         assert policy is not None, "calculate_sentiment missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -252,7 +286,7 @@ class TestRetryPolicyConfiguration:
         ]
 
         for asset_def in assets:
-            policy = asset_def.retry_policy  # type: ignore[attr-defined]
+            policy = asset_def.op.retry_policy
             assert policy is not None, f"{asset_def.key} missing retry_policy"
             assert "EXPONENTIAL" in str(policy.backoff), (
                 f"{asset_def.key} should use EXPONENTIAL backoff, got {policy.backoff}"

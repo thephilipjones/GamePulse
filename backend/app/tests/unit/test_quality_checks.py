@@ -30,10 +30,22 @@ from app.assets.quality_checks import (
 )
 
 
+def extract_metadata_value(metadata_val: Any) -> Any:
+    """
+    Extract actual value from Dagster MetadataValue wrapper.
+
+    Dagster 1.12+ wraps metadata in typed objects (FloatMetadataValue, etc.).
+    This helper extracts the underlying value for test assertions.
+    """
+    if hasattr(metadata_val, "value"):
+        return metadata_val.value
+    return metadata_val
+
+
 @pytest.fixture
 def asset_check_context():
     """Proper Dagster asset check context for testing."""
-    return build_asset_check_context(asset_key=["extract_reddit_posts"])
+    return build_asset_check_context()
 
 
 @pytest.fixture
@@ -67,8 +79,12 @@ class TestRedditFreshnessCheck:
 
         # Assertions
         assert result.passed is True
-        assert result.metadata["age_hours"] < FRESHNESS_SLA_HOURS
-        assert result.metadata["sla_hours"] == FRESHNESS_SLA_HOURS
+        assert (
+            extract_metadata_value(result.metadata["age_hours"]) < FRESHNESS_SLA_HOURS
+        )
+        assert (
+            extract_metadata_value(result.metadata["sla_hours"]) == FRESHNESS_SLA_HOURS
+        )
         assert "action" not in result.metadata  # No action needed when passing
 
     @pytest.mark.asyncio
@@ -89,7 +105,9 @@ class TestRedditFreshnessCheck:
 
         # Assertions
         assert result.passed is False
-        assert result.metadata["age_hours"] > FRESHNESS_SLA_HOURS
+        assert (
+            extract_metadata_value(result.metadata["age_hours"]) > FRESHNESS_SLA_HOURS
+        )
         assert "action" in result.metadata  # Action required for failure
 
     @pytest.mark.asyncio
@@ -109,8 +127,12 @@ class TestRedditFreshnessCheck:
 
         # Assertions
         assert result.passed is False
-        assert "No Reddit data found" in result.metadata["reason"]
-        assert result.metadata["sla_hours"] == FRESHNESS_SLA_HOURS
+        assert "No Reddit data found" in extract_metadata_value(
+            result.metadata["reason"]
+        )
+        assert (
+            extract_metadata_value(result.metadata["sla_hours"]) == FRESHNESS_SLA_HOURS
+        )
 
 
 class TestRedditVolumeAnomalyCheck:
@@ -134,9 +156,16 @@ class TestRedditVolumeAnomalyCheck:
 
         # Assertions
         assert result.passed is True
-        assert result.metadata["post_count_last_15min"] == normal_count
-        assert result.metadata["baseline_min"] == REDDIT_VOLUME_MIN
-        assert result.metadata["baseline_max"] == REDDIT_VOLUME_MAX
+        assert (
+            extract_metadata_value(result.metadata["post_count_last_15min"])
+            == normal_count
+        )
+        assert (
+            extract_metadata_value(result.metadata["baseline_min"]) == REDDIT_VOLUME_MIN
+        )
+        assert (
+            extract_metadata_value(result.metadata["baseline_max"]) == REDDIT_VOLUME_MAX
+        )
         assert "anomaly" not in result.metadata
 
     @pytest.mark.asyncio
@@ -157,8 +186,10 @@ class TestRedditVolumeAnomalyCheck:
 
         # Assertions
         assert result.passed is False
-        assert result.metadata["anomaly"] == "volume_too_low"
-        assert "rate limits" in result.metadata["action"].lower()
+        assert extract_metadata_value(result.metadata["anomaly"]) == "volume_too_low"
+        assert (
+            "rate limits" in extract_metadata_value(result.metadata["action"]).lower()
+        )
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_high(
@@ -178,8 +209,8 @@ class TestRedditVolumeAnomalyCheck:
 
         # Assertions
         assert result.passed is False
-        assert result.metadata["anomaly"] == "volume_too_high"
-        assert "duplicate" in result.metadata["action"].lower()
+        assert extract_metadata_value(result.metadata["anomaly"]) == "volume_too_high"
+        assert "duplicate" in extract_metadata_value(result.metadata["action"]).lower()
 
     @pytest.mark.asyncio
     async def test_passes_when_zero_posts(
@@ -222,8 +253,12 @@ class TestBlueskyFreshnessCheck:
 
         # Assertions
         assert result.passed is True
-        assert result.metadata["age_hours"] < FRESHNESS_SLA_HOURS
-        assert result.metadata["sla_hours"] == FRESHNESS_SLA_HOURS
+        assert (
+            extract_metadata_value(result.metadata["age_hours"]) < FRESHNESS_SLA_HOURS
+        )
+        assert (
+            extract_metadata_value(result.metadata["sla_hours"]) == FRESHNESS_SLA_HOURS
+        )
 
     @pytest.mark.asyncio
     async def test_fails_when_data_is_stale(
@@ -243,7 +278,9 @@ class TestBlueskyFreshnessCheck:
 
         # Assertions
         assert result.passed is False
-        assert result.metadata["age_hours"] > FRESHNESS_SLA_HOURS
+        assert (
+            extract_metadata_value(result.metadata["age_hours"]) > FRESHNESS_SLA_HOURS
+        )
 
 
 class TestBlueskyVolumeAnomalyCheck:
@@ -267,9 +304,18 @@ class TestBlueskyVolumeAnomalyCheck:
 
         # Assertions
         assert result.passed is True
-        assert result.metadata["post_count_last_10min"] == normal_count
-        assert result.metadata["baseline_min"] == BLUESKY_VOLUME_MIN
-        assert result.metadata["baseline_max"] == BLUESKY_VOLUME_MAX
+        assert (
+            extract_metadata_value(result.metadata["post_count_last_10min"])
+            == normal_count
+        )
+        assert (
+            extract_metadata_value(result.metadata["baseline_min"])
+            == BLUESKY_VOLUME_MIN
+        )
+        assert (
+            extract_metadata_value(result.metadata["baseline_max"])
+            == BLUESKY_VOLUME_MAX
+        )
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_low(
@@ -289,7 +335,7 @@ class TestBlueskyVolumeAnomalyCheck:
 
         # Assertions
         assert result.passed is False
-        assert result.metadata["anomaly"] == "volume_too_low"
+        assert extract_metadata_value(result.metadata["anomaly"]) == "volume_too_low"
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_high(
@@ -309,7 +355,7 @@ class TestBlueskyVolumeAnomalyCheck:
 
         # Assertions
         assert result.passed is False
-        assert result.metadata["anomaly"] == "volume_too_high"
+        assert extract_metadata_value(result.metadata["anomaly"]) == "volume_too_high"
 
 
 class TestAssetCheckConfiguration:
@@ -326,10 +372,10 @@ class TestAssetCheckConfiguration:
         ]
 
         for check in checks:
-            # Verify blocking=False in decorator (check via op definition)
-            # The @asset_check decorator sets this attribute
-            assert hasattr(check, "_asset_check"), (
-                f"{getattr(check, '__name__', str(check))} missing _asset_check attribute"
+            # Verify blocking=False in decorator (check via check_specs)
+            # The @asset_check decorator sets this attribute in Dagster 1.12+
+            assert hasattr(check, "check_specs"), (
+                f"{getattr(check, '__name__', str(check))} missing check_specs attribute"
             )
             # All checks should allow materialization to proceed even if they fail
             # This is configured via blocking=False parameter
