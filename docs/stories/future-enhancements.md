@@ -673,6 +673,185 @@ jobs:
 
 ---
 
+### 11. TimescaleDB Infrastructure Configuration
+
+**Context**: Story 4-7 (Social data pipeline) introduced TimescaleDB hypertables for social data with requirements for retention policies (90 days) and compression policies (7 days on raw tables). The database migrations create hypertables and indexes, but TimescaleDB-specific policies and index optimizations are not yet configured.
+
+**Current State**:
+- ✅ Hypertables created: `raw_reddit_posts`, `raw_bluesky_posts`, `stg_social_posts`
+- ✅ Unique index created: `ix_stg_social_posts_social_post_key` on `(social_post_key, created_at)`
+- ⚠️ **Index issue**: Unique index not properly created on hypertable chunks (CI error: "index for constraint not found on chunk")
+- ❌ **Retention policies**: Not configured (90-day retention requirement from Story 4-7 AC3)
+- ❌ **Compression policies**: Not configured (7-day compression on raw tables from Story 4-7 AC4)
+
+**Gap**: TimescaleDB-specific configuration missing from migrations, causing:
+1. CI/CD test failures when inserting into `stg_social_posts` hypertable
+2. No automated data retention (manual cleanup required)
+3. No data compression (higher storage costs)
+
+**Infrastructure Issues**:
+
+**Issue 1: Hypertable Index Creation** (Blocking CI/CD)
+- **Error**: `asyncpg.exceptions.InternalServerError: index for constraint not found on chunk`
+- **Affected**: 2 E2E pipeline tests (`test_reddit_to_sentiment_data_flow`, `test_bluesky_to_sentiment_data_flow`)
+- **Root Cause**: Migration `f1a2b3c4d5e6_add_social_post_key_to_stg_social_posts.py` creates unique index using standard SQLAlchemy `op.create_index()`, but TimescaleDB hypertables require special index creation that propagates to chunks
+- **Fix Required**: Update migration to use TimescaleDB-specific index creation after table is converted to hypertable
+- **Workaround**: Tests skipped with `@pytest.mark.skip` to unblock CI/CD
+
+**Issue 2: TimescaleDB Retention Policies** (Missing)
+- **Requirement**: Story 4-7 AC3 - 90-day retention on all social data tables
+- **Current State**: No policies configured, data retained indefinitely
+- **Affected**: `test_timescaledb_jobs_are_enabled` test skipped
+- **Fix Required**: Add `add_retention_policy()` calls in migration for all hypertables
+- **Impact**: Storage costs increase over time, manual cleanup required
+
+**Issue 3: TimescaleDB Compression Policies** (Missing)
+- **Requirement**: Story 4-7 AC4 - 7-day compression on raw tables only (`raw_reddit_posts`, `raw_bluesky_posts`)
+- **Current State**: No policies configured, data uncompressed
+- **Affected**: `test_timescaledb_jobs_are_enabled` test skipped
+- **Fix Required**: Add `add_compression_policy()` calls in migration for raw tables
+- **Impact**: Higher storage costs (uncompressed JSONB data)
+
+**Proposed Fix** (Alembic Migration):
+
+**Fix 1: Hypertable Index Creation**
+```python
+def upgrade():
+    # Existing: Create hypertable
+    op.execute("""
+        SELECT create_hypertable(
+            'stg_social_posts',
+            'created_at',
+            chunk_time_interval => INTERVAL '7 days',
+            if_not_exists => TRUE
+        );
+    """)
+
+    # OLD (doesn't work for hypertables):
+    # op.create_index('ix_stg_social_posts_social_post_key', 'stg_social_posts',
+    #                 ['social_post_key', 'created_at'], unique=True)
+
+    # NEW (TimescaleDB-compatible):
+    op.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_stg_social_posts_social_post_key
+        ON stg_social_posts (social_post_key, created_at);
+    """)
+```
+
+**Fix 2: Retention Policies**
+```python
+def upgrade():
+    # After hypertable creation, add retention policies
+    op.execute("""
+        SELECT add_retention_policy('raw_reddit_posts', INTERVAL '90 days', if_not_exists => TRUE);
+    """)
+
+    op.execute("""
+        SELECT add_retention_policy('raw_bluesky_posts', INTERVAL '90 days', if_not_exists => TRUE);
+    """)
+
+    op.execute("""
+        SELECT add_retention_policy('stg_social_posts', INTERVAL '90 days', if_not_exists => TRUE);
+    """)
+```
+
+**Fix 3: Compression Policies**
+```python
+def upgrade():
+    # First, enable compression on hypertables
+    op.execute("""
+        ALTER TABLE raw_reddit_posts SET (
+            timescaledb.compress,
+            timescaledb.compress_segmentby = 'subreddit',
+            timescaledb.compress_orderby = 'post_created_at DESC'
+        );
+    """)
+
+    op.execute("""
+        ALTER TABLE raw_bluesky_posts SET (
+            timescaledb.compress,
+            timescaledb.compress_segmentby = 'author_did',
+            timescaledb.compress_orderby = 'created_at DESC'
+        );
+    """)
+
+    # Then add compression policies (compress data older than 7 days)
+    op.execute("""
+        SELECT add_compression_policy('raw_reddit_posts', INTERVAL '7 days', if_not_exists => TRUE);
+    """)
+
+    op.execute("""
+        SELECT add_compression_policy('raw_bluesky_posts', INTERVAL '7 days', if_not_exists => TRUE);
+    """)
+
+    # NOTE: Do NOT compress stg_social_posts (active querying table)
+```
+
+**Implementation Tasks**:
+1. Create new Alembic migration: `xxx_configure_timescaledb_policies.py`
+2. Fix index creation for `stg_social_posts` (use raw SQL instead of `op.create_index`)
+3. Add retention policies for all 3 hypertables (90 days)
+4. Configure compression settings for raw tables
+5. Add compression policies for raw tables (7 days)
+6. Re-enable skipped tests:
+   - `test_reddit_to_sentiment_data_flow`
+   - `test_bluesky_to_sentiment_data_flow`
+   - `test_timescaledb_jobs_are_enabled`
+7. Run migration in development and CI environments
+8. Verify policies active via Dagster UI and `timescaledb_information.jobs` view
+
+**Testing Strategy**:
+1. Local development: Run migration, verify policies created
+2. Query `timescaledb_information.jobs` to confirm scheduled jobs
+3. Re-enable tests and verify CI passes
+4. Production: Monitor compression ratios and storage usage
+
+**Benefits**:
+- ✅ Fixes CI/CD test failures (unblocks pipeline)
+- ✅ Automated data retention (reduces storage costs)
+- ✅ Data compression (reduces storage costs by 50-80% for JSONB data)
+- ✅ Completes Story 4-7 acceptance criteria (AC3, AC4)
+
+**Risks**:
+- **Medium**: TimescaleDB policy syntax differences between versions
+- **Low**: Compression may impact query performance (raw tables rarely queried)
+- **Low**: Migration rollback needs to remove policies before dropping hypertables
+
+**Estimated Effort**: 3-4 hours
+- Research TimescaleDB index/policy syntax: 1 hour
+- Create migration with all fixes: 1 hour
+- Test locally and in CI: 1 hour
+- Update tests and verify: 30-60 minutes
+
+**Priority**: Medium (blocks CI/CD, but workaround in place via skipped tests)
+
+**Estimated Storage Savings**:
+- Retention: Unknown (depends on data volume over time)
+- Compression: 50-80% reduction on raw tables (JSONB compresses well)
+- Example: 1GB raw_reddit_posts → ~200-500MB compressed
+
+**When to Implement**:
+- Story 4-8 or Story 4-9 (during Epic 4 wrap-up)
+- Before Epic 5 (to ensure storage costs under control)
+- When team has bandwidth for infrastructure work
+
+**Related Stories**:
+- Story 4-7: Introduced hypertables and policy requirements
+- Story 4-1: Reddit extraction (raw_reddit_posts table)
+- Story 4-2: Bluesky extraction (raw_bluesky_posts table)
+- Story 4-4: Transform layer (stg_social_posts table)
+
+**Test Files**:
+- Skipped: `backend/app/tests/integration/test_epic4_pipeline_e2e.py` (2 tests)
+- Skipped: `backend/app/tests/integration/test_timescaledb_policies.py` (1 test)
+
+**References**:
+- TimescaleDB Retention Policies: https://docs.timescale.com/use-timescale/latest/data-retention/
+- TimescaleDB Compression: https://docs.timescale.com/use-timescale/latest/compression/
+- Migration file: `backend/app/alembic/versions/f1a2b3c4d5e6_add_social_post_key_to_stg_social_posts.py`
+
+---
+
 ## Implementation Priority
 
 | Enhancement | Priority | Estimated Effort | Recommended Approach | Epic Target |
@@ -687,6 +866,7 @@ jobs:
 | Docker ECR Caching | Low | 1-2 hours | ECR buildcache with lifecycle policy | After Phase 1-3 validation |
 | Path-Based Job Skipping | Low | 2 hours | Path filters with dorny/paths-filter | High-frequency development periods |
 | Async Test Infrastructure | Low | 5-8 hours | Manual validation (status quo) or implement async fixtures | Story 4-9 or later |
+| TimescaleDB Infrastructure | Medium | 3-4 hours | Migration with index fix + retention/compression policies | Story 4-8 or 4-9 |
 
 ## Notes
 - All enhancements are **optional** for MVP
