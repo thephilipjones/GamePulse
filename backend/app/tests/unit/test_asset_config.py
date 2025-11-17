@@ -34,10 +34,10 @@ from app.assets.transform_social_posts import transform_social_posts
 class TestAutoMaterializePolicyConfiguration:
     """Test auto-materialize policies for trigger-based orchestration."""
 
-    def test_transform_has_eager_policy(self):
+    def test_transform_has_eager_policy(self) -> None:
         """Transform asset should use AutoMaterializePolicy.eager()."""
         asset_def = transform_social_posts
-        policy = asset_def.auto_materialize_policy
+        policy = asset_def.auto_materialize_policy  # type: ignore[attr-defined]
 
         assert policy is not None, (
             "transform_social_posts missing auto_materialize_policy"
@@ -47,22 +47,22 @@ class TestAutoMaterializePolicyConfiguration:
             f"Expected AutoMaterializePolicy, got {type(policy)}"
         )
 
-    def test_sentiment_has_eager_policy(self):
+    def test_sentiment_has_eager_policy(self) -> None:
         """Sentiment asset should use AutoMaterializePolicy.eager()."""
         asset_def = calculate_sentiment
-        policy = asset_def.auto_materialize_policy
+        policy = asset_def.auto_materialize_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "calculate_sentiment missing auto_materialize_policy"
         assert "AutoMaterializePolicy" in str(type(policy)), (
             f"Expected AutoMaterializePolicy, got {type(policy)}"
         )
 
-    def test_extract_assets_schedule_based(self):
+    def test_extract_assets_schedule_based(self) -> None:
         """Extract assets use schedules (may or may not have auto-materialize)."""
         # Extract assets use explicit schedules defined separately
         # They may have auto_materialize_policy=None, which is fine
-        _ = extract_reddit_posts.auto_materialize_policy
-        _ = extract_bluesky_posts.auto_materialize_policy
+        _ = extract_reddit_posts.auto_materialize_policy  # type: ignore[attr-defined]
+        _ = extract_bluesky_posts.auto_materialize_policy  # type: ignore[attr-defined]
 
         # No assertions - just verify attributes exist
         # Schedule-based assets may or may not have auto-materialize policies
@@ -72,7 +72,7 @@ class TestAutoMaterializePolicyConfiguration:
 class TestAssetDependencies:
     """Test asset dependencies configuration (AC1)."""
 
-    def test_transform_depends_on_both_extract_assets(self):
+    def test_transform_depends_on_both_extract_assets(self) -> None:
         """
         Transform should depend on BOTH Reddit and Bluesky extracts.
 
@@ -87,7 +87,8 @@ class TestAssetDependencies:
         # Get dependency keys from asset definition
         deps = asset_def.asset_deps
         dependency_keys = {
-            str(key.path[0]) for key in deps.values() for key in deps.values()
+            str(key.path[0])  # type: ignore[attr-defined]
+            for key in deps.values()
         }
 
         # Verify both dependencies present
@@ -98,20 +99,21 @@ class TestAssetDependencies:
             "Missing dependency on extract_bluesky_posts (CRITICAL BUG if fails)"
         )
 
-    def test_sentiment_depends_on_transform(self):
+    def test_sentiment_depends_on_transform(self) -> None:
         """Sentiment should depend on transform_social_posts."""
         asset_def = calculate_sentiment
 
         deps = asset_def.asset_deps
         dependency_keys = {
-            str(key.path[0]) for key in deps.values() for key in deps.values()
+            str(key.path[0])  # type: ignore[attr-defined]
+            for key in deps.values()
         }
 
         assert "transform_social_posts" in dependency_keys, (
             "Missing dependency on transform_social_posts"
         )
 
-    def test_extract_assets_have_no_dependencies(self):
+    def test_extract_assets_have_no_dependencies(self) -> None:
         """Extract assets should have no upstream dependencies."""
         reddit_deps = extract_reddit_posts.asset_deps
         bluesky_deps = extract_bluesky_posts.asset_deps
@@ -126,14 +128,14 @@ class TestAssetDependencies:
 class TestFreshnessPolicyConfiguration:
     """Test freshness SLA configuration (AC6)."""
 
-    def test_transform_has_30_minute_freshness_sla(self):
+    def test_transform_has_30_minute_freshness_sla(self) -> None:
         """
         Transform should have 30-minute freshness SLA.
 
         Requirement: Maximum 30 minutes from extract to transform complete.
         """
         asset_def = transform_social_posts
-        policy = asset_def.freshness_policy
+        policy = asset_def.freshness_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "transform_social_posts missing freshness_policy"
         assert "FreshnessPolicy" in str(type(policy)), (
@@ -145,7 +147,7 @@ class TestFreshnessPolicyConfiguration:
             f"Expected 30 min SLA, got {policy.maximum_lag_minutes}"
         )
 
-    def test_sentiment_has_45_minute_freshness_sla(self):
+    def test_sentiment_has_45_minute_freshness_sla(self) -> None:
         """
         Sentiment should have 45-minute freshness SLA.
 
@@ -153,7 +155,7 @@ class TestFreshnessPolicyConfiguration:
         Rationale: Transform (30 min) + Sentiment processing (15 min buffer) = 45 min total.
         """
         asset_def = calculate_sentiment
-        policy = asset_def.freshness_policy
+        policy = asset_def.freshness_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "calculate_sentiment missing freshness_policy"
         assert "FreshnessPolicy" in str(type(policy)), (
@@ -165,15 +167,15 @@ class TestFreshnessPolicyConfiguration:
             f"Expected 45 min SLA, got {policy.maximum_lag_minutes}"
         )
 
-    def test_extract_assets_may_have_no_freshness_policy(self):
+    def test_extract_assets_may_have_no_freshness_policy(self) -> None:
         """
         Extract assets use schedules with fixed intervals.
 
         Freshness policies are optional for scheduled assets.
         Primary SLA enforcement is on downstream trigger-based assets.
         """
-        _ = extract_reddit_posts.freshness_policy
-        _ = extract_bluesky_posts.freshness_policy
+        _ = extract_reddit_posts.freshness_policy  # type: ignore[attr-defined]
+        _ = extract_bluesky_posts.freshness_policy  # type: ignore[attr-defined]
 
         # These may or may not have freshness policies - both are valid
         # Just verify we can access the attributes without error
@@ -183,10 +185,10 @@ class TestFreshnessPolicyConfiguration:
 class TestRetryPolicyConfiguration:
     """Test retry policies on all assets (AC2)."""
 
-    def test_extract_reddit_has_retry_policy(self):
+    def test_extract_reddit_has_retry_policy(self) -> None:
         """Extract Reddit should have exponential backoff retry policy."""
         asset_def = extract_reddit_posts
-        policy = asset_def.retry_policy
+        policy = asset_def.retry_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "extract_reddit_posts missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -198,10 +200,10 @@ class TestRetryPolicyConfiguration:
             f"Expected EXPONENTIAL backoff, got {policy.backoff}"
         )
 
-    def test_extract_bluesky_has_retry_policy(self):
+    def test_extract_bluesky_has_retry_policy(self) -> None:
         """Extract Bluesky should have exponential backoff retry policy."""
         asset_def = extract_bluesky_posts
-        policy = asset_def.retry_policy
+        policy = asset_def.retry_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "extract_bluesky_posts missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -212,10 +214,10 @@ class TestRetryPolicyConfiguration:
             f"Expected EXPONENTIAL backoff, got {policy.backoff}"
         )
 
-    def test_transform_has_retry_policy(self):
+    def test_transform_has_retry_policy(self) -> None:
         """Transform should have exponential backoff retry policy."""
         asset_def = transform_social_posts
-        policy = asset_def.retry_policy
+        policy = asset_def.retry_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "transform_social_posts missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -226,10 +228,10 @@ class TestRetryPolicyConfiguration:
             f"Expected EXPONENTIAL backoff, got {policy.backoff}"
         )
 
-    def test_sentiment_has_retry_policy(self):
+    def test_sentiment_has_retry_policy(self) -> None:
         """Sentiment should have exponential backoff retry policy."""
         asset_def = calculate_sentiment
-        policy = asset_def.retry_policy
+        policy = asset_def.retry_policy  # type: ignore[attr-defined]
 
         assert policy is not None, "calculate_sentiment missing retry_policy"
         assert "RetryPolicy" in str(type(policy)), (
@@ -240,7 +242,7 @@ class TestRetryPolicyConfiguration:
             f"Expected EXPONENTIAL backoff, got {policy.backoff}"
         )
 
-    def test_all_retry_policies_use_exponential_backoff(self):
+    def test_all_retry_policies_use_exponential_backoff(self) -> None:
         """All assets should use exponential backoff (best practice)."""
         assets = [
             extract_reddit_posts,
@@ -250,7 +252,7 @@ class TestRetryPolicyConfiguration:
         ]
 
         for asset_def in assets:
-            policy = asset_def.retry_policy
+            policy = asset_def.retry_policy  # type: ignore[attr-defined]
             assert policy is not None, f"{asset_def.key} missing retry_policy"
             assert "EXPONENTIAL" in str(policy.backoff), (
                 f"{asset_def.key} should use EXPONENTIAL backoff, got {policy.backoff}"
@@ -260,7 +262,7 @@ class TestRetryPolicyConfiguration:
 class TestAssetGroupConfiguration:
     """Test asset group assignments for UI organization."""
 
-    def test_all_social_assets_in_same_group(self):
+    def test_all_social_assets_in_same_group(self) -> None:
         """All social data assets should be in 'social_data' group."""
         social_assets = [
             extract_reddit_posts,

@@ -1,3 +1,5 @@
+from typing import Any
+
 """
 End-to-end integration tests for Epic 4 social data pipeline (Story 4-7).
 
@@ -30,7 +32,7 @@ import pytest
 class TestEpic4PipelineConfiguration:
     """Test Epic 4 pipeline configuration and integration."""
 
-    def test_all_epic4_assets_loaded(self):
+    def test_all_epic4_assets_loaded(self) -> None:
         """Verify all Epic 4 assets are registered in Dagster definitions."""
         from app.dagster_definitions import defs
 
@@ -53,7 +55,7 @@ class TestEpic4PipelineConfiguration:
                 f"Epic 4 asset '{asset_name}' not found in definitions"
             )
 
-    def test_all_epic4_asset_checks_loaded(self):
+    def test_all_epic4_asset_checks_loaded(self) -> None:
         """Verify all Epic 4 asset checks are registered."""
 
         # Get all asset check keys (if available in Dagster version)
@@ -72,11 +74,11 @@ class TestEpic4PipelineConfiguration:
                 f"Asset check '{check_name}' not found in quality_checks module"
             )
 
-    def test_all_epic4_schedules_registered(self):
+    def test_all_epic4_schedules_registered(self) -> None:
         """Verify all Epic 4 schedules are registered in Dagster definitions."""
         from app.dagster_definitions import defs
 
-        schedule_names = {schedule.name for schedule in defs.get_all_schedule_defs()}
+        schedule_names = {schedule.name for schedule in defs.get_all_schedule_defs()}  # type: ignore[attr-defined]
 
         expected_schedules = {
             "reddit_posts_schedule",
@@ -89,7 +91,7 @@ class TestEpic4PipelineConfiguration:
                 f"Schedule '{schedule_name}' not found in definitions"
             )
 
-    def test_asset_dependency_chain_correct(self):
+    def test_asset_dependency_chain_correct(self) -> None:
         """
         Verify asset dependency chain matches expected pipeline flow.
 
@@ -104,7 +106,7 @@ class TestEpic4PipelineConfiguration:
         # Verify transform depends on both extracts
         transform_deps = transform_social_posts.asset_deps
         transform_dep_keys = {
-            str(key.path[0])
+            str(key.path[0])  # type: ignore[attr-defined]
             for key in transform_deps.values()
             for key in transform_deps.values()
         }
@@ -119,7 +121,7 @@ class TestEpic4PipelineConfiguration:
         # Verify sentiment depends on transform
         sentiment_deps = calculate_sentiment.asset_deps
         sentiment_dep_keys = {
-            str(key.path[0])
+            str(key.path[0])  # type: ignore[attr-defined]
             for key in sentiment_deps.values()
             for key in sentiment_deps.values()
         }
@@ -128,24 +130,24 @@ class TestEpic4PipelineConfiguration:
             "calculate_sentiment should depend on transform_social_posts"
         )
 
-    def test_freshness_policies_configured(self):
+    def test_freshness_policies_configured(self) -> None:
         """Verify FreshnessPolicy configured on downstream assets (AC6)."""
         from app.assets.social_sentiment import calculate_sentiment
         from app.assets.transform_social_posts import transform_social_posts
 
         # Verify transform has 30-min freshness SLA
-        assert transform_social_posts.freshness_policy is not None, (
+        assert transform_social_posts.freshness_policy is not None, (  # type: ignore[attr-defined]
             "transform_social_posts missing FreshnessPolicy"
         )
-        assert transform_social_posts.freshness_policy.maximum_lag_minutes == 30, (
+        assert transform_social_posts.freshness_policy.maximum_lag_minutes == 30, (  # type: ignore[attr-defined]
             "transform_social_posts should have 30-min SLA"
         )
 
         # Verify sentiment has 45-min freshness SLA
-        assert calculate_sentiment.freshness_policy is not None, (
+        assert calculate_sentiment.freshness_policy is not None, (  # type: ignore[attr-defined]
             "calculate_sentiment missing FreshnessPolicy"
         )
-        assert calculate_sentiment.freshness_policy.maximum_lag_minutes == 45, (
+        assert calculate_sentiment.freshness_policy.maximum_lag_minutes == 45, (  # type: ignore[attr-defined]
             "calculate_sentiment should have 45-min SLA"
         )
 
@@ -153,7 +155,7 @@ class TestEpic4PipelineConfiguration:
 @pytest.mark.e2e
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_reddit_to_sentiment_data_flow(_db, session):
+async def test_reddit_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     """
     Test complete data flow: Reddit extract → Transform → Sentiment.
 
@@ -187,7 +189,7 @@ async def test_reddit_to_sentiment_data_flow(_db, session):
     from sqlalchemy import select
 
     result = await session.execute(
-        select(RawRedditPost).where(RawRedditPost.post_id == "e2e_test_reddit_1")
+        select(RawRedditPost).where(RawRedditPost.post_id == "e2e_test_reddit_1")  # type: ignore[arg-type]
     )
     reddit_post = result.scalar()
     assert reddit_post is not None, "Reddit post should exist in database"
@@ -214,7 +216,7 @@ async def test_reddit_to_sentiment_data_flow(_db, session):
 
     # Verify transformed post exists
     result = await session.execute(
-        select(StgSocialPost).where(StgSocialPost.post_id == "e2e_test_reddit_1")
+        select(StgSocialPost).where(StgSocialPost.post_id == "e2e_test_reddit_1")  # type: ignore[arg-type]
     )
     transformed_post = result.scalar()
     assert transformed_post is not None, "Transformed post should exist"
@@ -227,7 +229,7 @@ async def test_reddit_to_sentiment_data_flow(_db, session):
 @pytest.mark.e2e
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_bluesky_to_sentiment_data_flow(_db, session):
+async def test_bluesky_to_sentiment_data_flow(_db: Any, session: Any) -> None:
     """
     Test complete data flow: Bluesky extract → Transform → Sentiment.
     """
@@ -255,7 +257,7 @@ async def test_bluesky_to_sentiment_data_flow(_db, session):
 
     result = await session.execute(
         select(RawBlueskyPost).where(
-            RawBlueskyPost.post_uri == "at://test.e2e.bsky.social/post1"
+            RawBlueskyPost.post_uri == "at://test.e2e.bsky.social/post1"  # type: ignore[arg-type]
         )
     )
     bluesky_post = result.scalar()
@@ -283,7 +285,7 @@ async def test_bluesky_to_sentiment_data_flow(_db, session):
     # Verify transformed post exists
     result = await session.execute(
         select(StgSocialPost).where(
-            StgSocialPost.post_id == "at://test.e2e.bsky.social/post1"
+            StgSocialPost.post_id == "at://test.e2e.bsky.social/post1"  # type: ignore[arg-type]
         )
     )
     transformed_post = result.scalar()
@@ -296,7 +298,7 @@ async def test_bluesky_to_sentiment_data_flow(_db, session):
 
 @pytest.mark.e2e
 @pytest.mark.integration
-def test_pipeline_performance_expectations():
+def test_pipeline_performance_expectations() -> None:
     """
     Document expected pipeline performance characteristics.
 
@@ -317,10 +319,10 @@ def test_pipeline_performance_expectations():
     # - Sentiment processing: 1-2 min (2500 posts batch)
 
     # Verify SLA configuration
-    assert transform_social_posts.freshness_policy.maximum_lag_minutes == 30, (
+    assert transform_social_posts.freshness_policy.maximum_lag_minutes == 30, (  # type: ignore[attr-defined]
         "Transform SLA should be 30 min"
     )
-    assert calculate_sentiment.freshness_policy.maximum_lag_minutes == 45, (
+    assert calculate_sentiment.freshness_policy.maximum_lag_minutes == 45, (  # type: ignore[attr-defined]
         "Sentiment SLA should be 45 min"
     )
 

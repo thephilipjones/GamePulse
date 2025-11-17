@@ -11,6 +11,7 @@ These tests require a database connection (pytest-asyncio + database fixture).
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,7 +24,7 @@ from app.resources.database import DatabaseResource
 
 
 @pytest.fixture
-async def setup_test_data(session):
+async def setup_test_data(session: Any) -> dict[str, RawRedditPost | RawBlueskyPost]:
     """
     Create test data for cleanup tests.
 
@@ -165,7 +166,9 @@ async def setup_test_data(session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data):
+async def test_cleanup_deletes_old_unmatched_posts(
+    _db: Any, session: Any, setup_test_data: Any
+) -> None:
     """
     Cleanup should delete old unmatched posts (>7 days, no match).
 
@@ -188,7 +191,7 @@ async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data
     database = DatabaseResource()
 
     # Execute cleanup
-    result = await cleanup_unmatched_raw_posts(mock_context, database)
+    result = await cleanup_unmatched_raw_posts(mock_context, database)  # type: ignore[misc]
 
     # Verify deletion counts
     assert result.metadata["reddit_posts_deleted"] == 1, (
@@ -201,13 +204,13 @@ async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data
 
     # Verify old unmatched posts were deleted
     reddit_result = await session.execute(
-        select(RawRedditPost).where(RawRedditPost.post_id == "old_unmatched_r1")
+        select(RawRedditPost).where(RawRedditPost.post_id == "old_unmatched_r1")  # type: ignore[arg-type]
     )
     assert reddit_result.scalar() is None, "Old unmatched Reddit post should be deleted"
 
     bluesky_result = await session.execute(
         select(RawBlueskyPost).where(
-            RawBlueskyPost.post_uri == "at://old.unmatched.bluesky/post1"
+            RawBlueskyPost.post_uri == "at://old.unmatched.bluesky/post1"  # type: ignore[arg-type]
         )
     )
     assert bluesky_result.scalar() is None, (
@@ -216,7 +219,7 @@ async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data
 
     # Verify recent unmatched posts still exist
     reddit_result = await session.execute(
-        select(RawRedditPost).where(RawRedditPost.post_id == "recent_unmatched_r1")
+        select(RawRedditPost).where(RawRedditPost.post_id == "recent_unmatched_r1")  # type: ignore[arg-type]
     )
     assert reddit_result.scalar() is not None, (
         "Recent unmatched Reddit post should be preserved"
@@ -224,7 +227,7 @@ async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data
 
     bluesky_result = await session.execute(
         select(RawBlueskyPost).where(
-            RawBlueskyPost.post_uri == "at://recent.unmatched.bluesky/post1"
+            RawBlueskyPost.post_uri == "at://recent.unmatched.bluesky/post1"  # type: ignore[arg-type]
         )
     )
     assert bluesky_result.scalar() is not None, (
@@ -234,7 +237,9 @@ async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cleanup_preserves_matched_posts(_db, session, setup_test_data):
+async def test_cleanup_preserves_matched_posts(
+    _db: Any, session: Any, setup_test_data: Any
+) -> None:
     """
     Cleanup should preserve old matched posts (matched_to_game=TRUE).
 
@@ -247,11 +252,13 @@ async def test_cleanup_preserves_matched_posts(_db, session, setup_test_data):
     mock_context = MagicMock()
     mock_context.log = MagicMock()
     database = DatabaseResource()
-    await cleanup_unmatched_raw_posts(mock_context, database)
+    await cleanup_unmatched_raw_posts(mock_context, database)  # type: ignore[misc]
 
     # Verify old matched posts still exist
     reddit_result = await session.execute(
-        select(RawRedditPost).where(RawRedditPost.post_id == "old_matched_r1")
+        select(RawRedditPost).where(
+            RawRedditPost.post_id == "old_matched_r1"  # type: ignore[arg-type]
+        )
     )
     assert reddit_result.scalar() is not None, (
         "Old matched Reddit post should be preserved"
@@ -259,7 +266,7 @@ async def test_cleanup_preserves_matched_posts(_db, session, setup_test_data):
 
     bluesky_result = await session.execute(
         select(RawBlueskyPost).where(
-            RawBlueskyPost.post_uri == "at://old.matched.bluesky/post1"
+            RawBlueskyPost.post_uri == "at://old.matched.bluesky/post1"  # type: ignore[arg-type]
         )
     )
     assert bluesky_result.scalar() is not None, (
@@ -269,7 +276,7 @@ async def test_cleanup_preserves_matched_posts(_db, session, setup_test_data):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cleanup_handles_empty_tables(_db, _session):
+async def test_cleanup_handles_empty_tables(_db: Any, _session: Any) -> None:
     """
     Cleanup should handle empty tables gracefully (no errors, 0 deletions).
     """
@@ -280,7 +287,7 @@ async def test_cleanup_handles_empty_tables(_db, _session):
     database = DatabaseResource()
 
     # Execute cleanup on empty tables
-    result = await cleanup_unmatched_raw_posts(mock_context, database)
+    result = await cleanup_unmatched_raw_posts(mock_context, database)  # type: ignore[misc]
 
     # Verify no deletions
     assert result.metadata["reddit_posts_deleted"] == 0
@@ -290,7 +297,9 @@ async def test_cleanup_handles_empty_tables(_db, _session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_cleanup_metadata_accuracy(_db, _session, setup_test_data):
+async def test_cleanup_metadata_accuracy(
+    _db: Any, _session: Any, setup_test_data: Any
+) -> None:
     """
     Cleanup metadata should accurately reflect deletion counts.
     """
@@ -301,7 +310,7 @@ async def test_cleanup_metadata_accuracy(_db, _session, setup_test_data):
     mock_context.log = MagicMock()
     database = DatabaseResource()
 
-    result = await cleanup_unmatched_raw_posts(mock_context, database)
+    result = await cleanup_unmatched_raw_posts(mock_context, database)  # type: ignore[misc]
 
     # Verify metadata structure
     assert "reddit_posts_deleted" in result.metadata

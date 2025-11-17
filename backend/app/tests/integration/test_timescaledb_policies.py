@@ -1,3 +1,5 @@
+from typing import Any
+
 """
 Integration tests for TimescaleDB retention and compression policies (Story 4-7).
 
@@ -15,7 +17,7 @@ from sqlalchemy import text
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_retention_policies_exist(_db, session):
+async def test_retention_policies_exist(_db: Any, session: Any) -> None:
     """
     Verify retention policies exist for all 4 social data tables (AC3).
 
@@ -70,7 +72,7 @@ async def test_retention_policies_exist(_db, session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_compression_policies_on_raw_tables_only(_db, session):
+async def test_compression_policies_on_raw_tables_only(_db: Any, session: Any) -> None:
     """
     Verify compression policies exist ONLY on raw tables (AC4).
 
@@ -129,7 +131,7 @@ async def test_compression_policies_on_raw_tables_only(_db, session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_retention_interval_is_90_days(_db, session):
+async def test_retention_interval_is_90_days(_db: Any, session: Any) -> None:
     """
     Verify retention policies use 90-day interval (AC3).
     """
@@ -159,7 +161,7 @@ async def test_retention_interval_is_90_days(_db, session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_compression_interval_is_7_days(_db, session):
+async def test_compression_interval_is_7_days(_db: Any, session: Any) -> None:
     """
     Verify compression policies use 7-day interval (AC4).
     """
@@ -184,7 +186,7 @@ async def test_compression_interval_is_7_days(_db, session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_timescaledb_jobs_are_enabled(_db, session):
+async def test_timescaledb_jobs_are_enabled(_db: Any, session: Any) -> None:
     """
     Verify TimescaleDB policy jobs are enabled and scheduled.
     """
@@ -222,7 +224,7 @@ async def test_timescaledb_jobs_are_enabled(_db, session):
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_hypertables_configured_correctly(_db, session):
+async def test_hypertables_configured_correctly(_db: Any, session: Any) -> None:
     """
     Verify social data tables are configured as TimescaleDB hypertables.
     """
