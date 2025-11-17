@@ -571,6 +571,108 @@ jobs:
 
 ---
 
+### 10. Async Integration Test Infrastructure for Dagster Assets
+
+**Context**: Dagster asset tests currently use configuration validation + manual UI validation pattern (established in Story 2-5). Integration tests requiring async database operations are skipped due to missing async fixtures.
+
+**Current State**:
+- ✅ **Unit tests**: 100% coverage of business logic (e.g., 8 passing tests in `test_sentiment_analyzer.py`)
+- ✅ **Configuration tests**: Retry policies, asset metadata, constants validated
+- ✅ **Manual validation**: Dagster UI materialization confirms end-to-end functionality
+- ⚠️ **Integration tests**: 4 tests in `test_calculate_sentiment.py` skipped via `@pytest.mark.skip` decorator
+
+**Gap**: Missing async fixtures prevent automated end-to-end testing of Dagster assets with database operations.
+
+**Missing Fixtures**:
+1. `async_session` (AsyncSession) - Async database session with transaction rollback for test isolation
+2. `test_context` (AssetExecutionContext) - Mock Dagster execution context using `build_asset_context()`
+
+**Current Test Coverage for Sentiment Feature (Story 4-5)**:
+- ✅ VADER sentiment analysis logic: 8/8 passing unit tests
+- ✅ Asset configuration: Retry policy, auto-materialize, metadata validated
+- ✅ Production deployment: Asset materializes successfully in Dagster UI
+- ⏸️ Integration tests: 4 skipped tests
+  - `test_process_matched_posts` - End-to-end FK validation
+  - `test_skip_posts_without_game_match` - NULL game_key handling
+  - `test_no_unprocessed_posts` - Empty database graceful handling
+  - `test_idempotency` - Running twice doesn't duplicate records
+
+**Validation Strategy (Current)**:
+- **Story 2-5 precedent**: Manual Dagster UI validation instead of async DB tests
+- **Rationale**: Greenlet dependency issues, async complexity, manual validation sufficient
+- **Resolution**: AC7 and AC9 validated via "Code review + manual Dagster UI"
+
+**Implementation Requirements** (if pursuing):
+
+1. **Async Session Fixture** (3-4 hours)
+   - SQLAlchemy AsyncEngine with event loop management
+   - Transaction rollback for test isolation
+   - Database URL conversion (`postgresql+psycopg` → `postgresql+asyncpg`)
+   - Compatibility with pytest-xdist (parallel execution)
+   - Delete seed data for test isolation (similar to sync `db` fixture)
+
+2. **Dagster Test Context Fixture** (1-2 hours)
+   - Use `build_asset_context()` from Dagster testing utilities
+   - Configure with DatabaseResource
+   - Compatible with logging/resources
+
+3. **Test Updates** (1-2 hours)
+   - Remove `@pytest.mark.skip` decorators
+   - Update fixtures from `session` → `async_session`
+   - Verify async/await patterns
+   - Run locally and in CI
+
+**Technical Dependencies**:
+- ✅ pytest-asyncio installed (v0.24.0)
+- ✅ asyncpg installed (v0.30.0)
+- ✅ Python 3.12 in CI (Python 3.14 locally skips tests due to Dagster incompatibility)
+- ⚠️ Potential greenlet compatibility issues (historical problem from Story 2-5)
+- ⚠️ Event loop management with pytest-xdist parallel execution
+
+**Risks**:
+- Greenlet compatibility issues with async SQLAlchemy (Story 2-5 context)
+- Parallel test execution conflicts with async fixtures
+- CI environment differences (Python 3.12 vs 3.14)
+
+**Alternative Validation** (Current Approach):
+- Unit tests cover 100% of sentiment analysis logic
+- Manual Dagster UI validation confirms end-to-end functionality
+- Code review validated FK relationships, idempotency, edge cases
+- Production deployment successful (Story 4-5 approved 2025-11-16)
+
+**Value Assessment**:
+- **Low incremental value**: Tests would formalize what's already validated
+- **Not blocking**: Epic 5 can consume `fact_social_sentiment` without these tests
+- **Pattern establishment**: Would enable automated testing for future Dagster assets
+
+**Recommendation**:
+- Continue manual Dagster UI validation pattern (status quo) for MVP
+- Consider implementing if team scales or needs automated regression testing
+- Revisit when multiple Dagster assets require similar integration tests
+
+**Priority**: Low (technical debt, not blocking functionality)
+
+**Estimated Effort**: 5-8 hours
+- Async session fixture: 3-4 hours
+- Dagster context fixture: 1-2 hours
+- Test updates and validation: 1-2 hours
+
+**Related Stories**:
+- Story 2-5: Established manual Dagster UI validation precedent
+- Story 4-5: Sentiment analysis with 4 skipped integration tests
+- Story 4-4: Transform layer tests also use manual validation pattern
+
+**When to Implement**:
+- Story 4-9 or later (after Epic 4 completion)
+- When team needs automated regression testing for Dagster assets
+- If greenlet/async compatibility improves with future library updates
+
+**Test Files**:
+- Skipped: `/Users/Philip/dev/gamepulse/backend/app/tests/assets/test_calculate_sentiment.py`
+- Pattern reference: `/Users/Philip/dev/gamepulse/backend/app/tests/assets/test_transform_social_posts.py` (lines 367-391)
+
+---
+
 ## Implementation Priority
 
 | Enhancement | Priority | Estimated Effort | Recommended Approach | Epic Target |
@@ -584,6 +686,7 @@ jobs:
 | DimTeam Timezone Fix | Low | 2-3 hours | Update model + migration | Infrastructure Sprint |
 | Docker ECR Caching | Low | 1-2 hours | ECR buildcache with lifecycle policy | After Phase 1-3 validation |
 | Path-Based Job Skipping | Low | 2 hours | Path filters with dorny/paths-filter | High-frequency development periods |
+| Async Test Infrastructure | Low | 5-8 hours | Manual validation (status quo) or implement async fixtures | Story 4-9 or later |
 
 ## Notes
 - All enhancements are **optional** for MVP
