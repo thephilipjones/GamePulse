@@ -1,6 +1,6 @@
 # Story 4.8: Game Matching Post-Processor (Transform Layer Optimization)
 
-Status: drafted
+Status: ready-for-dev
 
 ## Story
 
@@ -284,3 +284,8 @@ Add a post-processing step that batch-matches stg_social_posts to games and opti
 - Schedule configuration: 1 hour
 - Integration testing: 2-3 hours
 - Documentation updates: 1-2 hours
+
+## Dev Agent Record
+
+### Context Reference
+- [Story Context XML](4-8-game-matching-post-processor.context.xml) - Generated 2025-11-16

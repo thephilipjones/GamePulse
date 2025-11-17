@@ -1,0 +1,284 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>4-9</storyId>
+    <title>Enhanced Game Card UI Design</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-16</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-9-game-card-ui-design.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>basketball fan</asA>
+    <iWant>to see visually appealing game cards with team branding, scores, and game status</iWant>
+    <soThat>I can quickly scan multiple games and identify which ones are live, finished, or upcoming</soThat>
+    <tasks>
+      - Enhance GameList.tsx with status grouping logic (Live → Final → Upcoming sections)
+      - Create new GameCard.tsx component (extract card rendering from GameList)
+      - Create new GameStatusBadge.tsx component (LIVE/FINAL/start time badges)
+      - Implement responsive grid layout (mobile: 1 col, tablet: 2 col, desktop: 3 col)
+      - Apply team color branding using primary_color (left/right border accents)
+      - Add status-based visual styling (LIVE badge with pulsing animation, muted Final games)
+      - Implement time display logic (game_clock for in_progress, start_time for scheduled, FINAL text)
+      - Write component tests for grouping, badges, responsive behavior, team colors
+      - Ensure accessibility (ARIA labels for badges, screen reader support, keyboard navigation)
+      - Performance optimization (wrap GameCard in React.memo to prevent unnecessary re-renders)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    AC-4.9.1: Game Status Grouping
+    - Games grouped into three sections: "Live Games", "Final Games", "Upcoming Games"
+    - Section order: Live → Final → Upcoming (user scanning priority)
+    - Empty sections hidden (no placeholder text)
+    - Clear visual separation (headings, spacing)
+
+    AC-4.9.2: Status Badges
+    - in_progress games show "LIVE" badge in red (Chakra red.500)
+    - LIVE badge has pulsing animation
+    - final games show "FINAL" badge in gray (Chakra gray.500)
+    - scheduled games show formatted start time (e.g., "8:00 PM ET")
+    - Badge styling consistent with Chakra UI Badge component
+
+    AC-4.9.3: Time Display
+    - in_progress games: Display game_clock value (e.g., "14:32 2nd Half")
+    - final games: Display "FINAL" text
+    - scheduled games: Display formatted start time from game_start_time (UTC to ET conversion)
+    - Time updates every 60 seconds via existing polling
+
+    AC-4.9.4: Team Branding
+    - Team abbreviations displayed (e.g., "DU" for Duke, "UNC" for North Carolina)
+    - Team colors used as visual accents (border, background, or badge)
+    - Home team color: Left border (4px solid) using home_team.primary_color
+    - Away team color: Right border (4px solid) using away_team.primary_color
+    - Colors render correctly as hex codes
+
+    AC-4.9.5: Score Display
+    - Scores prominently displayed (large font, center of card)
+    - Home score on left, away score on right
+    - Score format: "78 - 81" or "78  81" (clear separation)
+    - scheduled games: Show "—" or hide scores
+    - Scores update live for in_progress games
+
+    AC-4.9.6: Responsive Design
+    - Mobile (<768px): Single column layout
+    - Tablet (768px-1024px): Two-column grid
+    - Desktop (>1024px): Three-column grid
+    - Card layout readable on all screen sizes
+    - Touch-friendly tap targets on mobile (min 44x44px)
+
+    AC-4.9.7: Loading and Error States
+    - Loading skeleton preserves grouped section layout
+    - Error state shows user-friendly message
+    - Retry logic works (TanStack Query automatic retry)
+    - No visual regression from Story 3.4
+
+    AC-4.9.8: Performance
+    - GameCard component wrapped in React.memo
+    - No layout shift when games transition between sections
+    - Polling continues at 60-second interval
+    - Page renders within 500ms on 4G connection
+
+    AC-4.9.9: Accessibility
+    - Status badges have aria-labels: "Game is live", "Game is final", etc.
+    - Team names announced by screen readers
+    - Color contrast meets WCAG AA
+    - Keyboard navigation works (tab through cards in logical order)
+
+    AC-4.9.10: Verification Queries
+    - SQL query to verify team colors exist for all teams in today's games
+    - SQL query to check game status distribution (all must be "scheduled", "in_progress", or "final")
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>Frontend Framework</section>
+        <snippet>React 18.2+ with TypeScript and Vite for fast builds. Chakra UI 3.8+ for pre-built components with dark mode support and responsive design system.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion</title>
+        <section>Architecture Overview</section>
+        <snippet>Multi-platform social media pipeline using ELT pattern with TimescaleDB. Supports downstream excitement scoring in Epic 5.</snippet>
+      </doc>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>Frontend User Experience</section>
+        <snippet>Data-first web application combining real-time sports data with sentiment analysis to surface exciting NCAA basketball games.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-9-game-card-ui-design.md</path>
+        <title>Story 4-9 Requirements</title>
+        <section>Dev Notes</section>
+        <snippet>Extend existing GameList.tsx component with status grouping (Live/Final/Scheduled), team color branding, and responsive design. Use Chakra UI design tokens for consistency.</snippet>
+      </doc>
+      <doc>
+        <path>docs/gamepulse-1-desktop.png</path>
+        <title>Desktop Mockup</title>
+        <section>Design Reference</section>
+        <snippet>Directional mockup showing team badges with initials, large score display, status badges, and three-column grid layout.</snippet>
+      </doc>
+      <doc>
+        <path>docs/gamepulse-1-mobile.png</path>
+        <title>Mobile Mockup</title>
+        <section>Design Reference</section>
+        <snippet>Directional mockup showing single-column stacked card layout optimized for mobile screens.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>frontend/src/components/GameList.tsx</path>
+        <kind>component</kind>
+        <symbol>GameList</symbol>
+        <lines>1-139</lines>
+        <reason>Existing component to be enhanced with status grouping and improved visual design. Currently displays basic game cards with team names, scores, and left border color accent.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/hooks/useGames.ts</path>
+        <kind>hook</kind>
+        <symbol>useGames</symbol>
+        <lines>1-48</lines>
+        <reason>TanStack Query hook providing game data with 1-minute polling. Returns GameListResponse with games array. Do not modify - preserve existing polling behavior.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/fact_game.py</path>
+        <kind>model</kind>
+        <symbol>FactGame</symbol>
+        <lines>43-45</lines>
+        <reason>Defines game_status enum values: "scheduled", "in_progress", "final". Used for status grouping logic in frontend.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>route</kind>
+        <symbol>Dashboard</symbol>
+        <lines>-</lines>
+        <reason>Dashboard page that renders GameList component. May need minor updates for section headers.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <frontend>
+        <package name="react" version="^18.2.0" />
+        <package name="@chakra-ui/react" version="^3.8.0" />
+        <package name="@tanstack/react-query" version="^5.28.14" />
+        <package name="@tanstack/react-router" version="1.19.1" />
+        <package name="date-fns" version="^4.1.0" />
+        <package name="react-icons" version="^5.4.0" />
+        <package name="@emotion/react" version="^11.14.0" />
+      </frontend>
+      <backend>
+        <package name="fastapi" version="0.114.2+" />
+        <package name="sqlmodel" version="0.0.21+" />
+        <package name="postgresql" version="16.x" />
+      </backend>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    - Extend existing GameList.tsx component - do not rebuild from scratch
+    - Use Chakra UI design tokens for consistency (no custom CSS unless necessary)
+    - Implement responsive design with mobile-first approach
+    - Game status grouping logic in frontend (backend returns flat list)
+    - Preserve existing TanStack Query polling behavior (1-minute interval)
+    - Team colors from dim_team.primary_color and secondary_color (hex codes)
+    - No backend API changes required - all data already available
+    - React.memo optimization required for GameCard to prevent unnecessary re-renders
+    - Accessibility: ARIA labels, WCAG AA contrast, keyboard navigation
+    - Loading and error states must not regress from Story 3.4 behavior
+    - Target page render time: &lt;500ms on 4G connection
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>GET /api/v1/games</name>
+      <kind>REST endpoint</kind>
+      <signature>GET /api/v1/games?date=YYYY-MM-DD → GameListResponse</signature>
+      <path>backend/app/api/routes/games.py</path>
+      <schema>
+        GamePublic {
+          game_key: number;
+          game_id: string;
+          game_date: string;
+          game_start_time: string;
+          game_status: "scheduled" | "in_progress" | "final";
+          game_clock?: string | null;  // "14:32 2nd Half"
+          home_team: {
+            team_key: number;
+            team_id: string;
+            team_name: string;
+            team_group_name: string;
+            primary_color: string;      // Hex "#012169"
+            secondary_color?: string;   // Hex "#FFFFFF"
+          };
+          away_team: { /* same structure */ };
+          home_score: number;
+          away_score: number;
+          venue?: string | null;
+          broadcast_network?: string | null;
+        }
+      </schema>
+    </interface>
+    <interface>
+      <name>GameListResponse</name>
+      <kind>TypeScript type</kind>
+      <signature>type GameListResponse = { games: GamePublic[] }</signature>
+      <path>frontend/src/client/types.gen.ts</path>
+    </interface>
+    <interface>
+      <name>useGames hook</name>
+      <kind>React hook</kind>
+      <signature>useGames() → UseQueryResult&lt;GameListResponse&gt;</signature>
+      <path>frontend/src/hooks/useGames.ts</path>
+      <returns>{ data, isLoading, isError, isFetching, error }</returns>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>
+      Frontend tests use Vitest + React Testing Library. Component tests should verify rendering, user interactions, and state changes. Use @testing-library/react's screen queries (getByText, getByRole) for accessible selectors. Mock TanStack Query with test data for component isolation.
+    </standards>
+    <locations>
+      frontend/src/components/GameList.test.tsx (NEW)
+      frontend/src/components/GameCard.test.tsx (NEW)
+      frontend/src/components/GameStatusBadge.test.tsx (NEW)
+    </locations>
+    <ideas>
+      AC-4.9.1: Test game status grouping
+        - Verify games grouped into Live/Final/Upcoming sections
+        - Verify section order: Live → Final → Upcoming
+        - Verify empty sections are hidden
+
+      AC-4.9.2: Test status badges
+        - Verify LIVE badge for in_progress games
+        - Verify FINAL badge for final games
+        - Verify formatted start time for scheduled games
+        - Verify badge colors match Chakra tokens
+
+      AC-4.9.3: Test time display logic
+        - Verify game_clock displayed for in_progress games
+        - Verify FINAL text for final games
+        - Verify formatted start time for scheduled games
+
+      AC-4.9.4: Test team branding
+        - Verify team abbreviations extracted correctly
+        - Verify team colors applied as border accents
+        - Verify hex colors render without errors
+
+      AC-4.9.6: Test responsive design
+        - Verify single column on mobile (&lt;768px)
+        - Verify two columns on tablet (768-1024px)
+        - Verify three columns on desktop (&gt;1024px)
+
+      AC-4.9.8: Test React.memo optimization
+        - Verify GameCard wrapped in React.memo
+        - Verify component doesn't re-render unnecessarily
+
+      AC-4.9.9: Test accessibility
+        - Verify ARIA labels on status badges
+        - Verify keyboard navigation works
+        - Verify screen reader announcements
+    </ideas>
+  </tests>
+</story-context>

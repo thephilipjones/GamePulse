@@ -1,0 +1,205 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>8</storyId>
+    <title>Game Matching Post-Processor (Transform Layer Optimization)</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-16</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-8-game-matching-post-processor.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>a data engineer</asA>
+    <iWant>to batch-process stg_social_posts with GameMatcher to filter non-game posts</iWant>
+    <soThat>storage and downstream processing costs are reduced by 10-20%</soThat>
+    <tasks>
+### Task 1: Database Migration (If Needed) - AC #4
+- Check if stg_social_posts already has matched_to_game and match_confidence columns
+- If missing, create Alembic migration: add_game_matching_to_stg_social_posts.py
+- Add columns: matched_to_game BOOLEAN DEFAULT FALSE, match_confidence NUMERIC(3,2)
+- Run migration: alembic upgrade head
+
+### Task 2: Dagster Asset - match_posts_to_games (AC #1, #2, #3)
+- Create file: backend/app/assets/match_posts_to_games.py
+- Import dependencies: GameMatcher, StgSocialPost
+- Define @asset with retry policy, deps=[transform_social_posts]
+- Implement batch processing logic (2500 posts per batch)
+- Add structured logging and return metadata
+
+### Task 3: Environment Variable Configuration (AC #3)
+- Add FILTER_LOW_CONFIDENCE_POSTS to .env.example
+- Document in CLAUDE.md
+- Update AWS Parameter Store mapping
+
+### Task 4: Dagster Schedule Definition (AC #5)
+- Define match_posts_to_games_schedule (cron: 0 3 * * *)
+- Register in dagster_definitions.py
+- Verify in Dagster UI
+
+### Task 5: Integration Testing (AC #6, #7)
+- Test with sample posts (matched and unmatched)
+- Verify filtering behavior with env var toggle
+- Validate Story 4-5 integration
+- Measure performance metrics
+
+### Task 6: Update Documentation
+- Update Epic 4 data flow diagram
+- Document in Story 4-4 Dev Notes
+- Update CLAUDE.md
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### AC #1: New Dagster Asset - match_posts_to_games
+Asset configuration: name="match_posts_to_games", description="Batch-process stg_social_posts to match posts to games and filter irrelevant content", group_name="social_media_transformation", compute_kind="python", deps=[transform_social_posts], retry_policy=RetryPolicy(max_retries=2, delay=10, backoff=Backoff.LINEAR)
+
+### AC #2: Batch Processing Logic
+Process posts in batches of 2500, SELECT WHERE matched_to_game = FALSE, initialize GameMatcher once per batch, for each post: extract text, call match_post_to_teams(), update matched_to_game and match_confidence, commit batch, log structured metadata (posts_processed, posts_matched, posts_filtered, match_rate, batches_executed)
+
+### AC #3: Optional Post Filtering (Configurable)
+FILTER_LOW_CONFIDENCE_POSTS=true: delete posts with match_confidence < 0.6, log deletion count. FILTER_LOW_CONFIDENCE_POSTS=false (default): update metadata but keep posts for future ML
+
+### AC #4: Database Schema Updates
+If Story 4-4 didn't add columns, create migration to add: matched_to_game BOOLEAN DEFAULT FALSE, match_confidence NUMERIC(3,2)
+
+### AC #5: Dagster Schedule - Daily at 3:00 AM
+Schedule: match_posts_to_games_schedule, cron: 0 3 * * *, timezone: America/New_York, status: RUNNING, runs after cleanup job
+
+### AC #6: Integration with Story 4-5
+Story 4-5 continues working without modification, skips posts with matched_to_game = FALSE OR match_confidence < 0.6, no duplicate game matching
+
+### AC #7: Performance Metrics
+Match rate: 30-50% of posts, storage reduction: ~10-20% fewer total posts (if filtering enabled), processing time: ~5-7 seconds per 1000 posts
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Architecture Overview - Transform Layer</section>
+        <snippet>Transform layer processes raw posts with GameMatcher filtering. This story adds optional post-processing for storage optimization (10-20% reduction expected).</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-3-game-matching-service.md</path>
+        <title>Story 4-3: Game Matching Service</title>
+        <section>GameMatcher Class API</section>
+        <snippet>GameMatcher.match_post_to_teams() returns matched_teams, match_confidence (0-1), and is_game_related flag. Threshold: 0.6 for game relevance. Uses RapidFuzz with 70/100 match threshold.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-4-unified-transform-layer.md</path>
+        <title>Story 4-4: Unified Transform Layer</title>
+        <section>Dev Notes - Separation of Concerns</section>
+        <snippet>Transform layer intentionally deferred game matching for performance. Story 4-8 adds optional post-processing optimization without modifying transform layer itself.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-5-sentiment-analysis-fact-table.md</path>
+        <title>Story 4-5: Sentiment Analysis</title>
+        <section>Integration Notes</section>
+        <snippet>Story 4-5 performs game_key resolution for FK relationships. This story adds earlier filtering but does NOT replace Story 4-5's matching logic.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>backend/app/services/game_matcher.py</path>
+        <kind>service</kind>
+        <symbol>GameMatcher</symbol>
+        <lines>48-247</lines>
+        <reason>Core dependency - provides match_post_to_teams() method for batch team matching. Supports sync/async sessions.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/social.py</path>
+        <kind>model</kind>
+        <symbol>StgSocialPost</symbol>
+        <lines>109-188</lines>
+        <reason>Target table for batch updates. Already has matched_to_game (bool) and match_confidence (numeric) columns - NO MIGRATION NEEDED.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/transform_social_posts.py</path>
+        <kind>asset</kind>
+        <symbol>transform_social_posts</symbol>
+        <lines>52-68</lines>
+        <reason>Reference pattern for creating Dagster assets with retry policies, auto-materialize, freshness policies, and dependency declaration.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/cleanup_raw_posts.py</path>
+        <kind>asset</kind>
+        <symbol>cleanup_unmatched_posts_schedule</symbol>
+        <lines>201-208</lines>
+        <reason>Reference pattern for defining ScheduleDefinition with cron, timezone, default_status=RUNNING.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/dagster_definitions.py</path>
+        <kind>config</kind>
+        <symbol>defs</symbol>
+        <lines>81-100</lines>
+        <reason>Register new asset in load_assets_from_modules() and new schedule in schedules list.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <python>
+        <package name="dagster" version=">=1.12.1" />
+        <package name="rapidfuzz" version=">=3.14.3" />
+        <package name="sqlmodel" version=">=0.0.22" />
+        <package name="structlog" version=">=24.0.0" />
+        <package name="asyncpg" version=">=0.30.0" />
+      </python>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Database schema: StgSocialPost ALREADY HAS matched_to_game and match_confidence columns - skip AC #4 migration unless columns are missing</constraint>
+    <constraint>Batch size: 2500 posts per run (optimized for t4g.small memory limit - 1GB RAM + 4GB swap)</constraint>
+    <constraint>Environment variable: FILTER_LOW_CONFIDENCE_POSTS defaults to false to preserve data for future ML experimentation</constraint>
+    <constraint>Schedule timing: Daily at 3:00 AM (after cleanup job at 2:00 AM from Story 4-7) to avoid processing posts about to be deleted</constraint>
+    <constraint>Integration: Story 4-5 sentiment analysis MUST continue working without modification - no changes to existing assets</constraint>
+    <constraint>No duplicate matching: GameMatcher initialized once per batch for performance (1000 matches in &lt;1 second)</constraint>
+    <constraint>Logging: Use structlog.get_logger() with structured metadata (posts_processed, posts_matched, posts_filtered, match_rate, batches_executed)</constraint>
+  </constraints>
+  <interfaces>
+    <interface>
+      <name>GameMatcher.match_post_to_teams()</name>
+      <kind>method</kind>
+      <signature>match_post_to_teams(post_text: str) -> GameMatchResult</signature>
+      <path>backend/app/services/game_matcher.py:150-200</path>
+      <returns>GameMatchResult with matched_teams (list[str]), match_confidence (float 0-1), is_game_related (bool), game_key (int|None)</returns>
+    </interface>
+    <interface>
+      <name>Dagster Asset Decorator</name>
+      <kind>decorator</kind>
+      <signature>@asset(name, description, group_name, compute_kind, retry_policy, deps)</signature>
+      <path>backend/app/assets/transform_social_posts.py:52-68</path>
+      <usage>Define match_posts_to_games asset with group_name="social_media_transformation", deps=[transform_social_posts]</usage>
+    </interface>
+    <interface>
+      <name>ScheduleDefinition</name>
+      <kind>class</kind>
+      <signature>ScheduleDefinition(name, job, cron_schedule, description, execution_timezone, default_status)</signature>
+      <path>backend/app/assets/cleanup_raw_posts.py:201-208</path>
+      <usage>Create match_posts_to_games_schedule with cron="0 3 * * *", timezone="America/New_York", default_status=DefaultScheduleStatus.RUNNING</usage>
+    </interface>
+    <interface>
+      <name>StgSocialPost UPDATE Pattern</name>
+      <kind>sql</kind>
+      <signature>UPDATE stg_social_posts SET matched_to_game = ?, match_confidence = ? WHERE social_post_key = ?</signature>
+      <path>backend/app/models/social.py:179-188</path>
+      <usage>Batch update matched_to_game (bool) and match_confidence (numeric 0-1) via async session</usage>
+    </interface>
+  </interfaces>
+  <tests>
+    <standards>Backend testing uses pytest with pytest-asyncio for async tests. Integration tests require database (mark with @pytest.mark.integration). Unit tests should mock external dependencies. Use structlog for logging assertions. Test files mirror source structure: app/assets/X.py -> app/tests/assets/test_X.py or app/tests/integration/test_X.py</standards>
+    <locations>
+      <location>backend/app/tests/assets/</location>
+      <location>backend/app/tests/integration/</location>
+      <location>backend/app/tests/services/</location>
+    </locations>
+    <ideas>
+      <test ac="1,2">Integration test: Verify asset materializes successfully, processes 2500-post batches, logs structured metadata with all expected fields</test>
+      <test ac="3">Integration test: With FILTER_LOW_CONFIDENCE_POSTS=true, verify low-confidence posts (&lt;0.6) are deleted. With =false, verify posts are kept with updated metadata</test>
+      <test ac="4">Manual check: Verify StgSocialPost model has matched_to_game and match_confidence columns (they already exist from Story 4-4)</test>
+      <test ac="5">Manual verification: Check Dagster UI for schedule with correct cron, timezone, and RUNNING status</test>
+      <test ac="6,7">Integration test: Insert sample posts (matched and unmatched), run asset, verify Story 4-5 sentiment asset still works, measure match rate (30-50% expected)</test>
+    </ideas>
+  </tests>
+</story-context>

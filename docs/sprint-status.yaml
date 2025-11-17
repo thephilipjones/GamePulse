@@ -85,8 +85,10 @@ development_status:
   4-4-unified-transform-layer: done # AC updates complete, tests passing (11 unit tests), TimescaleDB policies verified (2025-11-16)
   4-5-sentiment-analysis-fact-table: done # Review complete - approved with documented design refinements (regular table, auto-materialize policy) (2025-11-16)
   4-6-improve-game-matching-quality: done # Review approved with bug fix - 23 tests passing, date range bug fixed (2025-11-16)
-  4-7-orchestration-data-management: changes-requested # Code review 2025-11-16: APPROVED WITH MINOR FOLLOW-UPS - Address 2 findings (AC3/AC4 spec mismatches) then resubmit for final approval
-  4-8-game-matching-post-processor: drafted # Optimization - batch match stg_social_posts to games
+  4-7-orchestration-data-management: done # Review APPROVED 2025-11-16: AC spec updates complete (compression + retention), 7/9 ACs implemented, ready for 7-day validation
+  4-8-game-matching-post-processor: ready-for-dev # Optimization - batch match stg_social_posts to games - Context ready 2025-11-16 (DEFERRED - do after 4-9, 4-10)
+  4-9-game-card-ui-design: ready-for-dev # UX - Enhanced game cards with team branding, colors, and status grouping - Context ready 2025-11-16
+  4-10-social-posts-feed: drafted # UX - Display social media posts and sentiment for each game
   epic-4-retrospective: optional
 
   # Epic 5: Moment Detection & Excitement Scoring (1 story defined, rest to be decomposed)

@@ -321,56 +321,39 @@ This story maintains batch polling architecture (1-minute intervals). Future imp
 
 ## Phase 2: Data Pipeline Complexity (Week 2 - Add Intelligence)
 
-### Epic 4: Reddit Social Sentiment (Batch)
+### Epic 4: Social Media Data Ingestion via ELT Pattern
 
-**Goal:** Track Reddit posts from r/CollegeBasketball and match to games.
+**Goal:** Multi-platform social media data pipeline (Reddit + Bluesky) using Extract-Load-Transform pattern to collect game-related social conversations.
 
-**Value:** Social signals available for excitement scoring. Demonstrates event stream data modeling patterns.
+**Value:** Social signals for excitement scoring. Demonstrates ELT patterns, Dagster orchestration, TimescaleDB partitioning, and sentiment analysis.
 
-**Milestone:** Reddit posts matched to games with confidence scoring
+**Milestone:** Social posts matched to games with sentiment analysis, ready for UI integration
 
-**Schema Design:**
-- `event_reddit_post` (event stream, NOT fact table - semi-structured social data)
-- Grain: One row per Reddit post
-- Partitioned by `post_time` (TimescaleDB hypertable, 1-day chunks)
-- Optional FK to `fact_moment` (populated later via heuristic matching in Epic 5.7)
+**Technical Stack:**
+- Reddit + Bluesky data sources
+- TimescaleDB hypertables (90-day retention, 7-day compression)
+- Dagster orchestration with auto-materialization policies
+- VADER sentiment analysis
+- GameMatcher service for team/game resolution
 
-**Table: event_reddit_post**
-```sql
-event_reddit_post (
-  post_key BIGSERIAL PRIMARY KEY,
-  post_id VARCHAR(50) UNIQUE NOT NULL,            -- Reddit ID "abc123"
-  game_key BIGINT REFERENCES fact_game(game_key),
-  moment_key BIGINT,                              -- FK to fact_moment (Epic 5) - NULL if not linked
-  post_time TIMESTAMP NOT NULL,
-  post_date_key INTEGER REFERENCES dim_date(date_key),
-  post_title TEXT,
-  post_type VARCHAR(50),                          -- "game_thread", "highlight", "moment"
-  post_url TEXT,
-  author VARCHAR(100),
-  upvotes INTEGER,
-  num_comments INTEGER,
-  num_awards INTEGER,
-  engagement_score DECIMAL(10,2),                 -- upvotes + comments*0.5 + awards*2
-  sentiment_score DECIMAL(5,2),                   -- VADER on title (-1 to +1)
-  matched_teams TEXT[],                           -- ["Duke", "UNC"]
-  match_confidence DECIMAL(3,2),                  -- 0-1 fuzzy match quality
-  created_at TIMESTAMP DEFAULT NOW()
-) PARTITION BY RANGE (post_time);
-```
+**Epic Documentation:** [Epic 4 Technical Specification](./epics/epic-4-social-media-elt.md)
 
-**Design Rationale:**
-- `event_` prefix signals semi-structured event stream (not traditional fact table)
-- Supports future expansion: JSONB fields, nested comment threads, media attachments
-- Conceptually distinct from fact tables which measure repeatable business processes
+**Stories:**
+1. [Story 4-1: Reddit Data Pipeline](./stories/4-1-reddit-data-pipeline.md) ✅ DONE
+2. [Story 4-2: Bluesky Data Pipeline](./stories/4-2-bluesky-data-pipeline.md) ✅ DONE
+3. [Story 4-3: Game Matching Service](./stories/4-3-game-matching-service.md) ✅ DONE
+4. [Story 4-4: Unified Transform Layer](./stories/4-4-unified-transform-layer.md) ✅ DONE
+5. [Story 4-5: Sentiment Analysis Fact Table](./stories/4-5-sentiment-analysis-fact-table.md) ✅ DONE
+6. [Story 4-6: Improve Game Matching Quality](./stories/4-6-improve-game-matching-quality.md) ✅ DONE
+7. [Story 4-7: Orchestration & Data Management](./stories/4-7-orchestration-data-management.md) ✅ DONE
+8. [Story 4-8: Game Matching Post-Processor](./stories/4-8-game-matching-post-processor.md) - READY (Optimization - deferred)
+9. **[Story 4-9: Enhanced Game Card UI Design](./stories/4-9-game-card-ui-design.md)** ⬅️ NEW (UX)
+10. **[Story 4-10: Social Posts Feed Integration](./stories/4-10-social-posts-feed.md)** ⬅️ NEW (UX)
 
-**Stories:** _High-level implementation captured at epic level_
-1. Reddit API OAuth authentication
-2. Post fetching from r/CollegeBasketball (batch, 15-min polling, 100 QPM limit)
-3. Create event_reddit_post table schema
-4. Post-to-game matching algorithm (exact → fuzzy team names)
-5. Game thread vs moment post classification
-6. VADER sentiment analysis on post titles
+**Implementation Order:**
+- **Week 1:** Stories 4-1 through 4-7 (backend pipeline) ✅ Complete
+- **Week 2:** Stories 4-9, 4-10 (UX integration) ⬅️ Next
+- **Later:** Story 4-8 (optional optimization)
 
 ---
 
