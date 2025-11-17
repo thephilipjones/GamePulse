@@ -17,6 +17,8 @@ Transform Logic:
 - Skips posts that cannot be matched to a game
 """
 
+from datetime import timedelta
+
 import structlog
 from dagster import (
     AssetExecutionContext,
@@ -54,7 +56,10 @@ BATCH_SIZE = 2500
     # Auto-materialize: Trigger when transform_social_posts completes
     auto_materialize_policy=AutoMaterializePolicy.eager(),
     # Freshness SLA: Maximum 45 minutes from extract to sentiment complete
-    freshness_policy=FreshnessPolicy(maximum_lag_minutes=45),  # type: ignore[call-arg]
+    freshness_policy=FreshnessPolicy.time_window(
+        fail_window=timedelta(minutes=45),
+        warn_window=timedelta(minutes=30),
+    ),
     # Dependency: Runs after social post transformation completes
     deps=["transform_social_posts"],
 )

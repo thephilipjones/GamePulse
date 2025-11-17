@@ -18,7 +18,7 @@ Transform Logic:
 - Maintains game matching metadata (matched_to_game, match_confidence, matched_teams)
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
@@ -62,7 +62,10 @@ BATCH_SIZE = 2500
     # Auto-materialize: Trigger when either Reddit or Bluesky extract completes
     auto_materialize_policy=AutoMaterializePolicy.eager(),
     # Freshness SLA: Maximum 30 minutes from extract to transform complete
-    freshness_policy=FreshnessPolicy(maximum_lag_minutes=30),  # type: ignore[call-arg]
+    freshness_policy=FreshnessPolicy.time_window(
+        fail_window=timedelta(minutes=30),
+        warn_window=timedelta(minutes=20),
+    ),
     # Dependencies: Runs after either Reddit or Bluesky extract completes
     deps=["extract_reddit_posts", "extract_bluesky_posts"],
 )

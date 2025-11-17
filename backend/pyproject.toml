@@ -19,9 +19,9 @@ dependencies = [
     "sqlmodel>=0.0.22,<1.0.0",
     "pydantic-settings>=2.5.0,<3.0.0",
     "sentry-sdk[fastapi]>=2.0.0,<3.0.0",
-    "dagster>=1.12.1",
-    "dagster-webserver>=1.12.1",
-    "dagster-postgres>=0.28.1",
+    "dagster==1.12.2",
+    "dagster-webserver==1.12.2",
+    "dagster-postgres==0.28.2",
     "asyncpg>=0.30.0",
     "rapidfuzz>=3.14.3",
     "vadersentiment>=3.3.2",
@@ -78,8 +78,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-v --strict-markers"
 markers = [
     "unit: Pure unit tests (no database)",
     "integration: Integration tests (requires database)",
+    "e2e: End-to-end pipeline tests (slow, requires full setup)",
 ]

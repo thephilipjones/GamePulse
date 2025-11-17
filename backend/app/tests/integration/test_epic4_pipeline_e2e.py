@@ -15,6 +15,7 @@ These tests require:
 NOTE: E2E tests are slow (minutes) - run separately from unit tests
 """
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -139,7 +140,9 @@ class TestEpic4PipelineConfiguration:
         assert transform_social_posts.freshness_policy is not None, (  # type: ignore[attr-defined]
             "transform_social_posts missing FreshnessPolicy"
         )
-        assert transform_social_posts.freshness_policy.maximum_lag_minutes == 30, (  # type: ignore[attr-defined]
+        assert transform_social_posts.freshness_policy.fail_window == timedelta(
+            minutes=30
+        ), (  # type: ignore[attr-defined]
             "transform_social_posts should have 30-min SLA"
         )
 
@@ -147,7 +150,9 @@ class TestEpic4PipelineConfiguration:
         assert calculate_sentiment.freshness_policy is not None, (  # type: ignore[attr-defined]
             "calculate_sentiment missing FreshnessPolicy"
         )
-        assert calculate_sentiment.freshness_policy.maximum_lag_minutes == 45, (  # type: ignore[attr-defined]
+        assert calculate_sentiment.freshness_policy.fail_window == timedelta(
+            minutes=45
+        ), (  # type: ignore[attr-defined]
             "calculate_sentiment should have 45-min SLA"
         )
 
@@ -319,10 +324,12 @@ def test_pipeline_performance_expectations() -> None:
     # - Sentiment processing: 1-2 min (2500 posts batch)
 
     # Verify SLA configuration
-    assert transform_social_posts.freshness_policy.maximum_lag_minutes == 30, (  # type: ignore[attr-defined]
+    assert transform_social_posts.freshness_policy.fail_window == timedelta(
+        minutes=30
+    ), (  # type: ignore[attr-defined]
         "Transform SLA should be 30 min"
     )
-    assert calculate_sentiment.freshness_policy.maximum_lag_minutes == 45, (  # type: ignore[attr-defined]
+    assert calculate_sentiment.freshness_policy.fail_window == timedelta(minutes=45), (  # type: ignore[attr-defined]
         "Sentiment SLA should be 45 min"
     )
 

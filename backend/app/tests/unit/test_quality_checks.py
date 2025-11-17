@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from dagster import build_asset_check_context
 
 # Note: These tests will fail in Python 3.14 due to Dagster import issues
 # They work correctly in Python 3.10/3.12 (Docker environment)
@@ -30,11 +31,9 @@ from app.assets.quality_checks import (
 
 
 @pytest.fixture
-def mock_context() -> MagicMock:
-    """Mock AssetCheckExecutionContext."""
-    context = MagicMock()
-    context.log = MagicMock()
-    return context
+def asset_check_context():
+    """Proper Dagster asset check context for testing."""
+    return build_asset_check_context(asset_key=["extract_reddit_posts"])
 
 
 @pytest.fixture
@@ -52,7 +51,7 @@ class TestRedditFreshnessCheck:
 
     @pytest.mark.asyncio
     async def test_passes_when_data_is_fresh(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should pass when data was fetched within SLA (2 hours)."""
         database, session = mock_database
@@ -64,7 +63,7 @@ class TestRedditFreshnessCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_freshness(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_freshness(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is True
@@ -74,7 +73,7 @@ class TestRedditFreshnessCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_data_is_stale(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when data exceeds SLA (>2 hours old)."""
         database, session = mock_database
@@ -86,7 +85,7 @@ class TestRedditFreshnessCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_freshness(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_freshness(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
@@ -95,7 +94,7 @@ class TestRedditFreshnessCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_no_data_exists(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when no Reddit data has ever been fetched."""
         database, session = mock_database
@@ -106,7 +105,7 @@ class TestRedditFreshnessCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_freshness(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_freshness(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
@@ -119,7 +118,7 @@ class TestRedditVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_passes_when_volume_is_normal(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should pass when post count is within expected range."""
         database, session = mock_database
@@ -131,7 +130,7 @@ class TestRedditVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is True
@@ -142,7 +141,7 @@ class TestRedditVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_low(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when post count is below minimum threshold."""
         database, session = mock_database
@@ -154,7 +153,7 @@ class TestRedditVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
@@ -163,7 +162,7 @@ class TestRedditVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_high(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when post count exceeds maximum threshold."""
         database, session = mock_database
@@ -175,7 +174,7 @@ class TestRedditVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
@@ -184,7 +183,7 @@ class TestRedditVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_passes_when_zero_posts(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should pass when zero posts (no recent run)."""
         database, session = mock_database
@@ -195,7 +194,7 @@ class TestRedditVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_reddit_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_reddit_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         # Zero is acceptable (no recent run) - not considered "too low"
@@ -207,7 +206,7 @@ class TestBlueskyFreshnessCheck:
 
     @pytest.mark.asyncio
     async def test_passes_when_data_is_fresh(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should pass when data was fetched within SLA (2 hours)."""
         database, session = mock_database
@@ -219,7 +218,7 @@ class TestBlueskyFreshnessCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_bluesky_freshness(mock_context, database)  # type: ignore[misc]
+        result = await check_bluesky_freshness(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is True
@@ -228,7 +227,7 @@ class TestBlueskyFreshnessCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_data_is_stale(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when data exceeds SLA (>2 hours old)."""
         database, session = mock_database
@@ -240,7 +239,7 @@ class TestBlueskyFreshnessCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_bluesky_freshness(mock_context, database)  # type: ignore[misc]
+        result = await check_bluesky_freshness(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
@@ -252,7 +251,7 @@ class TestBlueskyVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_passes_when_volume_is_normal(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should pass when post count is within expected range."""
         database, session = mock_database
@@ -264,7 +263,7 @@ class TestBlueskyVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_bluesky_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_bluesky_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is True
@@ -274,7 +273,7 @@ class TestBlueskyVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_low(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when post count is below minimum threshold."""
         database, session = mock_database
@@ -286,7 +285,7 @@ class TestBlueskyVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_bluesky_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_bluesky_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
@@ -294,7 +293,7 @@ class TestBlueskyVolumeAnomalyCheck:
 
     @pytest.mark.asyncio
     async def test_fails_when_volume_too_high(
-        self: Any, mock_context: Any, mock_database: Any
+        self: Any, asset_check_context: Any, mock_database: Any
     ) -> None:
         """Check should fail when post count exceeds maximum threshold."""
         database, session = mock_database
@@ -306,7 +305,7 @@ class TestBlueskyVolumeAnomalyCheck:
         session.execute.return_value = mock_result
 
         # Execute check
-        result = await check_bluesky_volume_anomaly(mock_context, database)  # type: ignore[misc]
+        result = await check_bluesky_volume_anomaly(asset_check_context, database)  # type: ignore[misc]
 
         # Assertions
         assert result.passed is False
