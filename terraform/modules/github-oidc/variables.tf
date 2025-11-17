@@ -29,6 +29,11 @@ variable "aws_region" {
   type        = string
 }
 
+variable "ec2_instance_id" {
+  description = "EC2 instance ID for SSM command permissions"
+  type        = string
+}
+
 variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
