@@ -79,6 +79,7 @@ module "github_oidc" {
   github_repo             = var.github_repo
   allowed_branch_patterns = var.allowed_branch_patterns
   aws_region              = var.aws_region
+  ec2_instance_id         = module.compute.instance_id
   tags                    = local.common_tags
 }
 
