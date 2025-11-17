@@ -7,7 +7,8 @@ Asset: transform_social_posts
 - Matches posts to NCAA teams using GameMatcher service (Story 4-5 prerequisite)
 - Processes incrementally (WHERE processed_at IS NULL)
 - Batch size: 2500 posts per run (optimized for t4g.small)
-- Trigger: Auto-materializes when extract_reddit_posts completes (eager policy)
+- Trigger: Auto-materializes when EITHER extract_reddit_posts OR extract_bluesky_posts completes (eager policy)
+- Freshness SLA: Maximum 30 minutes from extract to transform complete (Story 4-7)
 
 Transform Logic:
 - Reddit: score + num_comments → engagement_score
@@ -25,6 +26,7 @@ from dagster import (
     AssetExecutionContext,
     AutoMaterializePolicy,
     Backoff,
+    FreshnessPolicy,
     RetryPolicy,
     asset,
 )
@@ -57,10 +59,12 @@ BATCH_SIZE = 2500
         delay=2,
         backoff=Backoff.EXPONENTIAL,
     ),
-    # Auto-materialize: Trigger when reddit/bluesky extract completes
+    # Auto-materialize: Trigger when either Reddit or Bluesky extract completes
     auto_materialize_policy=AutoMaterializePolicy.eager(),
-    # Dependency: Runs after Reddit extract completes
-    deps=["extract_reddit_posts"],
+    # Freshness SLA: Maximum 30 minutes from extract to transform complete
+    freshness_policy=FreshnessPolicy(maximum_lag_minutes=30),
+    # Dependencies: Runs after either Reddit or Bluesky extract completes
+    deps=["extract_reddit_posts", "extract_bluesky_posts"],
 )
 async def transform_social_posts(
     context: AssetExecutionContext,

@@ -1,0 +1,376 @@
+<story-context id="story-4-7-context" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>7</storyId>
+    <title>Orchestration &amp; Data Management</title>
+    <status>drafted</status>
+    <generatedAt>2025-11-16</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-7-orchestration-data-management.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>data engineer</asA>
+    <iWant>all Dagster schedules configured with proper intervals, retry policies, and observability</iWant>
+    <soThat>the Epic 4 pipeline runs reliably end-to-end with &lt;10 min latency and 99% uptime</soThat>
+    <tasks>
+      - Task 1: Validate All Schedules in Dagster Definitions (AC: #1)
+      - Task 2: Verify Retry Policies on All Assets (AC: #2)
+      - Task 3: Validate TimescaleDB Retention Policies (AC: #3)
+      - Task 4: Validate TimescaleDB Compression Policies (AC: #4)
+      - Task 5: Cleanup Job Implementation (AC: #5)
+      - Task 6: End-to-End Latency Testing (AC: #6)
+      - Task 7: Observability - Structured Logging Verification (AC: #7)
+      - Task 8: Uptime Monitoring Query (AC: #8)
+      - Task 9: Dagster Asset Checks for Data Quality (AC: #9)
+      - Task 10: Epic 5 Integration Validation (Enables Downstream Epic)
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <AC id="1" priority="critical">
+      All Schedules Configured &amp; Running
+      - 5 schedules RUNNING in Dagster UI: extract_reddit_posts (*/10), extract_bluesky_posts (*/5), transform_social_posts (15 * * * *), calculate_sentiment (30 * * * *), cleanup_unmatched_posts (0 2 * * *)
+      - Schedules execute without overlap
+      - Asset dependencies respected (transform waits for extracts, sentiment waits for transform)
+    </AC>
+    <AC id="2" priority="critical">
+      Retry Policies on All Assets
+      - All 4 main assets have RetryPolicy(max_retries=3, delay=2-5, backoff=Backoff.EXPONENTIAL)
+      - Retries logged with structured events: asset_retry_attempt: attempt=2, error="..."
+    </AC>
+    <AC id="3" priority="high">
+      Data Retention Policies Active
+      - All 4 tables have 90-day retention: raw_reddit_posts, raw_bluesky_posts, stg_social_posts, fact_social_sentiment
+      - Data older than 90 days automatically dropped
+      - Query: SELECT hypertable_name, drop_after FROM timescaledb_information.jobs WHERE proc_name = 'policy_retention'
+    </AC>
+    <AC id="4" priority="high">
+      Compression Policies Active
+      - Raw tables compress after 7 days: raw_reddit_posts, raw_bluesky_posts
+      - stg_social_posts has NO compression (active querying)
+      - Query: SELECT hypertable_name, compress_after FROM timescaledb_information.jobs WHERE proc_name = 'policy_compression'
+    </AC>
+    <AC id="5" priority="medium">
+      Cleanup Job for Unmatched Posts
+      - Cleanup runs daily at 2 AM
+      - Deletes raw posts where created_at &lt; NOW() - INTERVAL '7 days' AND matched_to_game = FALSE
+      - Logs cleanup_unmatched_posts_completed: reddit_deleted=X, bluesky_deleted=Y
+      - Storage savings: ~200 MB over 90 days
+    </AC>
+    <AC id="6" priority="high">
+      End-to-End Latency &lt; 10 Minutes
+      - Example timeline: 12:00:00 (post published) → 12:10:00 (extracted) → 12:15:00 (transformed) → 12:30:00 (sentiment)
+      - Total latency: 30 minutes (worst case)
+      - Average latency: 15-20 minutes (mid-cycle extraction)
+    </AC>
+    <AC id="7" priority="medium">
+      Observability - Structured Logging
+      - Structured events visible in Dagster UI logs: extract_reddit_posts_started, reddit_fetch_completed: posts_count=42, transform_social_posts_completed: posts_matched=23, calculate_sentiment_completed: posts_analyzed=20
+      - Errors logged with context: error="HTTP 503", attempt=2, retry_delay=4s
+    </AC>
+    <AC id="8" priority="high">
+      Week 3 Uptime Metric
+      - Pipeline runs for 7 days (168 hours) with uptime_pct &gt;= 99.0%
+      - Max 2 failed runs out of 168 hourly cycles
+      - Query provided: monitor_epic4_uptime.sql
+    </AC>
+    <AC id="9" priority="critical">
+      Asset Checks for Data Quality
+      - 4 asset checks implemented: check_reddit_freshness, check_reddit_volume_anomaly, check_bluesky_freshness, check_bluesky_volume_anomaly
+      - Freshness: Verifies data &lt;2 hours old (SLA: 2 hours)
+      - Volume: Detects &gt;50% deviation from 7-day average
+      - Checks are non-blocking (blocking=False)
+      - Check results display actionable metadata: age_hours, last_fetch, deviation_pct, lower_bound, upper_bound
+    </AC>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Story Breakdown</section>
+        <snippet>Story 4-7 "Orchestration &amp; Data Management" (8-12 hours) - Dependencies: 4-1, 4-2, 4-4, 4-5. Validates end-to-end pipeline, optimizes schedules, implements data management (retention, compression, cleanup), adds observability.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4 Tech Spec</title>
+        <section>Architecture Overview</section>
+        <snippet>Multi-platform ELT: Extract (Reddit 10 QPM, Bluesky 5min) → Load (TimescaleDB 1-day chunks, 90-day retention) → Transform (hourly batch) → Sentiment (VADER). Dagster orchestration with non-overlapping schedules.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>GamePulse Architecture</title>
+        <section>Dagster Development</section>
+        <snippet>Dagster UI: localhost:3000 (dev), dagster.gamepulse.top (prod). Asset materialization patterns, schedule configuration, structured logging via context.log. Asset checks for data quality monitoring.</snippet>
+      </doc>
+      <doc>
+        <path>CLAUDE.md</path>
+        <title>Project Development Guide</title>
+        <section>Dagster Development</section>
+        <snippet>Commands: docker compose exec dagster-daemon dagster asset materialize -m app.dagster_definitions ASSET_NAME. View logs: docker compose logs -f dagster-daemon. Dagster UI access and troubleshooting patterns.</snippet>
+      </doc>
+      <doc>
+        <path>CLAUDE.md</path>
+        <title>Project Development Guide</title>
+        <section>Database &amp; Migrations</section>
+        <snippet>TimescaleDB setup: Two databases (app, dagster). Alembic migrations in backend/app/alembic/versions/. Retention/compression policies added via migrations using add_retention_policy(), add_compression_policy().</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-6-improve-game-matching-quality.md</path>
+        <title>Previous Story Context</title>
+        <section>Completion Notes</section>
+        <snippet>Story 4-6 improved GameMatcher: Multi-tier matching (exact for ≤3 char acronyms, fuzzy for longer), threshold 60→70, 21 tests passing. Modified backend/app/services/game_matcher.py. Implications: Asset checks should validate game matching accuracy metrics.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>backend/app/dagster_definitions.py</path>
+        <kind>orchestration</kind>
+        <symbol>defs</symbol>
+        <lines>1-91</lines>
+        <reason>Central Dagster definitions file - currently has 3 schedules (ncaa_games, reddit_posts, bluesky). Need to add transform_social_posts, calculate_sentiment, cleanup_unmatched_posts schedules. Also need to import quality_checks module for asset checks.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/reddit_posts.py</path>
+        <kind>asset</kind>
+        <symbol>extract_reddit_posts</symbol>
+        <lines>44-54</lines>
+        <reason>Reference pattern for retry policy: RetryPolicy(max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL). Use same pattern for all Epic 4 assets.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/reddit_posts.py</path>
+        <kind>schedule</kind>
+        <symbol>reddit_posts_schedule</symbol>
+        <lines>200-220</lines>
+        <reason>Reference pattern for schedule definition: cron_schedule="*/10 * * * *", execution_timezone="America/New_York", default_status=DefaultScheduleStatus.RUNNING. Model for Task 1.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/bluesky_posts.py</path>
+        <kind>asset</kind>
+        <symbol>extract_bluesky_posts</symbol>
+        <lines>1-50</lines>
+        <reason>Second extraction asset with retry policy and schedule. Verify schedule exists (*/5 * * * *) and imports are correct in dagster_definitions.py.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/transform_social_posts.py</path>
+        <kind>asset</kind>
+        <symbol>transform_social_posts</symbol>
+        <lines>1-50</lines>
+        <reason>Transform asset from Story 4-4. Need to verify schedule exists (15 * * * *) and retry policy configured. This asset depends on reddit_posts and bluesky_posts.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/assets/social_sentiment.py</path>
+        <kind>asset</kind>
+        <symbol>calculate_sentiment</symbol>
+        <lines>1-50</lines>
+        <reason>Sentiment asset from Story 4-5. Need to verify schedule exists (30 * * * *) and retry policy configured. This asset depends on transform_social_posts.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/resources/database.py</path>
+        <kind>resource</kind>
+        <symbol>DatabaseResource</symbol>
+        <lines>1-50</lines>
+        <reason>Database resource pattern for asset database access. Use in asset checks to query data freshness and volume metrics.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/reddit.py</path>
+        <kind>model</kind>
+        <symbol>RawRedditPost</symbol>
+        <lines>1-50</lines>
+        <reason>Raw Reddit post model with fetched_at timestamp. Asset checks will query MAX(fetched_at) for freshness validation.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/models/bluesky.py</path>
+        <kind>model</kind>
+        <symbol>RawBlueskyPost</symbol>
+        <lines>1-50</lines>
+        <reason>Raw Bluesky post model. Asset checks will query MAX(fetched_at) for freshness validation (AC9).</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/alembic/versions/</path>
+        <kind>migrations</kind>
+        <symbol>retention_compression_policies</symbol>
+        <lines>N/A</lines>
+        <reason>Previous story migrations added retention (90d) and compression (7d) policies to raw tables. Task 3-4 validates these exist. Check migrations from Stories 4-1, 4-2, 4-4, 4-5.</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <python>
+        <package name="dagster" version="~1.8.0" usage="Orchestration framework - schedules, assets, retry policies, asset checks"/>
+        <package name="dagster-webserver" version="~1.8.0" usage="Dagster UI for monitoring schedules and runs"/>
+        <package name="sqlmodel" version="~0.0.21" usage="Database models for querying retention/compression policies"/>
+        <package name="structlog" version="*" usage="Structured logging for observability (AC7)"/>
+        <package name="alembic" version="*" usage="Database migrations for retention/compression policies"/>
+      </python>
+      <database>
+        <timescaledb version="2.x" usage="Retention policies (90d), compression policies (7d), hypertable queries"/>
+        <postgresql version="16" usage="Base database for TimescaleDB extension"/>
+      </database>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint type="architecture" priority="critical">
+      Dagster Orchestration Patterns:
+      - Follow existing schedule patterns from Epic 2 (ncaa_games_schedule)
+      - Use timezone-aware cron expressions (America/New_York)
+      - Stagger schedules to avoid concurrent execution (t2.micro RAM constraint: 1GB + 4GB swap)
+      - Non-blocking asset checks (blocking=False) - materialize even if checks fail
+      - Use DefaultScheduleStatus.RUNNING for auto-start on daemon init
+    </constraint>
+    <constraint type="data_management" priority="critical">
+      TimescaleDB Data Management:
+      - Retention policies use add_retention_policy() in migrations (not Python code)
+      - Compression policies only on raw tables (stg/fact tables need active queries)
+      - 1-day chunk intervals for social posts (aligns with query patterns)
+      - Test policies with SELECT * FROM timescaledb_information.jobs
+    </constraint>
+    <constraint type="observability" priority="high">
+      Observability Standards:
+      - Use Dagster's context.log for structured events
+      - Include counts/metrics in log messages (e.g., posts_count=42)
+      - Asset metadata visible in Dagster UI via MaterializeResult.metadata
+      - Non-blocking checks alert without stopping pipeline
+    </constraint>
+    <constraint type="resource" priority="high">
+      Resource Constraints (t2.micro EC2):
+      - 1GB RAM + 4GB swap - avoid concurrent asset execution
+      - Schedule staggering: Extracts (5-10min apart) → Transform (hourly :15) → Sentiment (hourly :30)
+      - Cleanup runs daily at 2 AM (low activity period)
+    </constraint>
+    <constraint type="testing" priority="medium">
+      Testing Requirements:
+      - Integration tests for schedules, policies, asset checks
+      - Manual 7-day uptime validation period
+      - End-to-end latency testing with real data
+      - Epic 5 query pattern validation
+    </constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>Dagster Asset Pattern</name>
+      <kind>decorator</kind>
+      <signature>
+@asset(
+    name="asset_name",
+    description="Description",
+    group_name="social_data",
+    compute_kind="python",
+    retry_policy=RetryPolicy(max_retries=3, delay=2, backoff=Backoff.EXPONENTIAL),
+)
+async def asset_name(context: AssetExecutionContext, database: DatabaseResource) -> dict[str, Any]:
+    context.log.info("structured_event key=value")
+    # Implementation
+    return {"metadata_key": value}
+      </signature>
+      <path>backend/app/assets/reddit_posts.py</path>
+    </interface>
+    <interface>
+      <name>Dagster Schedule Pattern</name>
+      <kind>class</kind>
+      <signature>
+ScheduleDefinition(
+    name="schedule_name",
+    job=asset_job,
+    cron_schedule="*/10 * * * *",
+    description="Description",
+    execution_timezone="America/New_York",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+      </signature>
+      <path>backend/app/assets/reddit_posts.py</path>
+    </interface>
+    <interface>
+      <name>Dagster Asset Check Pattern (NEW for this story)</name>
+      <kind>decorator</kind>
+      <signature>
+@asset_check(asset="extract_reddit_posts", blocking=False)
+async def check_reddit_freshness(database: DatabaseResource) -> AssetCheckResult:
+    async with database.get_session() as session:
+        # Query data
+        age_hours = calculate_age()
+        passed = age_hours &lt; 2.0
+        return AssetCheckResult(
+            passed=passed,
+            metadata={"age_hours": age_hours, "sla_threshold_hours": 2.0}
+        )
+      </signature>
+      <path>backend/app/assets/quality_checks.py (to be created)</path>
+    </interface>
+    <interface>
+      <name>DatabaseResource Pattern</name>
+      <kind>resource</kind>
+      <signature>
+async with database.get_session() as session:
+    stmt = select(Model).where(...)
+    result = await session.execute(stmt)
+    data = result.scalars().all()
+      </signature>
+      <path>backend/app/resources/database.py</path>
+    </interface>
+    <interface>
+      <name>TimescaleDB Retention Policy Query</name>
+      <kind>sql</kind>
+      <signature>
+SELECT h.hypertable_name, j.config-&gt;&gt;'drop_after' AS retention_interval
+FROM timescaledb_information.hypertables h
+JOIN timescaledb_information.jobs j ON j.hypertable_name = h.hypertable_name
+WHERE j.proc_name = 'policy_retention';
+      </signature>
+      <path>Task 3 verification</path>
+    </interface>
+    <interface>
+      <name>TimescaleDB Compression Policy Query</name>
+      <kind>sql</kind>
+      <signature>
+SELECT h.hypertable_name, j.config-&gt;&gt;'compress_after' AS compression_interval
+FROM timescaledb_information.hypertables h
+JOIN timescaledb_information.jobs j ON j.hypertable_name = h.hypertable_name
+WHERE j.proc_name = 'policy_compression';
+      </signature>
+      <path>Task 4 verification</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      GamePulse uses pytest for backend testing with parallel execution (-n auto for speed). Integration tests require database access and use DatabaseResource fixtures. Tests follow pytest naming conventions (test_*.py) and are organized by test type: unit tests (backend/app/tests/unit/) for logic validation, integration tests (backend/app/tests/integration/) for database/API interactions. All tests should include docstrings explaining what is being tested and why. Use async test functions for Dagster assets that use AsyncSession.
+    </standards>
+    <locations>
+      - backend/app/tests/integration/ (database-dependent tests)
+      - backend/app/tests/unit/ (pure logic tests)
+      - backend/app/tests/services/ (service layer tests)
+    </locations>
+    <ideas>
+      <test id="AC1" priority="high">
+        test_epic4_schedules_configured() - Verify all 5 schedules exist in defs.schedules, have correct cron patterns, and are set to RUNNING status. Location: backend/app/tests/integration/test_dagster_config.py
+      </test>
+      <test id="AC2" priority="high">
+        test_asset_retry_policies_configured() - Verify all 4 Epic 4 assets have retry_policy with max_retries=3, exponential backoff. Location: backend/app/tests/unit/test_asset_config.py
+      </test>
+      <test id="AC3" priority="medium">
+        test_retention_policies_active() - Query timescaledb_information.jobs to verify 90-day retention on 4 tables. Requires database. Location: backend/app/tests/integration/test_timescaledb_policies.py
+      </test>
+      <test id="AC4" priority="medium">
+        test_compression_policies_active() - Query timescaledb_information.jobs to verify 7-day compression on raw tables only. Location: backend/app/tests/integration/test_timescaledb_policies.py
+      </test>
+      <test id="AC5" priority="high">
+        test_cleanup_deletes_old_unmatched() - Insert test post with created_at &gt; 7 days ago and matched_to_game=FALSE, run cleanup asset, verify deletion. Location: backend/app/tests/integration/test_cleanup.py
+      </test>
+      <test id="AC9" priority="critical">
+        test_asset_checks_configured() - Verify 4 asset checks exist (reddit freshness/volume, bluesky freshness/volume), are non-blocking, and return AssetCheckResult with metadata. Location: backend/app/tests/unit/test_quality_checks.py
+      </test>
+      <test id="AC9" priority="critical">
+        test_asset_check_freshness_logic() - Mock database to return old timestamp, verify freshness check fails with age_hours &gt; 2. Location: backend/app/tests/unit/test_quality_checks.py
+      </test>
+      <test id="AC9" priority="critical">
+        test_asset_check_volume_anomaly_logic() - Mock database to return high deviation count, verify volume check fails with actionable metadata. Location: backend/app/tests/unit/test_quality_checks.py
+      </test>
+    </ideas>
+  </tests>
+</story-context>

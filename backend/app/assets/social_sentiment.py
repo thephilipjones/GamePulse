@@ -8,6 +8,7 @@ Asset: calculate_sentiment
 - Processes incrementally (LEFT JOIN to find unprocessed posts)
 - Batch size: 2500 posts per run (optimized for t4g.small)
 - Trigger: Auto-materializes when transform_social_posts completes (eager policy)
+- Freshness SLA: Maximum 45 minutes from extract to sentiment complete (Story 4-7)
 
 Transform Logic:
 - Uses VADER sentiment analyzer for compound + component scores
@@ -21,6 +22,7 @@ from dagster import (
     AssetExecutionContext,
     AutoMaterializePolicy,
     Backoff,
+    FreshnessPolicy,
     RetryPolicy,
     asset,
 )
@@ -51,6 +53,8 @@ BATCH_SIZE = 2500
     ),
     # Auto-materialize: Trigger when transform_social_posts completes
     auto_materialize_policy=AutoMaterializePolicy.eager(),
+    # Freshness SLA: Maximum 45 minutes from extract to sentiment complete
+    freshness_policy=FreshnessPolicy(maximum_lag_minutes=45),
     # Dependency: Runs after social post transformation completes
     deps=["transform_social_posts"],
 )

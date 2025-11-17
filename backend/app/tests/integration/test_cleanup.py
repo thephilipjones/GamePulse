@@ -1,0 +1,321 @@
+"""
+Integration tests for cleanup_unmatched_raw_posts asset (Story 4-7).
+
+Tests verify:
+- Old unmatched posts are deleted
+- Recent posts are preserved
+- Matched posts are preserved (regardless of age)
+- Deletion counts are accurate
+
+These tests require a database connection (pytest-asyncio + database fixture).
+"""
+
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock
+
+import pytest
+from sqlalchemy import select
+
+from app.assets.cleanup_raw_posts import cleanup_unmatched_raw_posts
+from app.models.reddit import RawRedditPost
+from app.models.social import RawBlueskyPost, StgSocialPost
+from app.resources.database import DatabaseResource
+
+
+@pytest.fixture
+async def setup_test_data(session):
+    """
+    Create test data for cleanup tests.
+
+    Data setup:
+    - Old unmatched Reddit posts (>7 days, should be deleted)
+    - Recent unmatched Reddit posts (<7 days, should be preserved)
+    - Old matched Reddit posts (>7 days, should be preserved)
+    - Similar setup for Bluesky posts
+    """
+    now = datetime.now(timezone.utc)
+    old_date = now - timedelta(days=10)  # 10 days ago (exceeds 7-day retention)
+    recent_date = now - timedelta(days=3)  # 3 days ago (within 7-day retention)
+
+    # Reddit posts
+    old_unmatched_reddit = RawRedditPost(
+        post_id="old_unmatched_r1",
+        subreddit="CollegeBasketball",
+        author="user1",
+        title="Old unmatched post",
+        post_created_at=old_date,
+        fetched_at=now,
+        score=10,
+        num_comments=5,
+        raw_json={},
+    )
+
+    recent_unmatched_reddit = RawRedditPost(
+        post_id="recent_unmatched_r1",
+        subreddit="CollegeBasketball",
+        author="user2",
+        title="Recent unmatched post",
+        post_created_at=recent_date,
+        fetched_at=now,
+        score=15,
+        num_comments=8,
+        raw_json={},
+    )
+
+    old_matched_reddit = RawRedditPost(
+        post_id="old_matched_r1",
+        subreddit="CollegeBasketball",
+        author="user3",
+        title="Old matched post",
+        post_created_at=old_date,
+        fetched_at=now,
+        score=20,
+        num_comments=10,
+        raw_json={},
+    )
+
+    # Bluesky posts
+    old_unmatched_bluesky = RawBlueskyPost(
+        post_uri="at://old.unmatched.bluesky/post1",
+        author_did="did:plc:old",
+        author_handle="old_user",
+        post_text="Old unmatched Bluesky post",
+        created_at=old_date,
+        fetched_at=now,
+        raw_json={},
+    )
+
+    recent_unmatched_bluesky = RawBlueskyPost(
+        post_uri="at://recent.unmatched.bluesky/post1",
+        author_did="did:plc:recent",
+        author_handle="recent_user",
+        post_text="Recent unmatched Bluesky post",
+        created_at=recent_date,
+        fetched_at=now,
+        raw_json={},
+    )
+
+    old_matched_bluesky = RawBlueskyPost(
+        post_uri="at://old.matched.bluesky/post1",
+        author_did="did:plc:matched",
+        author_handle="matched_user",
+        post_text="Old matched Bluesky post",
+        created_at=old_date,
+        fetched_at=now,
+        raw_json={},
+    )
+
+    # Add all raw posts
+    session.add_all(
+        [
+            old_unmatched_reddit,
+            recent_unmatched_reddit,
+            old_matched_reddit,
+            old_unmatched_bluesky,
+            recent_unmatched_bluesky,
+            old_matched_bluesky,
+        ]
+    )
+    await session.commit()
+
+    # Create stg_social_posts entries for matched posts
+    # This signals that posts were matched to games
+    matched_reddit_stg = StgSocialPost(
+        platform="reddit",
+        post_id="old_matched_r1",
+        created_at=old_date,
+        fetched_at=now,
+        author_handle="user3",
+        post_text="Old matched post",
+        engagement_score=30,
+        matched_to_game=True,  # Matched!
+        match_confidence=0.9,
+        matched_teams=["ncaam_duke", "ncaam_unc"],
+        processed_at=now,
+        raw_json={},
+    )
+
+    matched_bluesky_stg = StgSocialPost(
+        platform="bluesky",
+        post_id="at://old.matched.bluesky/post1",
+        created_at=old_date,
+        fetched_at=now,
+        author_handle="matched_user",
+        post_text="Old matched Bluesky post",
+        engagement_score=25,
+        matched_to_game=True,  # Matched!
+        match_confidence=0.85,
+        matched_teams=["ncaam_kansas"],
+        processed_at=now,
+        raw_json={},
+    )
+
+    session.add_all([matched_reddit_stg, matched_bluesky_stg])
+    await session.commit()
+
+    return {
+        "old_unmatched_reddit": old_unmatched_reddit,
+        "recent_unmatched_reddit": recent_unmatched_reddit,
+        "old_matched_reddit": old_matched_reddit,
+        "old_unmatched_bluesky": old_unmatched_bluesky,
+        "recent_unmatched_bluesky": recent_unmatched_bluesky,
+        "old_matched_bluesky": old_matched_bluesky,
+    }
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_cleanup_deletes_old_unmatched_posts(_db, session, setup_test_data):
+    """
+    Cleanup should delete old unmatched posts (>7 days, no match).
+
+    Expected deletions:
+    - old_unmatched_reddit (10 days old, no stg_social_posts entry)
+    - old_unmatched_bluesky (10 days old, no stg_social_posts entry)
+
+    Expected preservations:
+    - recent_unmatched_reddit (3 days old - within retention)
+    - recent_unmatched_bluesky (3 days old - within retention)
+    - old_matched_reddit (matched_to_game=TRUE)
+    - old_matched_bluesky (matched_to_game=TRUE)
+    """
+    # Fixture creates test data - trigger fixture execution
+    _ = setup_test_data
+
+    # Create mock context and database resource
+    mock_context = MagicMock()
+    mock_context.log = MagicMock()
+    database = DatabaseResource()
+
+    # Execute cleanup
+    result = await cleanup_unmatched_raw_posts(mock_context, database)
+
+    # Verify deletion counts
+    assert result.metadata["reddit_posts_deleted"] == 1, (
+        "Should delete 1 old unmatched Reddit post"
+    )
+    assert result.metadata["bluesky_posts_deleted"] == 1, (
+        "Should delete 1 old unmatched Bluesky post"
+    )
+    assert result.metadata["total_posts_deleted"] == 2
+
+    # Verify old unmatched posts were deleted
+    reddit_result = await session.execute(
+        select(RawRedditPost).where(RawRedditPost.post_id == "old_unmatched_r1")
+    )
+    assert reddit_result.scalar() is None, "Old unmatched Reddit post should be deleted"
+
+    bluesky_result = await session.execute(
+        select(RawBlueskyPost).where(
+            RawBlueskyPost.post_uri == "at://old.unmatched.bluesky/post1"
+        )
+    )
+    assert bluesky_result.scalar() is None, (
+        "Old unmatched Bluesky post should be deleted"
+    )
+
+    # Verify recent unmatched posts still exist
+    reddit_result = await session.execute(
+        select(RawRedditPost).where(RawRedditPost.post_id == "recent_unmatched_r1")
+    )
+    assert reddit_result.scalar() is not None, (
+        "Recent unmatched Reddit post should be preserved"
+    )
+
+    bluesky_result = await session.execute(
+        select(RawBlueskyPost).where(
+            RawBlueskyPost.post_uri == "at://recent.unmatched.bluesky/post1"
+        )
+    )
+    assert bluesky_result.scalar() is not None, (
+        "Recent unmatched Bluesky post should be preserved"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_cleanup_preserves_matched_posts(_db, session, setup_test_data):
+    """
+    Cleanup should preserve old matched posts (matched_to_game=TRUE).
+
+    Even if posts are >7 days old, they should NOT be deleted if they were matched to games.
+    """
+    # Fixture creates test data - trigger fixture execution
+    _ = setup_test_data
+
+    # Execute cleanup
+    mock_context = MagicMock()
+    mock_context.log = MagicMock()
+    database = DatabaseResource()
+    await cleanup_unmatched_raw_posts(mock_context, database)
+
+    # Verify old matched posts still exist
+    reddit_result = await session.execute(
+        select(RawRedditPost).where(RawRedditPost.post_id == "old_matched_r1")
+    )
+    assert reddit_result.scalar() is not None, (
+        "Old matched Reddit post should be preserved"
+    )
+
+    bluesky_result = await session.execute(
+        select(RawBlueskyPost).where(
+            RawBlueskyPost.post_uri == "at://old.matched.bluesky/post1"
+        )
+    )
+    assert bluesky_result.scalar() is not None, (
+        "Old matched Bluesky post should be preserved"
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_cleanup_handles_empty_tables(_db, _session):
+    """
+    Cleanup should handle empty tables gracefully (no errors, 0 deletions).
+    """
+    # No test data setup - tables are empty
+
+    mock_context = MagicMock()
+    mock_context.log = MagicMock()
+    database = DatabaseResource()
+
+    # Execute cleanup on empty tables
+    result = await cleanup_unmatched_raw_posts(mock_context, database)
+
+    # Verify no deletions
+    assert result.metadata["reddit_posts_deleted"] == 0
+    assert result.metadata["bluesky_posts_deleted"] == 0
+    assert result.metadata["total_posts_deleted"] == 0
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_cleanup_metadata_accuracy(_db, _session, setup_test_data):
+    """
+    Cleanup metadata should accurately reflect deletion counts.
+    """
+    # Fixture creates test data - trigger fixture execution
+    _ = setup_test_data
+
+    mock_context = MagicMock()
+    mock_context.log = MagicMock()
+    database = DatabaseResource()
+
+    result = await cleanup_unmatched_raw_posts(mock_context, database)
+
+    # Verify metadata structure
+    assert "reddit_posts_deleted" in result.metadata
+    assert "bluesky_posts_deleted" in result.metadata
+    assert "total_posts_deleted" in result.metadata
+    assert "cutoff_date" in result.metadata
+    assert "retention_days" in result.metadata
+
+    # Verify retention days is 7
+    assert result.metadata["retention_days"] == 7
+
+    # Verify total = reddit + bluesky
+    assert (
+        result.metadata["total_posts_deleted"]
+        == result.metadata["reddit_posts_deleted"]
+        + result.metadata["bluesky_posts_deleted"]
+    )

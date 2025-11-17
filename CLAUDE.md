@@ -114,6 +114,33 @@ docker compose restart dagster-daemon dagster-webserver
 docker compose exec dagster-daemon python
 >>> from app.dagster_definitions import defs
 >>> from app.assets.ncaa_games import ncaa_games
+
+# Auto-Materialization Setup (Story 4-7)
+# GamePulse uses trigger-based orchestration for social data pipeline
+# Transform and sentiment assets auto-materialize when upstream completes
+
+# REQUIRED: Enable auto-materialization sensor (one-time setup)
+# 1. Access Dagster UI: http://localhost:3000 (dev) or https://dagster.gamepulse.top (prod)
+# 2. Navigate to Automation tab
+# 3. Find your code location (gamepulse)
+# 4. Toggle ON the "default_automation_condition_sensor" sensor
+# 5. Verify sensor status shows "Running"
+
+# Verify auto-materialization is working:
+# - View asset "Auto-materialize" tab in Dagster UI
+# - Check evaluation logs: Assets → [asset] → Auto-materialize
+# - Monitor daemon logs: docker compose logs -f dagster-daemon | grep "auto-materialize"
+
+# Architecture:
+# - Extract assets (Reddit, Bluesky): Schedule-based (every 5-10 min)
+# - Transform asset: Auto-triggers when EITHER extract completes (eager policy)
+# - Sentiment asset: Auto-triggers when transform completes (eager policy)
+# - Cleanup asset: Schedule-based (daily at 2 AM)
+
+# Freshness SLA monitoring:
+# - Transform: 30-minute SLA (FreshnessPolicy)
+# - Sentiment: 45-minute SLA (FreshnessPolicy)
+# - View freshness status in Dagster UI Assets tab
 ```
 
 ### Frontend Development

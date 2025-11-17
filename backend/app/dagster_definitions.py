@@ -14,11 +14,17 @@ from dagster import (
 )
 
 from app.assets import bluesky_posts as bluesky_posts_module
+from app.assets import cleanup_raw_posts as cleanup_raw_posts_module
 from app.assets import ncaa_games as ncaa_games_module
+from app.assets import quality_checks as quality_checks_module
 from app.assets import reddit_posts as reddit_posts_module
 from app.assets import social_sentiment as social_sentiment_module
 from app.assets import transform_social_posts as transform_social_posts_module
 from app.assets.bluesky_posts import bluesky_posts_job, bluesky_posts_schedule
+from app.assets.cleanup_raw_posts import (
+    cleanup_unmatched_posts_job,
+    cleanup_unmatched_posts_schedule,
+)
 from app.assets.reddit_posts import reddit_posts_job, reddit_posts_schedule
 from app.resources.database import DatabaseResource
 
@@ -30,6 +36,8 @@ all_assets = load_assets_from_modules(
         bluesky_posts_module,
         transform_social_posts_module,
         social_sentiment_module,
+        cleanup_raw_posts_module,  # Cleanup old unmatched posts (Story 4-7)
+        quality_checks_module,  # Asset checks for data quality monitoring (Story 4-7)
     ]
 )
 
@@ -76,6 +84,7 @@ defs = Definitions(
         ncaa_games_schedule,
         reddit_posts_schedule,
         bluesky_posts_schedule,
+        cleanup_unmatched_posts_schedule,  # Daily cleanup of old unmatched posts (Story 4-7)
     ],
     resources={
         "database": database_resource,
@@ -84,7 +93,8 @@ defs = Definitions(
         ncaa_games_job,
         reddit_posts_job,
         bluesky_posts_job,
-        calculate_sentiment_job,  # Manual materialization only
+        calculate_sentiment_job,  # Manual materialization only (auto-materialize policy)
+        cleanup_unmatched_posts_job,  # Manual cleanup trigger (also runs daily via schedule)
     ],
     executor=in_process_executor,
 )
