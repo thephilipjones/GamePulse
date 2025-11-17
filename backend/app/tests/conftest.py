@@ -1,4 +1,5 @@
 from collections.abc import AsyncGenerator, Generator
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -62,7 +63,7 @@ def client() -> Generator[TestClient, None, None]:
 
 # Async database fixtures for integration tests
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-async def async_engine():
+async def async_engine() -> AsyncGenerator[Any, None]:
     """
     Session-scoped async engine for integration tests.
 
@@ -83,7 +84,7 @@ async def async_engine():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def session(async_engine) -> AsyncGenerator[AsyncSession, None]:
+async def session(async_engine: Any) -> AsyncGenerator[AsyncSession, None]:
     """
     Function-scoped async session with transaction rollback for isolation.
 
@@ -117,7 +118,7 @@ async def session(async_engine) -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def _db(session) -> AsyncGenerator[AsyncSession, None]:
+async def _db(session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
     """
     Alias for session fixture (backward compatibility).
 

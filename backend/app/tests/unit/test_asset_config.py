@@ -169,9 +169,9 @@ class TestFreshnessPolicyConfiguration:
         # Dagster 1.12+ uses SerializableTimeDelta, compare via days+seconds attributes
         expected = timedelta(minutes=30)
         assert (
-            policy.fail_window.days == expected.days
-            and policy.fail_window.seconds == expected.seconds
-        ), f"Expected 30 min SLA, got {policy.fail_window}"
+            policy.fail_window.days == expected.days  # type: ignore[attr-defined]
+            and policy.fail_window.seconds == expected.seconds  # type: ignore[attr-defined]
+        ), f"Expected 30 min SLA, got {policy.fail_window}"  # type: ignore[attr-defined]
 
     def test_sentiment_has_45_minute_freshness_sla(self) -> None:
         """
@@ -195,9 +195,9 @@ class TestFreshnessPolicyConfiguration:
         # Dagster 1.12+ uses SerializableTimeDelta, compare via days+seconds attributes
         expected = timedelta(minutes=45)
         assert (
-            policy.fail_window.days == expected.days
-            and policy.fail_window.seconds == expected.seconds
-        ), f"Expected 45 min SLA, got {policy.fail_window}"
+            policy.fail_window.days == expected.days  # type: ignore[attr-defined]
+            and policy.fail_window.seconds == expected.seconds  # type: ignore[attr-defined]
+        ), f"Expected 45 min SLA, got {policy.fail_window}"  # type: ignore[attr-defined]
 
     def test_extract_assets_may_have_no_freshness_policy(self) -> None:
         """

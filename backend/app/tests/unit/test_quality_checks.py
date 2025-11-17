@@ -43,7 +43,7 @@ def extract_metadata_value(metadata_val: Any) -> Any:
 
 
 @pytest.fixture
-def asset_check_context():
+def asset_check_context() -> Any:
     """Proper Dagster asset check context for testing."""
     return build_asset_check_context()
 

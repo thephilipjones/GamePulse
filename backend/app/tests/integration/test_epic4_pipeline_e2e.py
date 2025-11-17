@@ -107,7 +107,7 @@ class TestEpic4PipelineConfiguration:
         # Verify transform depends on both extracts
         transform_deps = transform_social_posts.asset_deps
         transform_dep_keys = {
-            str(key.path[0])  # type: ignore[attr-defined]
+            str(key.path[0])
             for keys in transform_deps.values()
             for key in (keys if isinstance(keys, set) else {keys})
         }
@@ -122,7 +122,7 @@ class TestEpic4PipelineConfiguration:
         # Verify sentiment depends on transform
         sentiment_deps = calculate_sentiment.asset_deps
         sentiment_dep_keys = {
-            str(key.path[0])  # type: ignore[attr-defined]
+            str(key.path[0])
             for keys in sentiment_deps.values()
             for key in (keys if isinstance(keys, set) else {keys})
         }
@@ -144,8 +144,8 @@ class TestEpic4PipelineConfiguration:
         # Compare SerializableTimeDelta via days+seconds attributes
         expected_30 = timedelta(minutes=30)
         assert (
-            transform_specs[0].freshness_policy.fail_window.days == expected_30.days
-            and transform_specs[0].freshness_policy.fail_window.seconds
+            transform_specs[0].freshness_policy.fail_window.days == expected_30.days  # type: ignore[attr-defined]
+            and transform_specs[0].freshness_policy.fail_window.seconds  # type: ignore[attr-defined]
             == expected_30.seconds
         ), "transform_social_posts should have 30-min SLA"
 
@@ -157,8 +157,8 @@ class TestEpic4PipelineConfiguration:
         # Compare SerializableTimeDelta via days+seconds attributes
         expected_45 = timedelta(minutes=45)
         assert (
-            sentiment_specs[0].freshness_policy.fail_window.days == expected_45.days
-            and sentiment_specs[0].freshness_policy.fail_window.seconds
+            sentiment_specs[0].freshness_policy.fail_window.days == expected_45.days  # type: ignore[attr-defined]
+            and sentiment_specs[0].freshness_policy.fail_window.seconds  # type: ignore[attr-defined]
             == expected_45.seconds
         ), "calculate_sentiment should have 45-min SLA"
 
@@ -339,13 +339,13 @@ def test_pipeline_performance_expectations() -> None:
     expected_30 = timedelta(minutes=30)
     expected_45 = timedelta(minutes=45)
     assert (
-        transform_specs[0].freshness_policy.fail_window.days == expected_30.days
-        and transform_specs[0].freshness_policy.fail_window.seconds
+        transform_specs[0].freshness_policy.fail_window.days == expected_30.days  # type: ignore[union-attr]
+        and transform_specs[0].freshness_policy.fail_window.seconds  # type: ignore[union-attr]
         == expected_30.seconds
     ), "Transform SLA should be 30 min"
     assert (
-        sentiment_specs[0].freshness_policy.fail_window.days == expected_45.days
-        and sentiment_specs[0].freshness_policy.fail_window.seconds
+        sentiment_specs[0].freshness_policy.fail_window.days == expected_45.days  # type: ignore[union-attr]
+        and sentiment_specs[0].freshness_policy.fail_window.seconds  # type: ignore[union-attr]
         == expected_45.seconds
     ), "Sentiment SLA should be 45 min"
 
