@@ -62,7 +62,7 @@ BATCH_SIZE = 2500
     # Auto-materialize: Trigger when either Reddit or Bluesky extract completes
     auto_materialize_policy=AutoMaterializePolicy.eager(),
     # Freshness SLA: Maximum 30 minutes from extract to transform complete
-    freshness_policy=FreshnessPolicy(maximum_lag_minutes=30),
+    freshness_policy=FreshnessPolicy(maximum_lag_minutes=30),  # type: ignore[call-arg]
     # Dependencies: Runs after either Reddit or Bluesky extract completes
     deps=["extract_reddit_posts", "extract_bluesky_posts"],
 )

@@ -37,7 +37,7 @@ BLUESKY_VOLUME_MIN = 20  # Minimum expected posts per run
 BLUESKY_VOLUME_MAX = 200  # Maximum expected posts per run
 
 
-@asset_check(
+@asset_check(  # type: ignore[arg-type]
     asset="extract_reddit_posts",
     blocking=False,  # Non-blocking: Asset materializes even if check fails
     description="Ensures Reddit posts were fetched within the last 2 hours (freshness SLA)",
@@ -85,10 +85,10 @@ async def check_reddit_freshness(
         if not passed:
             metadata["action"] = "Check extract_reddit_posts schedule and logs"
 
-        return AssetCheckResult(passed=passed, metadata=metadata)
+        return AssetCheckResult(passed=passed, metadata=metadata)  # type: ignore[arg-type]
 
 
-@asset_check(
+@asset_check(  # type: ignore[arg-type]
     asset="extract_reddit_posts",
     blocking=False,
     description="Detects abnormal Reddit post volume (baseline: 50-500 posts per run)",
@@ -106,8 +106,8 @@ async def check_reddit_volume_anomaly(
     async with database.get_session() as session:
         # Count posts fetched in last run (last 15 minutes)
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=15)
-        stmt = select(func.count(RawRedditPost.post_id)).where(
-            RawRedditPost.fetched_at >= cutoff_time
+        stmt = select(func.count(RawRedditPost.post_id)).where(  # type: ignore[arg-type]
+            RawRedditPost.fetched_at >= cutoff_time  # type: ignore[arg-type]
         )
         result = await session.execute(stmt)
         recent_count = result.scalar() or 0
@@ -118,7 +118,7 @@ async def check_reddit_volume_anomaly(
 
         passed = not (is_too_low or is_too_high)
 
-        metadata = {
+        metadata: dict[str, object] = {
             "post_count_last_15min": recent_count,
             "baseline_min": REDDIT_VOLUME_MIN,
             "baseline_max": REDDIT_VOLUME_MAX,
@@ -131,10 +131,10 @@ async def check_reddit_volume_anomaly(
             metadata["anomaly"] = "volume_too_high"
             metadata["action"] = "Check for duplicate posts or bot activity"
 
-        return AssetCheckResult(passed=passed, metadata=metadata)
+        return AssetCheckResult(passed=passed, metadata=metadata)  # type: ignore[arg-type]
 
 
-@asset_check(
+@asset_check(  # type: ignore[arg-type]
     asset="extract_bluesky_posts",
     blocking=False,
     description="Ensures Bluesky posts were fetched within the last 2 hours (freshness SLA)",
@@ -182,10 +182,10 @@ async def check_bluesky_freshness(
         if not passed:
             metadata["action"] = "Check extract_bluesky_posts schedule and logs"
 
-        return AssetCheckResult(passed=passed, metadata=metadata)
+        return AssetCheckResult(passed=passed, metadata=metadata)  # type: ignore[arg-type]
 
 
-@asset_check(
+@asset_check(  # type: ignore[arg-type]
     asset="extract_bluesky_posts",
     blocking=False,
     description="Detects abnormal Bluesky post volume (baseline: 20-200 posts per run)",
@@ -203,8 +203,8 @@ async def check_bluesky_volume_anomaly(
     async with database.get_session() as session:
         # Count posts fetched in last run (last 10 minutes)
         cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=10)
-        stmt = select(func.count(RawBlueskyPost.post_uri)).where(
-            RawBlueskyPost.fetched_at >= cutoff_time
+        stmt = select(func.count(RawBlueskyPost.post_uri)).where(  # type: ignore[arg-type]
+            RawBlueskyPost.fetched_at >= cutoff_time  # type: ignore[arg-type]
         )
         result = await session.execute(stmt)
         recent_count = result.scalar() or 0
@@ -215,7 +215,7 @@ async def check_bluesky_volume_anomaly(
 
         passed = not (is_too_low or is_too_high)
 
-        metadata = {
+        metadata: dict[str, object] = {
             "post_count_last_10min": recent_count,
             "baseline_min": BLUESKY_VOLUME_MIN,
             "baseline_max": BLUESKY_VOLUME_MAX,
@@ -228,4 +228,4 @@ async def check_bluesky_volume_anomaly(
             metadata["anomaly"] = "volume_too_high"
             metadata["action"] = "Check for duplicate posts or spam"
 
-        return AssetCheckResult(passed=passed, metadata=metadata)
+        return AssetCheckResult(passed=passed, metadata=metadata)  # type: ignore[arg-type]
