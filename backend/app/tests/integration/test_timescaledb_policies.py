@@ -1,5 +1,3 @@
-from typing import Any
-
 """
 Integration tests for TimescaleDB retention and compression policies (Story 4-7).
 
@@ -10,6 +8,8 @@ Tests verify:
 
 These tests query TimescaleDB system views to verify policy configuration.
 """
+
+from typing import Any
 
 import pytest
 from sqlalchemy import text

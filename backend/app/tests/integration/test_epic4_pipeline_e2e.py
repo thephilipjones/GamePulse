@@ -1,5 +1,3 @@
-from typing import Any
-
 """
 End-to-end integration tests for Epic 4 social data pipeline (Story 4-7).
 
@@ -16,6 +14,8 @@ These tests require:
 
 NOTE: E2E tests are slow (minutes) - run separately from unit tests
 """
+
+from typing import Any
 
 import pytest
 

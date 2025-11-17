@@ -1,5 +1,3 @@
-from typing import Any
-
 """
 Unit tests for Dagster asset checks (Story 4-7).
 
@@ -11,6 +9,7 @@ Run in Docker: docker compose exec backend pytest app/tests/unit/test_quality_ch
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
