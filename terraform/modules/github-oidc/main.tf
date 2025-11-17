@@ -89,7 +89,7 @@ resource "aws_iam_policy" "github_actions_deployment" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # SSM permissions for specific EC2 instance (using explicit instance ID)
+      # SSM permissions for EC2 instances (with Project tag condition)
       {
         Effect = "Allow"
         Action = [
@@ -98,8 +98,13 @@ resource "aws_iam_policy" "github_actions_deployment" {
           "ssm:DescribeInstanceInformation"
         ]
         Resource = [
-          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/${var.ec2_instance_id}"
+          "arn:aws:ec2:${var.aws_region}:${data.aws_caller_identity.current.account_id}:instance/*"
         ]
+        Condition = {
+          StringEquals = {
+            "ec2:ResourceTag/Project" = var.project_name
+          }
+        }
       },
       # SSM permission to use AWS-RunShellScript document (no tag condition - it's AWS-managed)
       {
