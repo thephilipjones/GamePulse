@@ -260,6 +260,8 @@ class TestGamesEndpoint:
             game_date=datetime(2025, 11, 14),
             game_start_time=datetime(2025, 11, 14, 19, 0, 0),
             game_status="scheduled",
+            game_clock=None,
+            game_period=None,
             home_team=valid_team,
             away_team=valid_team,
             home_score=0,
@@ -277,6 +279,8 @@ class TestGamesEndpoint:
                 game_date="not-a-date",  # type: ignore[arg-type]  # Should be datetime
                 game_start_time="invalid",  # type: ignore[arg-type]  # Should be datetime
                 game_status="scheduled",
+                game_clock=None,
+                game_period=None,
                 home_team=valid_team,
                 away_team=valid_team,
             )
