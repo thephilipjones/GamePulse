@@ -142,7 +142,7 @@ describe("GameCard", () => {
     it("renders status badge for scheduled games", () => {
       const game = createMockGame({
         game_status: "scheduled",
-        game_start_time: "2025-11-16T20:00:00-05:00",
+        game_start_time: "2025-11-16T12:00:00Z",
       });
 
       render(<GameCard game={game} />);
