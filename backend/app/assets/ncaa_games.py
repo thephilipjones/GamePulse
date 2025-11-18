@@ -103,6 +103,7 @@ async def ncaa_games(
                             "away_score": stmt.excluded.away_score,
                             "game_status": stmt.excluded.game_status,
                             "game_clock": stmt.excluded.game_clock,
+                            "game_period": stmt.excluded.game_period,
                             "rivalry_factor": stmt.excluded.rivalry_factor,
                             "updated_at": stmt.excluded.updated_at,
                             # Preserve: game_key (surrogate PK), game_date, team FKs
@@ -335,6 +336,9 @@ async def transform_to_fact_game(
     away_score = int(game.get("away", {}).get("score", 0) or 0)
     game_status = game.get("gameState", "scheduled")  # "live", "pre", "final"
     game_clock = game.get("contestClock", None)
+    game_period = game.get(
+        "currentPeriod", None
+    )  # "1st Half", "2nd Half", "OT", "FINAL"
     venue = game.get("title", None)  # Game title often includes venue
 
     context.log.debug(
@@ -354,6 +358,7 @@ async def transform_to_fact_game(
         "away_score": away_score,
         "game_status": game_status,
         "game_clock": game_clock,
+        "game_period": game_period,
         "venue": venue,
         "rivalry_factor": rivalry_factor,  # FIX 3: Conference matching
         "created_at": datetime.now(timezone.utc).replace(

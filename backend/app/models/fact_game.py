@@ -68,6 +68,9 @@ class FactGame(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True))
     )
     game_clock: str | None = Field(default=None, max_length=50)
+    game_period: str | None = Field(
+        default=None, max_length=50
+    )  # "1st Half", "2nd Half", "OT", "FINAL"
 
     # Audit timestamps - timezone-aware
     created_at: datetime = Field(

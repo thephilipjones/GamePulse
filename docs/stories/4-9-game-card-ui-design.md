@@ -529,3 +529,274 @@ GROUP BY game_status;
 - Story 3.6: [Increase Refresh Cadence to 1 Minute](../epics.md#story-36)
 - Backend Model: `backend/app/models/fact_game.py` (game_status enum)
 - Frontend Hook: `frontend/src/hooks/useGames.ts` (60-second polling)
+
+---
+
+## Senior Developer Review (AI)
+
+**Reviewer:** Philip
+**Date:** 2025-11-17
+**Outcome:** **CHANGES REQUESTED** ⚠️
+
+### Summary
+
+Story 4-9 delivers a polished, visually appealing game card UI with status grouping, team branding via circular badges, and comprehensive test coverage (40 tests passing). The implementation is functional and demonstrates good React patterns (React.memo optimization, useMemo for grouping), but several acceptance criteria are not fully met as specified:
+
+- **AC-4.9.2:** LIVE badge missing pulsing animation (specified but not implemented)
+- **AC-4.9.6:** Desktop grid shows 2 columns instead of required 3 columns
+- **AC-4.9.4:** Team branding uses circular team badges instead of specified left/right border approach (alternative design - arguably better UX but deviates from spec)
+- **AC-4.9.9:** Some accessibility features incomplete (missing aria-labels on TeamCircle, no keyboard navigation)
+- **AC-4.9.10:** Verification SQL queries not executed
+
+The core user experience is strong, and the alternative visual approach (team color circles vs borders) provides good visual recognition. However, spec deviations should be documented and approved, and missing AC requirements should be addressed.
+
+### Key Findings
+
+#### 🟡 MEDIUM Severity
+
+1. **[AC-4.9.2] Missing Pulsing Animation for LIVE Badge**
+   - **Location:** `frontend/src/components/GameStatusBadge.tsx`
+   - **Issue:** AC explicitly requires "LIVE badge has pulsing animation (CSS keyframe or Chakra animation)" but implementation shows static red badge
+   - **Evidence:** Lines 32-44 show static Badge with no animation prop
+   - **Impact:** Reduces visual prominence of live games, makes it harder for users to identify active games at a glance
+
+2. **[AC-4.9.6] Incorrect Desktop Grid Breakpoint**
+   - **Location:** `frontend/src/components/GameList.tsx:158-164`
+   - **Issue:** Desktop (>1024px) shows 2 columns instead of required 3 columns
+   - **Current:** `lg: "repeat(2, 1fr)"`
+   - **Required:** `lg: "repeat(3, 1fr)"`
+   - **Impact:** Suboptimal use of screen real estate on large displays, users must scroll more
+
+3. **[AC-4.9.4] Team Branding Implementation Differs from Spec**
+   - **Location:** `frontend/src/components/GameCard.tsx:73-99`, `frontend/src/components/TeamCircle.tsx`
+   - **Issue:** AC specifies "Home team color: Left border (4px solid)" and "Away team color: Right border (4px solid)" but implementation uses circular team badges with color backgrounds
+   - **Evidence:** TeamCircle component (lines 29-38) uses `bg={teamColor}` for circular avatars, no border accents on GameCard
+   - **Impact:** Visual design deviates from specification and mockups without documented approval. Alternative approach arguably provides better visual recognition but represents unauthorized design change.
+
+4. **[AC-4.9.9] Incomplete Accessibility Implementation**
+   - **Location:** Multiple files
+   - **Issues:**
+     - TeamCircle component missing aria-label for team name announcement
+     - No keyboard navigation implementation (no tabIndex, no focus management)
+     - Color contrast not validated against WCAG AA (team colors may fail contrast ratios)
+     - Touch target sizes (44x44px minimum) not explicitly validated
+   - **Evidence:**
+     - GameStatusBadge has proper aria-labels (lines 41, 72, 96) ✅
+     - GameCard has role="article" with aria-label (lines 56-57) ✅
+     - TeamCircle (lines 19-63) has no accessibility attributes ❌
+   - **Impact:** Screen reader users may miss team name context, keyboard users cannot navigate game cards
+
+5. **[AC-4.9.10] Verification Queries Not Executed**
+   - **Location:** Story acceptance criteria section
+   - **Issue:** SQL queries provided to verify team colors exist and game status distribution, but no evidence these were run
+   - **Impact:** Cannot confirm data integrity (all teams have colors, all statuses are valid enum values)
+
+#### 🟢 LOW Severity
+
+6. **[Code Quality] Loose Type Safety in GameListContent**
+   - **Location:** `frontend/src/components/GameList.tsx:140-142`
+   - **Issue:** Props use `Array<any>` instead of `Array<GamePublic>`
+   - **Fix:** Replace `any` with proper GamePublic type import
+
+7. **[Code Quality] Magic Numbers in Component**
+   - **Location:** `frontend/src/components/GameCard.tsx:104`
+   - **Issue:** Hardcoded `h={40}` for placeholder height
+   - **Suggestion:** Use Chakra token or named constant for maintainability
+
+8. **[Error Handling] Silent Error Fallback**
+   - **Location:** `frontend/src/components/GameStatusBadge.tsx:101-117`
+   - **Issue:** Date parsing error caught but not logged
+   - **Suggestion:** Add `console.warn` for debugging failed date parsing in development
+
+### Acceptance Criteria Coverage
+
+| AC # | Description | Status | Evidence |
+|------|-------------|--------|----------|
+| **AC-4.9.1** | Game Status Grouping | ✅ **IMPLEMENTED** | GameList.tsx:47-57 (grouping logic), 152-214 (three sections: Live → Final → Upcoming), conditional rendering hides empty sections |
+| **AC-4.9.2** | Status Badges | ⚠️ **PARTIAL** | GameStatusBadge.tsx:25-58 (LIVE badge), 62-76 (FINAL badge), 80-100 (scheduled time) - **MISSING:** Pulsing animation for LIVE badge |
+| **AC-4.9.3** | Time Display | ✅ **IMPLEMENTED** | GameStatusBadge.tsx:45-55 (game_clock), 63-75 (FINAL text), 83-85 (formatted start time with date-fns), useGames hook preserves 60s polling |
+| **AC-4.9.4** | Team Branding | ⚠️ **DIFFERENT APPROACH** | GameCard.tsx:15-19 (abbreviation logic), TeamCircle.tsx:24-46 (color circles) - **DEVIATION:** Uses circular badges instead of left/right borders as spec'd |
+| **AC-4.9.5** | Score Display | ✅ **IMPLEMENTED** | GameCard.tsx:82-92 (6xl font, prominent), 73-99 (away left, home right), 86-87 (separator), null handling with "—" |
+| **AC-4.9.6** | Responsive Design | ⚠️ **PARTIAL** | GameList.tsx:158-164 (responsive grid) - **ISSUE:** Desktop shows 2 cols instead of required 3 cols, mobile/tablet correct |
+| **AC-4.9.7** | Loading/Error States | ✅ **IMPLEMENTED** | GameList.tsx:60-74 (skeleton grid), 78-84 (error message), 87-103 (cached data fallback), TanStack Query retry preserved |
+| **AC-4.9.8** | Performance | ✅ **IMPLEMENTED** | GameCard.tsx:138-146 (React.memo with custom compare), GameList.tsx:46-57 (useMemo), displayName set, polling unchanged |
+| **AC-4.9.9** | Accessibility | ⚠️ **PARTIAL** | GameStatusBadge aria-labels ✅, GameCard role+aria-label ✅ - **MISSING:** TeamCircle aria-labels, keyboard nav, contrast validation |
+| **AC-4.9.10** | Verification Queries | ❌ **NOT EXECUTED** | SQL queries provided in spec but no evidence of execution to verify data integrity |
+
+**Summary:** 5 of 10 ACs fully implemented, 4 partially implemented, 1 not executed
+
+### Test Coverage and Gaps
+
+**Test Execution Results:**
+- ✅ GameCard.test.tsx: 17 tests passed
+- ✅ GameList.test.tsx: 11 tests passed
+- ✅ GameStatusBadge.test.tsx: 12 tests passed
+- **Total: 40 tests passed (100% pass rate)**
+
+**Test Coverage by AC:**
+
+| AC | Test Coverage | Gap Analysis |
+|----|---------------|--------------|
+| AC-4.9.1 (Grouping) | ✅ Excellent | Tests verify grouping logic, section order, empty section hiding (GameList.test.tsx:140-203) |
+| AC-4.9.2 (Badges) | ✅ Good | Tests verify badge rendering for all statuses (GameStatusBadge.test.tsx:6-115) - **Missing:** Animation testing |
+| AC-4.9.3 (Time) | ✅ Good | Tests verify time formatting, game clock display (GameStatusBadge.test.tsx:13-25) |
+| AC-4.9.4 (Branding) | ⚠️ Partial | Tests verify team colors applied (GameCard.test.tsx:155-190) - **Missing:** Border accent tests (not implemented) |
+| AC-4.9.5 (Scores) | ✅ Excellent | Tests verify score display, null handling, separator (GameCard.test.tsx:64-117) |
+| AC-4.9.6 (Responsive) | ⚠️ Partial | Grid layout rendered (GameList.test.tsx:205-226) - **Missing:** Breakpoint validation (desktop 3-col not tested) |
+| AC-4.9.7 (States) | ✅ Excellent | Loading, error, empty states all tested (GameList.test.tsx:69-138) |
+| AC-4.9.8 (Performance) | ✅ Good | React.memo verified (GameCard.test.tsx:243-248) - **Missing:** Render time benchmarks |
+| AC-4.9.9 (A11y) | ⚠️ Partial | ARIA labels tested (GameCard.test.tsx:215-241, GameStatusBadge.test.tsx:11-94) - **Missing:** Keyboard nav, contrast tests |
+| AC-4.9.10 (Queries) | ❌ Not Tested | SQL queries not executed |
+
+**Test Quality:**
+- ✅ Good use of test factories (createMockGame, createMockGameListResponse)
+- ✅ Proper test isolation with mocked hooks
+- ✅ Accessibility testing with aria-label validation
+- ✅ Edge case coverage (null scores, invalid dates, missing data)
+- ⚠️ No visual regression tests (Chromatic/Percy mentioned in story but not implemented)
+- ⚠️ No performance benchmarks (render time <500ms not validated)
+
+### Architectural Alignment
+
+**Architecture Review:**
+
+✅ **Strengths:**
+- Proper component separation follows React best practices
+- GameCard extracted from GameList as intended (composition pattern)
+- Uses Chakra UI design tokens consistently (game.live, game.final, game.scheduled, card.bg, card.border)
+- No backend changes required (as spec'd)
+- TanStack Query polling behavior preserved from Story 3.4
+- Mobile-first responsive approach with Chakra breakpoints
+
+⚠️ **Deviations from Spec:**
+- Team branding visual design changed (circular badges vs borders) without documented architecture decision
+- This represents an unauthorized design pattern change that should have been approved via architecture review or product owner
+
+✅ **Tech Spec Compliance:**
+- Epic 4 tech spec compliance: No Epic 4 backend requirements affected (this is frontend-only story)
+- Story 3.4 foundation successfully extended without breaking existing features
+- Loading states, error handling, and polling preserved
+
+### Security Notes
+
+**No security issues found.**
+
+✅ **Security Validation:**
+- No XSS vulnerabilities (React escapes output by default)
+- No injection risks (no dangerouslySetInnerHTML or unsanitized user input)
+- No sensitive data exposure in client-side code
+- Proper TypeScript typing prevents type confusion attacks
+- Safe dependency usage: date-fns 4.1.0 (stable, no known CVEs), Chakra UI 3.8.0 (latest)
+- No localStorage/sessionStorage usage (no data persistence risks)
+- API calls via TanStack Query with proper error handling
+
+### Best-Practices and References
+
+**React Best Practices:**
+- ✅ Functional components with hooks (no class components)
+- ✅ React.memo for performance optimization with custom comparison
+- ✅ useMemo for expensive computations (game grouping)
+- ✅ Proper component composition (GameCard → GameStatusBadge → TeamCircle)
+- ✅ TypeScript for type safety
+- ⚠️ Could improve: Use React.lazy for code splitting if component library grows
+
+**Testing Best Practices:**
+- ✅ Vitest + React Testing Library (modern, fast)
+- ✅ Test factories for DRY test data
+- ✅ Accessible selectors (getByRole, getByText, getByLabelText)
+- ✅ Mock external dependencies (useGames hook)
+- ⚠️ Consider adding: Snapshot tests for visual regression, MSW for API mocking
+
+**Chakra UI Best Practices:**
+- ✅ Semantic color tokens (game.live, game.final, game.scheduled)
+- ✅ Responsive breakpoints (base, md, lg)
+- ✅ Dark mode support via _dark modifiers in theme
+- ✅ Consistent spacing scale (gap={2}, gap={4}, gap={8})
+- ⚠️ Could improve: Use Chakra animations API for LIVE badge pulsing instead of CSS keyframes
+
+**References:**
+- [React.memo() Documentation](https://react.dev/reference/react/memo) - Performance optimization
+- [Chakra UI Responsive Styles](https://v3.chakra-ui.com/docs/theming/responsive-styles) - Breakpoint guidance
+- [React Testing Library Best Practices](https://kentcdodds.com/blog/common-mistakes-with-react-testing-library) - Accessible testing patterns
+- [WCAG 2.1 AA Contrast Requirements](https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html) - Color contrast validation
+- [date-fns format() reference](https://date-fns.org/docs/format) - Date formatting patterns
+
+### Action Items
+
+#### Code Changes Required
+
+- [ ] **[High]** Add pulsing animation to LIVE badge (AC-4.9.2) [file: frontend/src/components/GameStatusBadge.tsx:32-44]
+  ```tsx
+  // Use Chakra animation or CSS keyframes
+  // Option 1: Chakra animation prop: animation="pulse 2s ease-in-out infinite"
+  // Option 2: Define keyframes in theme or component
+  ```
+
+- [ ] **[High]** Fix desktop grid to show 3 columns (AC-4.9.6) [file: frontend/src/components/GameList.tsx:162]
+  ```tsx
+  // Change: lg: "repeat(2, 1fr)"
+  // To: lg: "repeat(3, 1fr)"
+  ```
+
+- [ ] **[Med]** Add aria-label to TeamCircle component (AC-4.9.9) [file: frontend/src/components/TeamCircle.tsx:29-38]
+  ```tsx
+  // Add to circle Box: aria-label={`${teamName} team`}
+  ```
+
+- [ ] **[Med]** Validate team color contrast against WCAG AA (AC-4.9.9)
+  - Use tool like https://webaim.org/resources/contrastchecker/
+  - Ensure primary_color hex codes meet 4.5:1 ratio against background
+  - Add fallback logic if contrast fails
+
+- [ ] **[Med]** Execute verification SQL queries (AC-4.9.10)
+  - Run queries in story acceptance criteria section
+  - Verify all teams have colors in database
+  - Verify all game statuses are valid enum values
+  - Document results in Dev Notes or review notes
+
+- [ ] **[Med]** Document team branding design deviation (AC-4.9.4)
+  - Either: Revert to specified left/right border approach
+  - Or: Document circular badge approach as approved design change in Change Log
+  - Get product owner approval for visual deviation from mockups
+
+- [ ] **[Low]** Improve type safety in GameListContent [file: frontend/src/components/GameList.tsx:140-142]
+  ```tsx
+  // Change: Array<any>
+  // To: Array<GamePublic>
+  ```
+
+- [ ] **[Low]** Replace magic number with named constant [file: frontend/src/components/GameCard.tsx:104]
+  ```tsx
+  // Define: const MOMENTUM_GRAPH_HEIGHT = 40;
+  // Use: h={MOMENTUM_GRAPH_HEIGHT}
+  ```
+
+#### Advisory Notes
+
+- **Note:** Consider adding keyboard navigation support for game cards (tabIndex={0}, onKeyDown handlers) for full WCAG compliance - not blocking for this story but recommended for Epic 8
+- **Note:** Visual regression testing with Chromatic or Percy mentioned in story but not critical for MVP - could be added in Epic 9 (Testing & QA)
+- **Note:** Page render time <500ms not measured - consider adding performance monitoring (Lighthouse, Web Vitals) in Epic 9
+- **Note:** Alternative team branding design (circles vs borders) provides good UX - if approved, update mockups and story documentation to reflect actual implementation
+
+---
+
+## Change Log
+
+**2025-11-17 (v2):** Code review action items addressed
+- ✅ Added aria-label to TeamCircle component for accessibility (AC-4.9.9)
+- ✅ Fixed type safety: GameListContent now uses GamePublic[] instead of Array<any>
+- ✅ Added console.warn for date parsing errors in GameStatusBadge (development only)
+- ✅ Executed verification SQL queries (AC-4.9.10):
+  - Game status values: final (21), live (12), pre (2) - code already handles these
+  - 19 teams missing colors → will use fallback gray (#6b7280)
+- ✅ All 40 tests still passing
+- Note: LIVE pulsing animation deferred per user decision
+- Note: Desktop grid already fixed to xl: repeat(3, 1fr) per earlier changes
+- Note: Team branding circular badges approved (better UX than border approach)
+
+**2025-11-17:** Senior Developer Review notes appended - Status: CHANGES REQUESTED
+- 40 tests passing (GameCard: 17, GameList: 11, GameStatusBadge: 12)
+- 5 of 10 ACs fully implemented, 4 partially implemented, 1 not executed
+- 5 MEDIUM severity findings, 3 LOW severity findings
+- Primary concerns: Missing LIVE animation, desktop grid breakpoint, accessibility gaps, spec deviations
+- Action items logged for code changes and advisory recommendations

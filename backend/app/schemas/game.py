@@ -30,6 +30,10 @@ class GamePublic(BaseModel):
     game_status: str | None = Field(
         None, description="Game status (scheduled, in_progress, final)"
     )
+    game_clock: str | None = Field(None, description="Game clock time (e.g., '14:32')")
+    game_period: str | None = Field(
+        None, description="Game period (e.g., '1st Half', '2nd Half', 'OT', 'FINAL')"
+    )
     home_team: TeamInfo = Field(..., description="Home team details")
     away_team: TeamInfo = Field(..., description="Away team details")
     home_score: int = Field(default=0, description="Home team score")

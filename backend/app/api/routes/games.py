@@ -127,6 +127,8 @@ async def get_games(
                 game_date=game.game_date,
                 game_start_time=game.game_start_time,
                 game_status=game.game_status,
+                game_clock=game.game_clock,
+                game_period=game.game_period,
                 home_team=home_team_info,
                 away_team=away_team_info,
                 home_score=game.home_score,

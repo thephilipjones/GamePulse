@@ -29,7 +29,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export function useGames() {
   // Calculate user's local date (YYYY-MM-DD format)
   // This ensures users see games for their local "today", not server's UTC today
-  const localDate = format(new Date(), 'yyyy-MM-dd');
+  const localDate = format(new Date(), "yyyy-MM-dd");
 
   return useQuery<GameListResponse>({
     queryKey: ["games", localDate],
