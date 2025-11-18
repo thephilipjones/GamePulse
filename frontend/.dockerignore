@@ -1,2 +1,33 @@
 node_modules
 dist
+
+# Test files (not needed for production build)
+tests/
+playwright-report/
+playwright.config.ts
+test-results/
+
+# Development files
+.env.local
+.env.development
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git files
+.git/
+.gitignore
+
+# CI files
+.github/
+
+# Documentation
+README.md
+*.md
+
+# Cache directories
+.cache/
+.npm/
