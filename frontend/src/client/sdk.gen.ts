@@ -3,7 +3,7 @@
 import type { CancelablePromise } from './core/CancelablePromise';
 import { OpenAPI } from './core/OpenAPI';
 import { request as __request } from './core/request';
-import type { GamesGetGamesData, GamesGetGamesResponse, GamesGetGamesTodayResponse, HealthGetHealthResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
+import type { GamesGetGamesData, GamesGetGamesResponse, GamesGetGamesTodayResponse, GamesGetGameSocialPostsData, GamesGetGameSocialPostsResponse, HealthGetHealthResponse, UtilsTestEmailData, UtilsTestEmailResponse, UtilsHealthCheckResponse } from './types.gen';
 
 export class GamesService {
     /**
@@ -75,6 +75,46 @@ export class GamesService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/games/today'
+        });
+    }
+    
+    /**
+     * Get Game Social Posts
+     * Get social posts associated with a specific game (Story 4-10).
+     *
+     * Returns posts ordered by engagement_score DESC (most viral first).
+     * Includes sentiment classification and source URLs for Reddit/Bluesky.
+     *
+     * Args:
+     * game_id: Natural key for game (e.g., "ncaam_401525257")
+     * session: Database session (injected)
+     * limit: Maximum number of posts to return (default 10, max 50)
+     *
+     * Returns:
+     * SocialPostListResponse with posts, total_count, and game_id
+     *
+     * Raises:
+     * HTTPException 404: Game not found
+     * HTTPException 500: Database error
+     * @param data The data for the request.
+     * @param data.gameId
+     * @param data.limit Max posts to return (1-50)
+     * @returns SocialPostListResponse Successful Response
+     * @throws ApiError
+     */
+    public static getGameSocialPosts(data: GamesGetGameSocialPostsData): CancelablePromise<GamesGetGameSocialPostsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/games/{game_id}/social-posts',
+            path: {
+                game_id: data.gameId
+            },
+            query: {
+                limit: data.limit
+            },
+            errors: {
+                422: 'Validation Error'
+            }
         });
     }
     

@@ -47,9 +47,13 @@ export type GamePublic = {
      */
     game_status?: (string | null);
     /**
-     * Game clock (e.g., '14:32 2nd Half')
+     * Game clock time (e.g., '14:32')
      */
     game_clock?: (string | null);
+    /**
+     * Game period (e.g., '1st Half', '2nd Half', 'OT', 'FINAL')
+     */
+    game_period?: (string | null);
     /**
      * Home team details
      */
@@ -106,6 +110,32 @@ export type Message = {
 };
 
 /**
+ * Response schema for social posts list endpoint (Story 4-10).
+ */
+export type SocialPostListResponse = {
+    posts: Array<SocialPostPublic>;
+    total_count: number;
+    game_id: string;
+};
+
+/**
+ * Public API response schema for social posts (Story 4-10).
+ *
+ * Used by GET /api/v1/games/{game_id}/social-posts endpoint.
+ * Contains denormalized data plus derived fields (sentiment_label, source_url).
+ */
+export type SocialPostPublic = {
+    social_post_key: number;
+    platform: string;
+    post_text: string;
+    created_at: string;
+    engagement_score: number;
+    sentiment_compound: number;
+    sentiment_label: string;
+    source_url: string;
+};
+
+/**
  * Team information for game responses.
  */
 export type TeamInfo = {
@@ -151,6 +181,16 @@ export type GamesGetGamesData = {
 export type GamesGetGamesResponse = (GameListResponse);
 
 export type GamesGetGamesTodayResponse = (GameListResponse);
+
+export type GamesGetGameSocialPostsData = {
+    gameId: string;
+    /**
+     * Max posts to return (1-50)
+     */
+    limit?: number;
+};
+
+export type GamesGetGameSocialPostsResponse = (SocialPostListResponse);
 
 export type HealthGetHealthResponse = (HealthCheckResponse);
 
