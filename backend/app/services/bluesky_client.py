@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from atproto import Client
+from atproto import Client  # type: ignore[import-untyped]
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
