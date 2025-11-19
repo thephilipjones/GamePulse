@@ -69,13 +69,14 @@ def upgrade():
         OWNED BY stg_social_posts.social_post_key;
     """)
 
-    # Step 6: Create unique index for FK lookups from fact_social_sentiment
-    # Note: TimescaleDB requires partitioning column (created_at) in unique indexes
+    # Step 6: Create index for FK lookups from fact_social_sentiment
+    # Note: Non-unique because unique indexes on hypertables cause chunk propagation issues
+    # Sequence-generated values are inherently unique anyway
     op.create_index(
         'ix_stg_social_posts_social_post_key',
         'stg_social_posts',
         ['social_post_key', 'created_at'],
-        unique=True
+        unique=False
     )
 
 
