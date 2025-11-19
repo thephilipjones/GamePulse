@@ -24,10 +24,14 @@ from dagster import (
     Backoff,
     DefaultScheduleStatus,
     RetryPolicy,
-    ScheduleDefinition,
+    RunRequest,
+    ScheduleEvaluationContext,
+    SkipReason,
     asset,
     define_asset_job,
+    schedule,
 )
+from dagster._core.storage.dagster_run import DagsterRunStatus, RunsFilter
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -346,11 +350,32 @@ reddit_posts_job = define_asset_job(
     description="Manually materialize Reddit posts asset",
 )
 
-reddit_posts_schedule = ScheduleDefinition(
-    name="extract_reddit_posts_schedule",
+
+@schedule(
     job=reddit_posts_job,
     cron_schedule="*/10 * * * *",  # Every 10 minutes
-    description="Extract Reddit posts every 10 minutes from all active subreddits",
     execution_timezone="America/New_York",
     default_status=DefaultScheduleStatus.RUNNING,  # Auto-start on daemon init
 )
+def reddit_posts_schedule(
+    context: ScheduleEvaluationContext,
+) -> RunRequest | SkipReason:
+    """
+    Schedule Reddit posts extraction every 10 minutes.
+    Skips if there are already queued or running runs for this job.
+    """
+    job_name = "materialize_reddit_posts"
+
+    # Check for queued or running runs for this specific job
+    filters = RunsFilter(
+        statuses=[DagsterRunStatus.QUEUED, DagsterRunStatus.STARTED],
+        job_name=job_name,
+    )
+    existing_runs = context.instance.get_runs_count(filters=filters)
+
+    if existing_runs > 0:
+        return SkipReason(
+            f"Skipping: {existing_runs} run(s) already queued or running for {job_name}"
+        )
+
+    return RunRequest()

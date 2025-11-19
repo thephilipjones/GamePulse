@@ -122,6 +122,7 @@ class BlueskyClient:
 
         Raises:
             ValueError: If BLUESKY_HANDLE or BLUESKY_APP_PASSWORD not configured
+            asyncio.TimeoutError: If authentication takes longer than 30 seconds
             Exception: If authentication fails (invalid credentials)
         """
         if not settings.BLUESKY_HANDLE or not settings.BLUESKY_APP_PASSWORD:
@@ -130,10 +131,28 @@ class BlueskyClient:
             )
 
         # atproto Client is synchronous, so we use it directly
-        self.client = Client()
+        client = Client()
+        self.client = client
         try:
-            self.client.login(settings.BLUESKY_HANDLE, settings.BLUESKY_APP_PASSWORD)
+            # Run login in executor with timeout to prevent hanging
+            loop = asyncio.get_event_loop()
+            await asyncio.wait_for(
+                loop.run_in_executor(
+                    None,
+                    lambda: client.login(
+                        settings.BLUESKY_HANDLE, settings.BLUESKY_APP_PASSWORD
+                    ),
+                ),
+                timeout=30.0,  # 30 second timeout for login
+            )
             logger.info("bluesky_authenticated", handle=settings.BLUESKY_HANDLE)
+        except asyncio.TimeoutError:
+            logger.error(
+                "bluesky_authentication_timeout",
+                handle=settings.BLUESKY_HANDLE,
+                timeout_seconds=30,
+            )
+            raise
         except Exception as e:
             logger.error(
                 "bluesky_authentication_failed",
@@ -214,13 +233,25 @@ class BlueskyClient:
 
             # atproto SDK's search_posts is synchronous
             # We need to run it in executor to avoid blocking
+            # Add timeout to prevent hanging indefinitely on API issues
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: client.app.bsky.feed.search_posts(
-                    params={"q": query, "limit": limit}
-                ),
-            )
+            try:
+                response = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        lambda: client.app.bsky.feed.search_posts(
+                            params={"q": query, "limit": limit}
+                        ),
+                    ),
+                    timeout=60.0,  # 60 second timeout for search
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "bluesky_search_timeout",
+                    hashtag=hashtag,
+                    timeout_seconds=60,
+                )
+                raise
 
             # Extract posts from response
             posts = response.posts if hasattr(response, "posts") else []

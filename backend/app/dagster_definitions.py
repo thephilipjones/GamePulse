@@ -7,11 +7,15 @@ Registers assets, schedules, and resources for Dagster workspace.
 from dagster import (
     DefaultScheduleStatus,
     Definitions,
-    ScheduleDefinition,
+    RunRequest,
+    ScheduleEvaluationContext,
+    SkipReason,
     define_asset_job,
     in_process_executor,
     load_assets_from_modules,
+    schedule,
 )
+from dagster._core.storage.dagster_run import DagsterRunStatus, RunsFilter
 
 from app.assets import bluesky_posts as bluesky_posts_module
 from app.assets import cleanup_raw_posts as cleanup_raw_posts_module
@@ -58,6 +62,7 @@ calculate_sentiment_job = define_asset_job(
     description="Analyze sentiment of social posts and link to games",
 )
 
+
 # Define NCAA games schedule: every 1 minute (starts RUNNING automatically)
 # RATIONALE: Schedule auto-starts on daemon initialization to ensure continuous
 # game data ingestion during NCAA basketball season. The retry policy (3 attempts,
@@ -65,14 +70,33 @@ calculate_sentiment_job = define_asset_job(
 # auto-start safe. During off-season, materializations complete quickly with
 # zero games (no API load). The 1-minute interval provides real-time feel for
 # live sports while staying well below NCAA API rate limits (5 req/sec burst).
-ncaa_games_schedule = ScheduleDefinition(
-    name="ncaa_games_schedule",
+@schedule(
     job=ncaa_games_job,
     cron_schedule="* * * * *",  # Every 1 minute - real-time feel for live sports
-    description="Materialize NCAA games data every 1 minute",
     execution_timezone="America/New_York",  # NCAA games typically in Eastern Time
     default_status=DefaultScheduleStatus.RUNNING,  # Auto-start for continuous ingestion
 )
+def ncaa_games_schedule(context: ScheduleEvaluationContext) -> RunRequest | SkipReason:
+    """
+    Schedule NCAA games materialization every minute.
+    Skips if there are already queued or running runs for this job.
+    """
+    job_name = "materialize_ncaa_games"
+
+    # Check for queued or running runs for this specific job
+    filters = RunsFilter(
+        statuses=[DagsterRunStatus.QUEUED, DagsterRunStatus.STARTED],
+        job_name=job_name,
+    )
+    existing_runs = context.instance.get_runs_count(filters=filters)
+
+    if existing_runs > 0:
+        return SkipReason(
+            f"Skipping: {existing_runs} run(s) already queued or running for {job_name}"
+        )
+
+    return RunRequest()
+
 
 # Initialize resources
 database_resource = DatabaseResource()

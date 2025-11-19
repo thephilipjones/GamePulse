@@ -35,6 +35,19 @@ run_coordinator:
       - key: "database"
         value: "main"
         limit: 1 # Only enforced if assets have tags={"database": "main"}
+      # Prevent queue buildup: only 1 queued/running run per schedule
+      - key: "dagster/schedule_name"
+        value:
+          applyLimitPerUniqueValue: true
+        limit: 1
+
+# Auto-cancel stuck runs to prevent queue buildup
+run_monitoring:
+  enabled: true
+  start_timeout_seconds: 300    # Cancel if stuck starting for 5 minutes
+  max_runtime_seconds: 600      # Cancel if running for 10 minutes
+  poll_interval_seconds: 60     # Check every minute
+  cancel_timeout_seconds: 120   # Allow 2 minutes for graceful cancellation
 
 run_launcher:
   module: dagster.core.launcher
