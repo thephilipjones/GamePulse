@@ -24,12 +24,12 @@ from app.assets import quality_checks as quality_checks_module
 from app.assets import reddit_posts as reddit_posts_module
 from app.assets import social_sentiment as social_sentiment_module
 from app.assets import transform_social_posts as transform_social_posts_module
-from app.assets.bluesky_posts import bluesky_posts_job, bluesky_posts_schedule
+from app.assets.bluesky_posts import bluesky_posts_job, extract_bluesky_posts_schedule
 from app.assets.cleanup_raw_posts import (
     cleanup_unmatched_posts_job,
     cleanup_unmatched_posts_schedule,
 )
-from app.assets.reddit_posts import reddit_posts_job, reddit_posts_schedule
+from app.assets.reddit_posts import extract_reddit_posts_schedule, reddit_posts_job
 from app.resources.database import DatabaseResource
 
 # Load all assets from assets module
@@ -106,8 +106,8 @@ defs = Definitions(
     assets=all_assets,
     schedules=[
         ncaa_games_schedule,
-        reddit_posts_schedule,
-        bluesky_posts_schedule,
+        extract_reddit_posts_schedule,
+        extract_bluesky_posts_schedule,
         cleanup_unmatched_posts_schedule,  # Daily cleanup of old unmatched posts (Story 4-7)
     ],
     resources={

@@ -295,7 +295,7 @@ bluesky_posts_job = define_asset_job(
     execution_timezone="America/New_York",
     default_status=DefaultScheduleStatus.RUNNING,  # Auto-start on daemon init
 )
-def bluesky_posts_schedule(
+def extract_bluesky_posts_schedule(
     context: ScheduleEvaluationContext,
 ) -> RunRequest | SkipReason:
     """
