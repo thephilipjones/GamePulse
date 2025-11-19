@@ -25,10 +25,14 @@ from dagster import (
     Backoff,
     DefaultScheduleStatus,
     RetryPolicy,
-    ScheduleDefinition,
+    RunRequest,
+    ScheduleEvaluationContext,
+    SkipReason,
     asset,
     define_asset_job,
+    schedule,
 )
+from dagster._core.storage.dagster_run import DagsterRunStatus, RunsFilter
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -284,11 +288,32 @@ bluesky_posts_job = define_asset_job(
     description="Manually materialize Bluesky posts asset",
 )
 
-bluesky_posts_schedule = ScheduleDefinition(
-    name="extract_bluesky_posts_schedule",
+
+@schedule(
     job=bluesky_posts_job,
     cron_schedule="*/5 * * * *",  # Every 5 minutes
-    description="Extract Bluesky posts every 5 minutes from all configured hashtags",
     execution_timezone="America/New_York",
     default_status=DefaultScheduleStatus.RUNNING,  # Auto-start on daemon init
 )
+def bluesky_posts_schedule(
+    context: ScheduleEvaluationContext,
+) -> RunRequest | SkipReason:
+    """
+    Schedule Bluesky posts extraction every 5 minutes.
+    Skips if there are already queued or running runs for this job.
+    """
+    job_name = "materialize_bluesky_posts"
+
+    # Check for queued or running runs for this specific job
+    filters = RunsFilter(
+        statuses=[DagsterRunStatus.QUEUED, DagsterRunStatus.STARTED],
+        job_name=job_name,
+    )
+    existing_runs = context.instance.get_runs_count(filters=filters)
+
+    if existing_runs > 0:
+        return SkipReason(
+            f"Skipping: {existing_runs} run(s) already queued or running for {job_name}"
+        )
+
+    return RunRequest()
