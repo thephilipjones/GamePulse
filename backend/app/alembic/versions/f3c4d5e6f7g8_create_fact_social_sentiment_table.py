@@ -61,12 +61,8 @@ def upgrade():
         sa.ForeignKeyConstraint(['game_key'], ['fact_game.game_key'], name='fk_sentiment_game_key'),
         sa.ForeignKeyConstraint(['date_key'], ['dim_date.date_key'], name='fk_sentiment_date_key'),
 
-        # FK to stg_social_posts must include created_at due to TimescaleDB hypertable unique index
-        sa.ForeignKeyConstraint(
-            ['social_post_key', 'created_at'],
-            ['stg_social_posts.social_post_key', 'stg_social_posts.created_at'],
-            name='fk_sentiment_social_post_key'
-        ),
+        # Note: No FK to stg_social_posts due to TimescaleDB hypertable limitations
+        # Referential integrity enforced at application level (see social.py model)
 
         # Unique constraint to prevent duplicate sentiment analysis
         sa.UniqueConstraint('social_post_key', name='uq_sentiment_social_post_key'),
