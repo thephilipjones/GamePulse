@@ -1,5 +1,6 @@
 """API tests for games endpoint."""
 
+import time
 from datetime import date, datetime, timezone
 
 import pytest
@@ -397,10 +398,13 @@ class TestSocialPostsEndpoint:
             },
         ]
 
+        # Generate unique base key using timestamp to avoid conflicts in parallel test runs
+        base_key = int(time.time() * 1000) % 1000000000
+
         for i, post_data in enumerate(posts_data):
-            # Create staging post with explicit social_post_key (required for hypertable)
+            # Create staging post with unique social_post_key
             stg_post = StgSocialPost(
-                social_post_key=1000 + i,  # Explicit key for hypertable
+                social_post_key=base_key + i,
                 platform=post_data["platform"],
                 post_id=post_data["post_id"],
                 created_at=datetime(2025, 11, 14, 19, 0 + i, tzinfo=timezone.utc),
