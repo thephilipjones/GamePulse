@@ -1,0 +1,231 @@
+<story-context id="4-10-social-posts-feed" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>10</storyId>
+    <title>Social Posts Feed Integration</title>
+    <status>review</status>
+    <generatedAt>2025-11-18</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-10-social-posts-feed.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>basketball fan</asA>
+    <iWant>to see social media posts and fan reactions associated with each game</iWant>
+    <soThat>I can understand the story and excitement around the game through real fan perspectives</soThat>
+    <tasks>
+      <task id="1">Create backend endpoint GET /api/v1/games/{game_id}/social-posts</task>
+      <task id="2">Add SocialPostPublic and SocialPostListResponse schemas</task>
+      <task id="3">Implement query joining fact_social_sentiment with stg_social_post</task>
+      <task id="4">Build URL construction logic for Reddit and Bluesky posts</task>
+      <task id="5">Classify sentiment (compound score to positive/neutral/negative)</task>
+      <task id="6">Create SocialPostsFeed React component</task>
+      <task id="7">Create SocialPostCard component with sentiment color coding</task>
+      <task id="8">Create useSocialPosts TanStack Query hook</task>
+      <task id="9">Integrate SocialPostsFeed into GameCard component</task>
+      <task id="10">Add backend API tests</task>
+      <task id="11">Add frontend component tests</task>
+      <task id="12">Generate updated TypeScript client</task>
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+    <criterion id="AC-4.10.1">Backend API endpoint GET /api/v1/games/{game_id}/social-posts returns SocialPostListResponse with posts ordered by engagement_score DESC</criterion>
+    <criterion id="AC-4.10.2">Source URLs correctly constructed for Reddit (https://www.reddit.com{permalink}) and Bluesky (https://bsky.app/profile/{handle}/post/{id})</criterion>
+    <criterion id="AC-4.10.3">Sentiment classification: compound >= 0.05 positive, <= -0.05 negative, else neutral</criterion>
+    <criterion id="AC-4.10.4">SocialPostsFeed component integrated into GameCard, hidden when no posts (returns null)</criterion>
+    <criterion id="AC-4.10.5">Post cards display text (truncated 3 lines), platform icon, timestamp, engagement score, sentiment badge, external link</criterion>
+    <criterion id="AC-4.10.6">API response time less than 100ms for 10 posts with appropriate database indexing</criterion>
+    <criterion id="AC-4.10.7">Data quality: no NULL source URLs, valid timestamps, positive engagement scores</criterion>
+    <criterion id="AC-4.10.8">Accessibility: aria-labels on links and badges, keyboard navigation, color not sole indicator</criterion>
+    <criterion id="AC-4.10.9">Empty state: section completely hidden if posts.length === 0, no message displayed</criterion>
+    <criterion id="AC-4.10.10">TypeScript client regenerated with GameService.getGameSocialPosts() method</criterion>
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4 Tech Spec - Social Media ELT Pipeline</title>
+        <section>Story 4-10 Context</section>
+        <snippet>Story 4-10 brings social data to the UI by displaying posts linked to games with engagement metrics and sentiment color coding.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-5-calculate-sentiment.md</path>
+        <title>Story 4-5 - Calculate Sentiment Analysis</title>
+        <section>Sentiment Schema</section>
+        <snippet>Created fact_social_sentiment table with VADER scores (compound, positive, negative, neutral) and denormalized fields for Epic 5 queries.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-1-extract-reddit-posts.md</path>
+        <title>Story 4-1 - Reddit Posts Extraction</title>
+        <section>URL Construction</section>
+        <snippet>Reddit posts have permalink field for URL construction: https://www.reddit.com{permalink}</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-2-extract-bluesky-posts.md</path>
+        <title>Story 4-2 - Bluesky Posts Extraction</title>
+        <section>URL Construction</section>
+        <snippet>Bluesky posts use author_handle and post_uri to construct: https://bsky.app/profile/{handle}/post/{uri_segment}</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/4-9-game-card-ui-design.md</path>
+        <title>Story 4-9 - Enhanced Game Card UI Design</title>
+        <section>Component Integration</section>
+        <snippet>GameCard component has placeholder for Top Moments section where SocialPostsFeed will be integrated.</snippet>
+      </doc>
+      <doc>
+        <path>CLAUDE.md</path>
+        <title>Project Development Guide</title>
+        <section>Testing Patterns</section>
+        <snippet>Backend uses pytest with unit/integration markers. Frontend uses vitest with testing-library. E2E uses Playwright.</snippet>
+      </doc>
+    </docs>
+
+    <code>
+      <artifact>
+        <path>backend/app/models/social.py</path>
+        <kind>model</kind>
+        <symbol>FactSocialSentiment, StgSocialPost</symbol>
+        <lines>210-290</lines>
+        <reason>Primary data models for social posts and sentiment. Contains sentiment_compound, engagement_score, platform fields needed for API response.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/games.py</path>
+        <kind>route</kind>
+        <symbol>get_games</symbol>
+        <lines>21-156</lines>
+        <reason>Existing games endpoint pattern to follow. Shows JOINs with aliased tables, error handling, response construction.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/GameCard.tsx</path>
+        <kind>component</kind>
+        <symbol>GameCardComponent</symbol>
+        <lines>38-157</lines>
+        <reason>Component to integrate with. Has placeholder for Top Moments section at lines 141-153.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/schemas/game.py</path>
+        <kind>schema</kind>
+        <symbol>GamePublic, GameListResponse</symbol>
+        <reason>Pattern for Pydantic response schemas to follow for SocialPostPublic, SocialPostListResponse.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/GameStatusBadge.tsx</path>
+        <kind>component</kind>
+        <symbol>GameStatusBadge</symbol>
+        <reason>Example of color-coded badge component to follow for SentimentBadge.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/tests/api/test_games.py</path>
+        <kind>test</kind>
+        <symbol>test_get_games_*</symbol>
+        <reason>Existing API test patterns for games endpoint. Follow same structure for social-posts tests.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/GameCard.test.tsx</path>
+        <kind>test</kind>
+        <symbol>GameCard tests</symbol>
+        <reason>Existing frontend test patterns using vitest and testing-library.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/deps.py</path>
+        <kind>dependency</kind>
+        <symbol>SessionDep</symbol>
+        <reason>Database session dependency injection pattern used in all API routes.</reason>
+      </artifact>
+    </code>
+
+    <dependencies>
+      <backend>
+        <package name="fastapi" version=">=0.115.0,<1.0.0">Web framework for API endpoints</package>
+        <package name="sqlmodel" version=">=0.0.22,<1.0.0">ORM for database queries</package>
+        <package name="pydantic" version=">=2.9.0,<3.0.0">Response model validation</package>
+        <package name="asyncpg" version=">=0.30.0">Async PostgreSQL driver</package>
+        <package name="vadersentiment" version=">=3.3.2">Sentiment analysis (used by upstream story 4-5)</package>
+        <package name="pytest" version=">=8.3.0,<9.0.0">Testing framework</package>
+        <package name="pytest-asyncio" version=">=0.24.0,<1.0.0">Async test support</package>
+      </backend>
+      <frontend>
+        <package name="react" version="^18.2.0">UI framework</package>
+        <package name="@chakra-ui/react" version="^3.8.0">Component library with color utilities</package>
+        <package name="@tanstack/react-query" version="^5.28.14">Data fetching and caching</package>
+        <package name="date-fns" version="^4.1.0">Date formatting (formatDistanceToNow)</package>
+        <package name="react-icons" version="^5.4.0">Platform icons (FaReddit, etc.)</package>
+        <package name="vitest" version="^4.0.9">Testing framework</package>
+        <package name="@testing-library/react" version="^16.3.0">Component testing utilities</package>
+      </frontend>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+    <constraint>Follow existing API route pattern from games.py: use SessionDep, proper error handling with HTTPException, structured logging</constraint>
+    <constraint>Use SQLModel select() pattern for database queries, not raw SQL</constraint>
+    <constraint>Frontend components must use Chakra UI v3 patterns (Box, HStack, VStack)</constraint>
+    <constraint>All API responses must have Pydantic response_model for OpenAPI schema generation</constraint>
+    <constraint>Empty state must return null from component, not render empty message (user requirement)</constraint>
+    <constraint>External links must open in new tab (target="_blank") with rel="noopener noreferrer"</constraint>
+    <constraint>Query must use index on (game_key, engagement_score DESC) for performance</constraint>
+    <constraint>TypeScript client must be regenerated after backend endpoint is added</constraint>
+  </constraints>
+
+  <interfaces>
+    <interface>
+      <name>GET /api/v1/games/{game_id}/social-posts</name>
+      <kind>REST endpoint</kind>
+      <signature>async def get_game_social_posts(game_id: str, limit: int = Query(default=10, ge=1, le=50), session: SessionDep) -> SocialPostListResponse</signature>
+      <path>backend/app/api/routes/games.py</path>
+    </interface>
+    <interface>
+      <name>SocialPostPublic</name>
+      <kind>Pydantic model</kind>
+      <signature>class SocialPostPublic(BaseModel): social_post_key: int, platform: str, post_text: str, created_at: datetime, engagement_score: int, sentiment_compound: float, sentiment_label: str, source_url: str</signature>
+      <path>backend/app/models/social.py (new)</path>
+    </interface>
+    <interface>
+      <name>SocialPostListResponse</name>
+      <kind>Pydantic model</kind>
+      <signature>class SocialPostListResponse(BaseModel): posts: list[SocialPostPublic], total_count: int, game_id: str</signature>
+      <path>backend/app/models/social.py (new)</path>
+    </interface>
+    <interface>
+      <name>useSocialPosts</name>
+      <kind>React hook</kind>
+      <signature>function useSocialPosts(gameId: string, limit?: number): UseQueryResult&lt;SocialPostListResponse&gt;</signature>
+      <path>frontend/src/hooks/useSocialPosts.ts (new)</path>
+    </interface>
+    <interface>
+      <name>SocialPostsFeed</name>
+      <kind>React component</kind>
+      <signature>function SocialPostsFeed({ gameId }: { gameId: string }): JSX.Element | null</signature>
+      <path>frontend/src/components/SocialPostsFeed.tsx (new)</path>
+    </interface>
+  </interfaces>
+
+  <tests>
+    <standards>
+      Backend tests use pytest with markers: @pytest.mark.unit for pure tests (no DB), @pytest.mark.integration for DB tests.
+      Tests run parallel with pytest-xdist (-n auto).
+      Frontend tests use vitest with @testing-library/react for component testing.
+      Mock external dependencies (hooks, services) with vi.mock().
+      E2E tests use Playwright.
+    </standards>
+    <locations>
+      <location>backend/app/tests/api/test_games.py</location>
+      <location>frontend/src/components/*.test.tsx</location>
+      <location>frontend/src/hooks/*.test.ts</location>
+    </locations>
+    <ideas>
+      <idea acId="AC-4.10.1">test_get_social_posts_success: Verify endpoint returns posts ordered by engagement DESC</idea>
+      <idea acId="AC-4.10.1">test_get_social_posts_respects_limit: Verify limit parameter works (default 10, max 50)</idea>
+      <idea acId="AC-4.10.1">test_get_social_posts_game_not_found: Verify 404 for invalid game_id</idea>
+      <idea acId="AC-4.10.2">test_reddit_url_construction: Verify https://www.reddit.com{permalink} format</idea>
+      <idea acId="AC-4.10.2">test_bluesky_url_construction: Verify https://bsky.app/profile/{handle}/post/{id} format</idea>
+      <idea acId="AC-4.10.3">test_sentiment_classification: Verify compound scores map to correct labels</idea>
+      <idea acId="AC-4.10.4">test_social_posts_feed_renders_posts: Verify component renders when data available</idea>
+      <idea acId="AC-4.10.9">test_social_posts_feed_hidden_when_empty: Verify component returns null for empty posts</idea>
+      <idea acId="AC-4.10.5">test_sentiment_badge_colors: Verify correct colors for positive/neutral/negative</idea>
+      <idea acId="AC-4.10.8">test_external_link_accessibility: Verify aria-labels on View Post links</idea>
+    </ideas>
+  </tests>
+</story-context>

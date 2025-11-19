@@ -2,6 +2,7 @@ import { Box, HStack, Text, VStack } from "@chakra-ui/react";
 import React from "react";
 import type { GamePublic } from "../client/types.gen";
 import { GameStatusBadge } from "./GameStatusBadge";
+import { SocialPostsFeed } from "./SocialPostsFeed";
 import { TeamCircle } from "./TeamCircle";
 
 interface GameCardProps {
@@ -138,19 +139,8 @@ function GameCardComponent({ game }: GameCardProps) {
           </Text>
         </Box>
 
-        {/* Top Moments Placeholder (Story 4-10) */}
-        <Box>
-          <HStack gap={2} mb={3}>
-            <Text fontSize="sm" fontWeight="medium" color="gray.400">
-              📋 Top Moments
-            </Text>
-          </HStack>
-          <VStack align="stretch" gap={2}>
-            <Text fontSize="sm" color="gray.600">
-              Social posts will appear here (Story 4-10)
-            </Text>
-          </VStack>
-        </Box>
+        {/* Top Moments - Social Posts Feed (Story 4-10) */}
+        <SocialPostsFeed gameId={game.game_id} />
       </VStack>
     </Box>
   );

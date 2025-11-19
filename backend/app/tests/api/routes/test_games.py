@@ -1,9 +1,15 @@
 """API tests for games endpoint."""
 
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.models.dim_date import DimDate
+from app.models.dim_team import DimTeam
+from app.models.fact_game import FactGame
+from app.models.social import FactSocialSentiment, StgSocialPost
 
 
 class TestGamesEndpoint:
@@ -291,3 +297,354 @@ class TestGamesEndpoint:
         # Test missing required fields
         with pytest.raises(ValidationError):
             GamePublic()  # type: ignore[call-arg]  # Missing all required fields
+
+
+class TestSocialPostsEndpoint:
+    """Test suite for social posts API endpoint (Story 4-10).
+
+    Uses client_with_db fixture to share test database session with the app.
+    This allows tests to create data and access it via API in the same transaction.
+    """
+
+    def _create_test_data(
+        self, db: Session, game_id: str = "ncaam_test123"
+    ) -> tuple[FactGame, list[FactSocialSentiment]]:
+        """Create test game and social posts data."""
+        # Create dim_date
+        dim_date = DimDate(
+            date_key=20251114,
+            full_date=date(2025, 11, 14),
+            year=2025,
+            month=11,
+            day_of_month=14,
+            day_of_week=4,
+            day_name="Friday",
+            month_name="November",
+            quarter=4,
+            week_of_year=46,
+            is_weekend=False,
+            is_march_madness=False,
+        )
+        db.add(dim_date)
+        db.flush()
+
+        # Create teams
+        home_team = DimTeam(
+            team_id="ncaam_duke",
+            team_name="Duke Blue Devils",
+            sport="ncaam",
+            is_current=True,
+        )
+        away_team = DimTeam(
+            team_id="ncaam_unc",
+            team_name="North Carolina Tar Heels",
+            sport="ncaam",
+            is_current=True,
+        )
+        db.add(home_team)
+        db.add(away_team)
+        db.flush()
+
+        # Create game
+        game = FactGame(
+            game_id=game_id,
+            game_date_key=20251114,
+            game_date=datetime(2025, 11, 14, tzinfo=timezone.utc),
+            game_start_time=datetime(2025, 11, 14, 19, 0, tzinfo=timezone.utc),
+            game_status="scheduled",
+            sport="ncaam",
+            home_team_key=home_team.team_key,
+            away_team_key=away_team.team_key,
+            home_score=0,
+            away_score=0,
+        )
+        db.add(game)
+        db.flush()
+
+        # Create staging posts and sentiment records
+        sentiments = []
+        posts_data = [
+            {
+                "platform": "reddit",
+                "post_id": "t3_abc123",
+                "post_text": "Duke starts with a 10-0 run! This is amazing!",
+                "engagement_score": 500,
+                "sentiment_compound": 0.85,  # positive
+                "author_handle": "hoopsfan",
+                "raw_json": {
+                    "permalink": "/r/CollegeBasketball/comments/abc123/duke_starts/"
+                },
+            },
+            {
+                "platform": "bluesky",
+                "post_id": "at://did:plc:xyz/app.bsky.feed.post/3abc123",
+                "post_text": "Great defense from UNC right now",
+                "engagement_score": 300,
+                "sentiment_compound": 0.02,  # neutral
+                "author_handle": "ballgame.bsky.social",
+                "raw_json": {},
+            },
+            {
+                "platform": "reddit",
+                "post_id": "t3_def456",
+                "post_text": "Terrible call by the refs, this is ridiculous",
+                "engagement_score": 200,
+                "sentiment_compound": -0.75,  # negative
+                "author_handle": "angryref",
+                "raw_json": {
+                    "permalink": "/r/CollegeBasketball/comments/def456/bad_call/"
+                },
+            },
+        ]
+
+        for i, post_data in enumerate(posts_data):
+            # Create staging post with explicit social_post_key (required for hypertable)
+            stg_post = StgSocialPost(
+                social_post_key=1000 + i,  # Explicit key for hypertable
+                platform=post_data["platform"],
+                post_id=post_data["post_id"],
+                created_at=datetime(2025, 11, 14, 19, 0 + i, tzinfo=timezone.utc),
+                fetched_at=datetime(2025, 11, 14, 19, 5, tzinfo=timezone.utc),
+                author_handle=post_data["author_handle"],
+                post_text=post_data["post_text"],
+                engagement_score=post_data["engagement_score"],
+                raw_json=post_data["raw_json"],
+            )
+            db.add(stg_post)
+            db.flush()
+
+            # Create sentiment record
+            sentiment = FactSocialSentiment(
+                game_key=game.game_key,
+                date_key=20251114,
+                social_post_key=stg_post.social_post_key,
+                sentiment_compound=post_data["sentiment_compound"],
+                sentiment_positive=0.5,
+                sentiment_negative=0.1,
+                sentiment_neutral=0.4,
+                platform=post_data["platform"],
+                post_text=post_data["post_text"],
+                created_at=stg_post.created_at,
+                engagement_score=post_data["engagement_score"],
+            )
+            db.add(sentiment)
+            sentiments.append(sentiment)
+
+        db.flush()
+        return game, sentiments
+
+    def test_get_social_posts_success(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test GET /api/v1/games/{game_id}/social-posts returns posts."""
+        # Setup test data
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        # Execute
+        response = client_with_db.get(f"/api/v1/games/{game.game_id}/social-posts")
+
+        # Verify
+        assert response.status_code == 200
+        data = response.json()
+
+        assert "posts" in data
+        assert "total_count" in data
+        assert "game_id" in data
+        assert data["game_id"] == game.game_id
+        assert data["total_count"] == 3
+        assert len(data["posts"]) == 3
+
+        # Verify posts are ordered by engagement_score DESC
+        engagement_scores = [p["engagement_score"] for p in data["posts"]]
+        assert engagement_scores == sorted(engagement_scores, reverse=True)
+
+    def test_get_social_posts_respects_limit(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test that limit parameter works correctly."""
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        # Request with limit=2
+        response = client_with_db.get(
+            f"/api/v1/games/{game.game_id}/social-posts?limit=2"
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["total_count"] == 2
+        assert len(data["posts"]) == 2
+
+    def test_get_social_posts_empty_result(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test endpoint returns empty array when no posts exist for game."""
+        # Create game without social posts
+        dim_date = DimDate(
+            date_key=20251114,
+            full_date=date(2025, 11, 14),
+            year=2025,
+            month=11,
+            day_of_month=14,
+            day_of_week=4,
+            day_name="Friday",
+            month_name="November",
+            quarter=4,
+            week_of_year=46,
+            is_weekend=False,
+            is_march_madness=False,
+        )
+        db.add(dim_date)
+
+        team = DimTeam(
+            team_id="ncaam_test",
+            team_name="Test Team",
+            sport="ncaam",
+            is_current=True,
+        )
+        db.add(team)
+        db.flush()
+
+        game = FactGame(
+            game_id="ncaam_empty",
+            game_date_key=20251114,
+            game_date=datetime(2025, 11, 14, tzinfo=timezone.utc),
+            sport="ncaam",
+            home_team_key=team.team_key,
+            away_team_key=team.team_key,
+        )
+        db.add(game)
+        db.flush()
+
+        # Execute
+        response = client_with_db.get("/api/v1/games/ncaam_empty/social-posts")
+
+        # Verify
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["posts"] == []
+        assert data["total_count"] == 0
+        assert data["game_id"] == "ncaam_empty"
+
+    def test_get_social_posts_game_not_found(self, client: TestClient) -> None:
+        """Test 404 error if game doesn't exist."""
+        response = client.get("/api/v1/games/ncaam_invalid/social-posts")
+
+        assert response.status_code == 404
+        data = response.json()
+        assert "detail" in data
+        assert "Game not found" in data["detail"]
+
+    def test_get_social_posts_invalid_limit(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test 422 error for invalid limit parameter."""
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        # Test limit too high
+        response = client_with_db.get(
+            f"/api/v1/games/{game.game_id}/social-posts?limit=100"
+        )
+        assert response.status_code == 422
+
+        # Test limit too low
+        response = client_with_db.get(
+            f"/api/v1/games/{game.game_id}/social-posts?limit=0"
+        )
+        assert response.status_code == 422
+
+    def test_sentiment_classification(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test sentiment compound scores are classified correctly."""
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        response = client_with_db.get(f"/api/v1/games/{game.game_id}/social-posts")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Find posts by engagement score (known order)
+        posts_by_engagement = {p["engagement_score"]: p for p in data["posts"]}
+
+        # Post with compound 0.85 should be positive
+        assert posts_by_engagement[500]["sentiment_label"] == "positive"
+
+        # Post with compound 0.02 should be neutral
+        assert posts_by_engagement[300]["sentiment_label"] == "neutral"
+
+        # Post with compound -0.75 should be negative
+        assert posts_by_engagement[200]["sentiment_label"] == "negative"
+
+    def test_reddit_url_construction(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test Reddit URL constructed correctly from permalink."""
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        response = client_with_db.get(f"/api/v1/games/{game.game_id}/social-posts")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Find Reddit posts
+        reddit_posts = [p for p in data["posts"] if p["platform"] == "reddit"]
+
+        for post in reddit_posts:
+            assert post["source_url"].startswith("https://www.reddit.com")
+            assert "/r/CollegeBasketball/comments/" in post["source_url"]
+
+    def test_bluesky_url_construction(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test Bluesky URL constructed correctly."""
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        response = client_with_db.get(f"/api/v1/games/{game.game_id}/social-posts")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Find Bluesky post
+        bluesky_posts = [p for p in data["posts"] if p["platform"] == "bluesky"]
+
+        for post in bluesky_posts:
+            assert post["source_url"].startswith("https://bsky.app/profile/")
+            assert "ballgame.bsky.social" in post["source_url"]
+            assert "/post/3abc123" in post["source_url"]
+
+    def test_response_schema_validation(
+        self, client_with_db: TestClient, db: Session
+    ) -> None:
+        """Test that response matches expected schema fields."""
+        game, _ = self._create_test_data(db)
+        db.flush()
+
+        response = client_with_db.get(f"/api/v1/games/{game.game_id}/social-posts")
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify post schema
+        post = data["posts"][0]
+        assert "social_post_key" in post
+        assert "platform" in post
+        assert "post_text" in post
+        assert "created_at" in post
+        assert "engagement_score" in post
+        assert "sentiment_compound" in post
+        assert "sentiment_label" in post
+        assert "source_url" in post
+
+        # Verify types
+        assert isinstance(post["social_post_key"], int)
+        assert isinstance(post["engagement_score"], int)
+        assert isinstance(post["sentiment_compound"], float)
+        assert post["sentiment_label"] in ["positive", "neutral", "negative"]

@@ -287,3 +287,32 @@ class FactSocialSentiment(SQLModel, table=True):
 
     class Config:
         arbitrary_types_allowed = True  # Allow JSONB type
+
+
+# ----- API Response Schemas (Story 4-10) -----
+
+
+class SocialPostPublic(SQLModel):
+    """
+    Public API response schema for social posts (Story 4-10).
+
+    Used by GET /api/v1/games/{game_id}/social-posts endpoint.
+    Contains denormalized data plus derived fields (sentiment_label, source_url).
+    """
+
+    social_post_key: int
+    platform: str  # "reddit" or "bluesky"
+    post_text: str
+    created_at: datetime
+    engagement_score: int
+    sentiment_compound: float  # -1.0 to +1.0
+    sentiment_label: str  # Derived: "positive", "neutral", "negative"
+    source_url: str  # Constructed from platform-specific fields
+
+
+class SocialPostListResponse(SQLModel):
+    """Response schema for social posts list endpoint (Story 4-10)."""
+
+    posts: list[SocialPostPublic]
+    total_count: int
+    game_id: str

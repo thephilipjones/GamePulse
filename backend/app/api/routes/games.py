@@ -11,6 +11,12 @@ from sqlmodel import and_, select
 from app.api.deps import SessionDep
 from app.models.dim_team import DimTeam
 from app.models.fact_game import FactGame
+from app.models.social import (
+    FactSocialSentiment,
+    SocialPostListResponse,
+    SocialPostPublic,
+    StgSocialPost,
+)
 from app.schemas.game import GameListResponse, GamePublic, TeamInfo
 
 logger = logging.getLogger(__name__)
@@ -199,3 +205,145 @@ async def get_games_today(session: SessionDep) -> GameListResponse:
         GameListResponse with list of today's games (UTC) and metadata
     """
     return await get_games(session=session, date_param=None)
+
+
+@router.get("/{game_id}/social-posts", response_model=SocialPostListResponse)
+async def get_game_social_posts(
+    game_id: str,
+    session: SessionDep,
+    limit: int = Query(
+        default=10, ge=1, le=50, description="Max posts to return (1-50)"
+    ),
+) -> SocialPostListResponse:
+    """
+    Get social posts associated with a specific game (Story 4-10).
+
+    Returns posts ordered by engagement_score DESC (most viral first).
+    Includes sentiment classification and source URLs for Reddit/Bluesky.
+
+    Args:
+        game_id: Natural key for game (e.g., "ncaam_401525257")
+        session: Database session (injected)
+        limit: Maximum number of posts to return (default 10, max 50)
+
+    Returns:
+        SocialPostListResponse with posts, total_count, and game_id
+
+    Raises:
+        HTTPException 404: Game not found
+        HTTPException 500: Database error
+    """
+    logger.info(
+        "Social posts endpoint called",
+        extra={
+            "game_id": game_id,
+            "limit": limit,
+        },
+    )
+
+    try:
+        # First, verify game exists
+        game_stmt = select(FactGame).where(FactGame.game_id == game_id)
+        game = session.exec(game_stmt).first()
+
+        if not game:
+            raise HTTPException(status_code=404, detail=f"Game not found: {game_id}")
+
+        # Query social posts with staging data for URL construction
+        stmt = (
+            select(FactSocialSentiment, StgSocialPost)
+            .join(
+                StgSocialPost,
+                FactSocialSentiment.social_post_key  # type: ignore[arg-type]
+                == StgSocialPost.social_post_key,
+            )
+            .where(FactSocialSentiment.game_key == game.game_key)
+            .order_by(FactSocialSentiment.engagement_score.desc())  # type: ignore[union-attr]
+            .limit(limit)
+        )
+
+        results = session.exec(stmt).all()
+
+        # Transform results to API response
+        posts = []
+        for row in results:
+            sentiment_obj = row[0]  # FactSocialSentiment
+            staging_obj = row[1]  # StgSocialPost
+
+            # Extract URL construction fields
+            author_handle = staging_obj.author_handle or ""
+            post_id = staging_obj.post_id or ""
+            # permalink is stored in raw_json for Reddit posts
+            raw_json = staging_obj.raw_json or {}
+            permalink = raw_json.get("permalink", "")
+
+            # Construct source URL based on platform
+            if sentiment_obj.platform == "reddit":
+                if permalink:
+                    source_url = f"https://www.reddit.com{permalink}"
+                else:
+                    # Fallback if permalink missing
+                    clean_id = post_id.replace("t3_", "") if post_id else ""
+                    source_url = f"https://reddit.com/comments/{clean_id}"
+            elif sentiment_obj.platform == "bluesky":
+                # Extract post ID segment from URI (last part after final /)
+                post_uri_segment = post_id.split("/")[-1] if post_id else ""
+                source_url = (
+                    f"https://bsky.app/profile/{author_handle}/post/{post_uri_segment}"
+                )
+            else:
+                source_url = ""
+
+            # Classify sentiment based on compound score thresholds
+            compound = float(sentiment_obj.sentiment_compound)
+            if compound >= 0.05:
+                sentiment_label = "positive"
+            elif compound <= -0.05:
+                sentiment_label = "negative"
+            else:
+                sentiment_label = "neutral"
+
+            # Ensure engagement_score is int (may be float from DB)
+            engagement = int(sentiment_obj.engagement_score or 0)
+
+            posts.append(
+                SocialPostPublic(
+                    social_post_key=sentiment_obj.social_post_key,
+                    platform=sentiment_obj.platform,
+                    post_text=sentiment_obj.post_text,
+                    created_at=sentiment_obj.created_at,
+                    engagement_score=engagement,
+                    sentiment_compound=compound,
+                    sentiment_label=sentiment_label,
+                    source_url=source_url,
+                )
+            )
+
+        logger.info(
+            "Social posts query successful",
+            extra={
+                "game_id": game_id,
+                "result_count": len(posts),
+            },
+        )
+
+        return SocialPostListResponse(
+            posts=posts,
+            total_count=len(posts),
+            game_id=game_id,
+        )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except (OperationalError, DatabaseError) as e:
+        logger.error(
+            "Database error in social posts endpoint",
+            exc_info=True,
+            extra={
+                "endpoint": f"/api/v1/games/{game_id}/social-posts",
+                "game_id": game_id,
+                "error": str(e),
+            },
+        )
+        raise HTTPException(status_code=500, detail="Database connection failed") from e

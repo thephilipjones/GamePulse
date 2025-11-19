@@ -47,13 +47,9 @@ export type GamePublic = {
      */
     game_status?: (string | null);
     /**
-     * Game clock time (e.g., '14:32')
+     * Game clock (e.g., '14:32 2nd Half')
      */
     game_clock?: (string | null);
-    /**
-     * Game period (e.g., '1st Half', '2nd Half', 'OT', 'FINAL')
-     */
-    game_period?: (string | null);
     /**
      * Home team details
      */
