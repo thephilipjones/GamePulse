@@ -1,10 +1,21 @@
 import { ChakraProvider } from "@chakra-ui/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "@testing-library/jest-dom";
 import { type RenderOptions, render } from "@testing-library/react";
 import type React from "react";
 import type { ReactElement } from "react";
 import { ColorModeProvider } from "./components/ui/color-mode";
 import { system } from "./theme";
+
+// Create a fresh QueryClient for each test
+const createTestQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
 
 // Mock window.matchMedia for tests (required for Chakra UI dark mode)
 Object.defineProperty(window, "matchMedia", {
@@ -22,14 +33,17 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 /**
- * Custom render function that wraps components with Chakra providers
- * for testing. This ensures all Chakra UI components work correctly in tests.
+ * Custom render function that wraps components with all necessary providers
+ * for testing. This ensures all Chakra UI and TanStack Query components work correctly in tests.
  */
 function AllTheProviders({ children }: { children: React.ReactNode }) {
+  const queryClient = createTestQueryClient();
   return (
-    <ChakraProvider value={system}>
-      <ColorModeProvider defaultTheme="light">{children}</ColorModeProvider>
-    </ChakraProvider>
+    <QueryClientProvider client={queryClient}>
+      <ChakraProvider value={system}>
+        <ColorModeProvider defaultTheme="light">{children}</ColorModeProvider>
+      </ChakraProvider>
+    </QueryClientProvider>
   );
 }
 

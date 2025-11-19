@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 from sqlmodel import Session
 
+from app.api.deps import get_db
 from app.core.config import settings
 from app.core.db import engine
 from app.main import app
@@ -59,6 +60,39 @@ def db() -> Generator[Session, None, None]:
 def client() -> Generator[TestClient, None, None]:
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture(scope="function")
+def client_with_db(db: Session) -> Generator[TestClient, None, None]:
+    """
+    TestClient that shares the test session with the app.
+
+    Use this fixture when you need to create test data in the database
+    and then access it through the API. The app's get_db dependency is
+    overridden to return the test session, so both test code and app
+    code see the same data (and changes are rolled back after each test).
+
+    Example:
+        def test_get_item(self, client_with_db: TestClient, db: Session):
+            # Create test data
+            item = Item(name="test")
+            db.add(item)
+            db.flush()
+
+            # Access via API (will see the item)
+            response = client_with_db.get(f"/items/{item.id}")
+            assert response.status_code == 200
+    """
+
+    def get_test_db() -> Generator[Session, None, None]:
+        yield db
+
+    app.dependency_overrides[get_db] = get_test_db
+    try:
+        with TestClient(app) as c:
+            yield c
+    finally:
+        app.dependency_overrides.clear()
 
 
 # Async database fixtures for integration tests
