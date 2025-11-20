@@ -27,10 +27,16 @@ def upgrade():
     - Subsequent chunks create fine once any chunk exists
 
     Solution:
-    - Force creation of initial chunk using synchronous SQL (Alembic uses psycopg2)
-    - Insert dummy row to trigger chunk creation with proper index propagation
+    - Check if any chunks already exist
+    - If NO chunks exist: Insert dummy row WITHOUT ON CONFLICT (plain INSERT works)
     - Delete dummy row immediately (chunk remains allocated)
-    - Future async inserts work correctly once chunks exist
+    - Future async inserts with ON CONFLICT work correctly once chunks exist
+
+    Why this works:
+    - ON CONFLICT requires an index to check conflicts
+    - When there are no chunks, there's no index yet (chicken-and-egg problem)
+    - Plain INSERT creates the first chunk with proper index propagation
+    - Subsequent inserts can use ON CONFLICT because the index now exists
 
     This follows TimescaleDB best practices:
     - Keep composite PK with partitioning column (required by TimescaleDB)
@@ -43,34 +49,53 @@ def upgrade():
     - Research: TimescaleDB 2.16+ has 10-100x better ON CONFLICT performance
     """
 
-    # Force creation of first chunk using synchronous SQL
-    # This ensures index propagation works correctly (unlike async first insert)
+    # Check if chunks exist, and only initialize if table is empty
+    # This approach avoids the ON CONFLICT problem when there are no chunks
     op.execute("""
-        INSERT INTO stg_social_posts (
-            platform,
-            post_id,
-            created_at,
-            fetched_at,
-            engagement_score,
-            raw_json,
-            social_post_key
-        )
-        VALUES (
-            '__init__',
-            '__chunk_init__',
-            NOW(),
-            NOW(),
-            0,
-            '{}'::jsonb,
-            DEFAULT
-        )
-        ON CONFLICT (platform, post_id, created_at) DO NOTHING;
-    """)
+        DO $$
+        DECLARE
+            chunk_count INTEGER;
+        BEGIN
+            -- Check if any chunks exist for stg_social_posts
+            SELECT COUNT(*) INTO chunk_count
+            FROM timescaledb_information.chunks
+            WHERE hypertable_name = 'stg_social_posts';
 
-    # Delete the dummy row (chunk remains allocated with proper indexes)
-    op.execute("""
-        DELETE FROM stg_social_posts
-        WHERE platform = '__init__' AND post_id = '__chunk_init__';
+            -- Only create initial chunk if none exist
+            IF chunk_count = 0 THEN
+                RAISE NOTICE 'stg_social_posts: No chunks found, initializing first chunk...';
+
+                -- Insert dummy row to force chunk creation
+                -- NOTE: We DON'T use ON CONFLICT here because there are no chunks yet
+                -- Plain INSERT creates the first chunk with proper index propagation
+                INSERT INTO stg_social_posts (
+                    platform,
+                    post_id,
+                    created_at,
+                    fetched_at,
+                    engagement_score,
+                    raw_json,
+                    social_post_key
+                )
+                VALUES (
+                    '__init__',
+                    '__chunk_init__',
+                    NOW(),
+                    NOW(),
+                    0,
+                    '{}'::jsonb,
+                    DEFAULT
+                );
+
+                -- Delete the dummy row (chunk remains allocated with proper indexes)
+                DELETE FROM stg_social_posts
+                WHERE platform = '__init__' AND post_id = '__chunk_init__';
+
+                RAISE NOTICE 'stg_social_posts: First chunk initialized successfully';
+            ELSE
+                RAISE NOTICE 'stg_social_posts: % chunks already exist, skipping initialization', chunk_count;
+            END IF;
+        END $$;
     """)
 
     # Verify chunk was created with proper index
