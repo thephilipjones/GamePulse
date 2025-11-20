@@ -49,67 +49,77 @@ def upgrade():
     - Research: TimescaleDB 2.16+ has 10-100x better ON CONFLICT performance
     """
 
-    # Check if chunks exist, and only initialize if table is empty
-    # TimescaleDB limitation: Cannot insert into hypertable with indexes on partitioning
-    # column when there are no chunks. Workaround: Temporarily drop indexes, insert, recreate.
+    # Check if table has data - if yes, chunks exist and initialization is unnecessary
+    # This avoids dropping indexes that may have FK dependencies in production
     op.execute("""
         DO $$
         DECLARE
+            row_count INTEGER;
             chunk_count INTEGER;
         BEGIN
-            -- Check if any chunks exist for stg_social_posts
+            -- Check if table has any data (safer than checking chunks directly)
+            SELECT COUNT(*) INTO row_count FROM stg_social_posts;
+
+            IF row_count > 0 THEN
+                RAISE NOTICE 'stg_social_posts: Table has % rows, chunks already initialized', row_count;
+                RETURN; -- Exit early, nothing to do
+            END IF;
+
+            -- Check if any chunks exist even with no data (edge case)
             SELECT COUNT(*) INTO chunk_count
             FROM timescaledb_information.chunks
             WHERE hypertable_name = 'stg_social_posts';
 
-            -- Only create initial chunk if none exist
-            IF chunk_count = 0 THEN
-                RAISE NOTICE 'stg_social_posts: No chunks found, initializing first chunk...';
-
-                -- Temporarily drop indexes that include partitioning column
-                -- This avoids TimescaleDB error: "index for constraint not found on chunk"
-                DROP INDEX IF EXISTS ix_stg_social_posts_social_post_key;
-                DROP INDEX IF EXISTS ix_stg_social_posts_created_at;
-                DROP INDEX IF EXISTS ix_stg_social_posts_matched;
-
-                -- Insert dummy row to force chunk creation
-                INSERT INTO stg_social_posts (
-                    platform,
-                    post_id,
-                    created_at,
-                    fetched_at,
-                    engagement_score,
-                    raw_json,
-                    social_post_key
-                )
-                VALUES (
-                    '__init__',
-                    '__chunk_init__',
-                    NOW(),
-                    NOW(),
-                    0,
-                    '{}'::jsonb,
-                    DEFAULT
-                );
-
-                -- Delete the dummy row (chunk remains allocated with proper primary key index)
-                DELETE FROM stg_social_posts
-                WHERE platform = '__init__' AND post_id = '__chunk_init__';
-
-                -- Recreate indexes (will now propagate correctly to existing chunk)
-                CREATE INDEX ix_stg_social_posts_created_at
-                    ON stg_social_posts (created_at);
-
-                CREATE INDEX ix_stg_social_posts_matched
-                    ON stg_social_posts (matched_to_game, created_at);
-
-                CREATE INDEX ix_stg_social_posts_social_post_key
-                    ON stg_social_posts (social_post_key, created_at);
-
-                RAISE NOTICE 'stg_social_posts: First chunk initialized successfully';
-            ELSE
-                RAISE NOTICE 'stg_social_posts: % chunks already exist, skipping initialization', chunk_count;
+            IF chunk_count > 0 THEN
+                RAISE NOTICE 'stg_social_posts: % chunks exist but table empty (edge case)', chunk_count;
+                RETURN; -- Exit early, chunks already initialized
             END IF;
+
+            -- Table is completely empty and has no chunks - safe to initialize
+            RAISE NOTICE 'stg_social_posts: No data and no chunks found, initializing first chunk...';
+
+            -- Temporarily drop indexes that include partitioning column
+            -- This avoids TimescaleDB error: "index for constraint not found on chunk"
+            -- Use CASCADE because fact_social_sentiment may have FK dependency
+            DROP INDEX IF EXISTS ix_stg_social_posts_social_post_key CASCADE;
+            DROP INDEX IF EXISTS ix_stg_social_posts_created_at CASCADE;
+            DROP INDEX IF EXISTS ix_stg_social_posts_matched CASCADE;
+
+            -- Insert dummy row to force chunk creation
+            INSERT INTO stg_social_posts (
+                platform,
+                post_id,
+                created_at,
+                fetched_at,
+                engagement_score,
+                raw_json,
+                social_post_key
+            )
+            VALUES (
+                '__init__',
+                '__chunk_init__',
+                NOW(),
+                NOW(),
+                0,
+                '{}'::jsonb,
+                DEFAULT
+            );
+
+            -- Delete the dummy row (chunk remains allocated with proper primary key index)
+            DELETE FROM stg_social_posts
+            WHERE platform = '__init__' AND post_id = '__chunk_init__';
+
+            -- Recreate indexes (will now propagate correctly to existing chunk)
+            CREATE INDEX ix_stg_social_posts_created_at
+                ON stg_social_posts (created_at);
+
+            CREATE INDEX ix_stg_social_posts_matched
+                ON stg_social_posts (matched_to_game, created_at);
+
+            CREATE INDEX ix_stg_social_posts_social_post_key
+                ON stg_social_posts (social_post_key, created_at);
+
+            RAISE NOTICE 'stg_social_posts: First chunk initialized successfully';
         END $$;
     """)
 
