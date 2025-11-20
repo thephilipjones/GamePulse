@@ -72,10 +72,63 @@ class GameMatcher:
         game_key = await matcher.resolve_game_key(result.matched_teams, post_date)
     """
 
-    MATCH_THRESHOLD = 70  # RapidFuzz score threshold (0-100 scale) - increased from 60
+    MATCH_THRESHOLD = 75  # RapidFuzz score threshold (0-100 scale) - increased from 70 to reduce false positives
     CONFIDENCE_THRESHOLD = 0.6  # Minimum confidence for is_game_related flag
     TOP_N_MATCHES = 5  # Number of top matches to consider
-    SHORT_ACRONYM_LENGTH = 3  # Aliases ≤ this length require exact match
+    SHORT_ACRONYM_LENGTH = 5  # Aliases ≤ this length require exact match (prevents "wake"→"basketball", "elon"→"oregon")
+
+    # Common words that should never match team names (prevents "college" → "Colgate")
+    WORD_BLACKLIST = {
+        # Educational institutions
+        "college",
+        "university",
+        "state",
+        "school",
+        # Sports terms
+        "team",
+        "game",
+        "play",
+        "player",
+        "coach",
+        "basketball",
+        "football",
+        "sports",
+        "season",
+        # Time references
+        "tonight",
+        "today",
+        "yesterday",
+        "tomorrow",
+        "week",
+        "year",
+        # Common articles/prepositions that appear in team names
+        "the",
+        "of",
+        "at",
+        "in",
+        "and",
+        "a",
+        "an",
+        # Geographic/directional words (too ambiguous when standalone)
+        "north",
+        "south",
+        "east",
+        "west",
+        "central",
+        "northern",
+        "southern",
+        "eastern",
+        "western",
+        # Common nouns that appear in team names
+        "forest",
+        "city",
+        "bay",
+        "valley",
+        "river",
+        "lake",
+        "mountain",
+        "coast",
+    }
 
     def __init__(self, session: Session | AsyncSession):
         """
@@ -129,13 +182,17 @@ class GameMatcher:
 
             # Build alias cache: lowercase alias -> team_id
             for team in teams:
-                # Add primary team name
-                self.teams_cache[team.team_name.lower()] = team.team_id
+                # Add primary team name (unless blacklisted)
+                team_name_lower = team.team_name.lower()
+                if team_name_lower not in self.WORD_BLACKLIST:
+                    self.teams_cache[team_name_lower] = team.team_id
 
-                # Add all aliases from TEXT[] column
+                # Add all aliases from TEXT[] column (skip blacklisted words)
                 if team.aliases:
                     for alias in team.aliases:
-                        self.teams_cache[alias.lower()] = team.team_id
+                        alias_lower = alias.lower()
+                        if alias_lower not in self.WORD_BLACKLIST:
+                            self.teams_cache[alias_lower] = team.team_id
 
             logger.info(
                 "game_matcher_teams_loaded",
@@ -177,13 +234,17 @@ class GameMatcher:
 
             # Build alias cache: lowercase alias -> team_id
             for team in teams:
-                # Add primary team name
-                self.teams_cache[team.team_name.lower()] = team.team_id
+                # Add primary team name (unless blacklisted)
+                team_name_lower = team.team_name.lower()
+                if team_name_lower not in self.WORD_BLACKLIST:
+                    self.teams_cache[team_name_lower] = team.team_id
 
-                # Add all aliases from TEXT[] column
+                # Add all aliases from TEXT[] column (skip blacklisted words)
                 if team.aliases:
                     for alias in team.aliases:
-                        self.teams_cache[alias.lower()] = team.team_id
+                        alias_lower = alias.lower()
+                        if alias_lower not in self.WORD_BLACKLIST:
+                            self.teams_cache[alias_lower] = team.team_id
 
             logger.info(
                 "game_matcher_teams_loaded",
@@ -198,6 +259,32 @@ class GameMatcher:
                 error=str(e),
             )
             raise RuntimeError(f"Failed to load teams cache: {e}") from e
+
+    def _remove_urls(self, text: str) -> str:
+        """
+        Remove URLs from text to prevent false positive matches.
+
+        Example: "Check /r/CollegeBasketball" contains "College" which fuzzy matches "Colgate"
+        This function strips URLs to prevent such false positives.
+
+        Args:
+            text: Input text possibly containing URLs
+
+        Returns:
+            Text with URLs removed
+        """
+        import re
+
+        # Remove http/https URLs
+        text = re.sub(r"https?://\S+", "", text)
+        # Remove www URLs
+        text = re.sub(r"www\.\S+", "", text)
+        # Remove markdown links [text](url)
+        text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+        # Remove /r/subreddit and /u/user patterns
+        text = re.sub(r"/[ru]/\w+", "", text)
+
+        return text
 
     def match_post_to_teams(self, post_text: str) -> GameMatchResult:
         """
@@ -240,12 +327,18 @@ class GameMatcher:
             )
 
         # Normalize post text for matching
-        text_lower = post_text.lower()
+        # Remove URLs to prevent false positives (e.g., "College" in URLs matching "Colgate")
+        text_cleaned = self._remove_urls(post_text)
+        text_lower = text_cleaned.lower()
 
         # Find all matches above threshold using multi-tier strategy
         matches: list[tuple[str, float]] = []  # (team_id, score)
 
         for alias, team_id in self.teams_cache.items():
+            # Skip if alias is a common word in blacklist (prevents "college" → "Colgate")
+            if alias in self.WORD_BLACKLIST:
+                continue
+
             # Tier 1: Short acronyms (≤3 chars) require exact word match
             if len(alias) <= self.SHORT_ACRONYM_LENGTH:
                 # Check if alias appears as a complete word (word boundary check)
@@ -558,3 +651,100 @@ class GameMatcher:
             return None
 
         return None
+
+    async def resolve_single_team_game(
+        self, team_id: str, post_date: datetime, time_window_hours: int = 24
+    ) -> int | None:
+        """
+        Resolve a single team mention to a game within a time window.
+
+        Used for high-confidence single-team posts (≥0.85 confidence) to capture:
+        - Pre-game hype posts
+        - Post-game reaction posts
+        - General team discussion near game time
+
+        Args:
+            team_id: Matched team ID (natural key from dim_team.team_id)
+            post_date: Timestamp of the social media post (timezone-aware)
+            time_window_hours: Hours before and after post to search for games (default: 24)
+
+        Returns:
+            Game key (surrogate PK) if exactly one game found in window, else None
+
+        Examples:
+            >>> # Post 6 hours before Duke vs UNC game
+            >>> game_key = await matcher.resolve_single_team_game("ncaam_duke", post_date, 24)
+            >>> game_key
+            12345
+        """
+        try:
+            # Get team_key surrogate key from team_id natural key
+            statement = select(DimTeam.team_key).where(DimTeam.team_id == team_id)
+            result = await self.session.execute(statement)  # type: ignore[misc]
+            team_key = result.scalar_one_or_none()
+
+            if not team_key:
+                logger.warning(
+                    "single_team_game_resolution_failed",
+                    team_id=team_id,
+                    reason="team_key_not_found",
+                )
+                return None
+
+            # Define time window: ±time_window_hours from post_date
+            window_start = post_date - timedelta(hours=time_window_hours)
+            window_end = post_date + timedelta(hours=time_window_hours)
+
+            # Query for games in time window where team is home or away
+            statement = (
+                select(FactGame.game_key)
+                .where(
+                    FactGame.game_date >= window_start,
+                    FactGame.game_date <= window_end,
+                )
+                .where(
+                    (FactGame.home_team_key == team_key)
+                    | (FactGame.away_team_key == team_key)
+                )
+            )
+            result = await self.session.execute(statement)  # type: ignore[misc]
+            games = list(result.scalars().all())
+
+            # Return game_key only if exactly one game found (unambiguous)
+            if len(games) == 1:
+                logger.debug(
+                    "single_team_game_resolved",
+                    team_id=team_id,
+                    post_date=post_date.isoformat(),
+                    game_key=games[0],
+                    window_hours=time_window_hours,
+                )
+                return games[0]  # type: ignore[no-any-return]
+            elif len(games) > 1:
+                logger.debug(
+                    "single_team_game_ambiguous",
+                    team_id=team_id,
+                    post_date=post_date.isoformat(),
+                    reason="multiple_games_in_window",
+                    games_count=len(games),
+                    window_hours=time_window_hours,
+                )
+                return None
+            else:
+                logger.debug(
+                    "single_team_game_not_found",
+                    team_id=team_id,
+                    post_date=post_date.isoformat(),
+                    window_hours=time_window_hours,
+                )
+                return None
+
+        except Exception as e:
+            logger.error(
+                "single_team_game_resolution_error",
+                team_id=team_id,
+                post_date=post_date.isoformat(),
+                error_type=type(e).__name__,
+                error=str(e),
+            )
+            return None

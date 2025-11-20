@@ -34,6 +34,17 @@ if [ "${DIM_DATE_AUTO_SEED:-true}" = "true" ]; then
     echo "==================================================================="
 fi
 
+# Enrich teams with colors and aliases
+if [ "${TEAM_ENRICHMENT_AUTO_RUN:-true}" = "true" ]; then
+    echo "==================================================================="
+    echo "Running team enrichment (colors + aliases)"
+    echo "==================================================================="
+    python -m app.cli.enrich_teams
+    echo "==================================================================="
+    echo "Team enrichment complete"
+    echo "==================================================================="
+fi
+
 # Initialize Dagster database if DAGSTER_POSTGRES_DB is set and differs from app DB
 if [ ! -z "$DAGSTER_POSTGRES_DB" ] && [ "$DAGSTER_POSTGRES_DB" != "$POSTGRES_DB" ]; then
     echo "==================================================================="

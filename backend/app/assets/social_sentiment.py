@@ -118,11 +118,31 @@ async def calculate_sentiment(
 
             # Resolve game_key using matched_teams + post date
             game_key = None
+            match_type = None  # Track match type for logging
+
             if post.matched_teams:
-                game_key = await matcher.resolve_game_key(
-                    team_ids=post.matched_teams,
-                    post_date=post.created_at,
-                )
+                # Priority 1: Dual-team posts (highest confidence)
+                if len(post.matched_teams) == 2:
+                    game_key = await matcher.resolve_game_key(
+                        team_ids=post.matched_teams,
+                        post_date=post.created_at,
+                    )
+                    if game_key:
+                        match_type = "dual_team"
+
+                # Priority 2: Single-team posts with high confidence (≥0.85)
+                # Expands time window to 24 hours to capture pre/post-game discussion
+                elif len(post.matched_teams) == 1 and post.match_confidence >= 0.85:
+                    game_key = await matcher.resolve_single_team_game(
+                        team_id=post.matched_teams[0],
+                        post_date=post.created_at,
+                        time_window_hours=24,
+                    )
+                    if game_key:
+                        match_type = "single_team"
+                        # Apply confidence penalty for single-team matches (70% of original)
+                        # This ensures dual-team posts rank higher in queries
+                        post.match_confidence = post.match_confidence * 0.7
 
             # Skip posts without valid game_key
             if not game_key:
@@ -132,10 +152,23 @@ async def calculate_sentiment(
                     extra={
                         "social_post_key": post.social_post_key,
                         "matched_teams": post.matched_teams,
+                        "match_confidence": post.match_confidence,
                         "post_date": str(post.created_at.date()),
                     },
                 )
                 continue
+
+            # Log successful match
+            context.log.debug(
+                f"post_matched_to_game_{match_type}",
+                extra={
+                    "social_post_key": post.social_post_key,
+                    "game_key": game_key,
+                    "matched_teams": post.matched_teams,
+                    "match_confidence": post.match_confidence,
+                    "match_type": match_type,
+                },
+            )
 
             # Calculate date_key from post created_at (YYYYMMDD format)
             date_key = int(post.created_at.strftime("%Y%m%d"))
