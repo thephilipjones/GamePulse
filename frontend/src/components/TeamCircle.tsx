@@ -60,8 +60,6 @@ export function TeamCircle({
         fontWeight="medium"
         color="text.primary"
         textAlign="center"
-        lineClamp={1}
-        maxW={{ base: 10, md: 16 }}
       >
         {teamName}
       </Text>
