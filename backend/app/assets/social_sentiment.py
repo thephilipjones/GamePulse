@@ -132,7 +132,11 @@ async def calculate_sentiment(
 
                 # Priority 2: Single-team posts with high confidence (≥0.85)
                 # Expands time window to 24 hours to capture pre/post-game discussion
-                elif len(post.matched_teams) == 1 and post.match_confidence >= 0.85:
+                elif (
+                    len(post.matched_teams) == 1
+                    and post.match_confidence is not None
+                    and post.match_confidence >= 0.85
+                ):
                     game_key = await matcher.resolve_single_team_game(
                         team_id=post.matched_teams[0],
                         post_date=post.created_at,
