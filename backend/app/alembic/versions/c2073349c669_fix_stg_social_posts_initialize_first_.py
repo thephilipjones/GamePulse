@@ -50,7 +50,8 @@ def upgrade():
     """
 
     # Check if chunks exist, and only initialize if table is empty
-    # This approach avoids the ON CONFLICT problem when there are no chunks
+    # TimescaleDB limitation: Cannot insert into hypertable with indexes on partitioning
+    # column when there are no chunks. Workaround: Temporarily drop indexes, insert, recreate.
     op.execute("""
         DO $$
         DECLARE
@@ -65,9 +66,13 @@ def upgrade():
             IF chunk_count = 0 THEN
                 RAISE NOTICE 'stg_social_posts: No chunks found, initializing first chunk...';
 
+                -- Temporarily drop indexes that include partitioning column
+                -- This avoids TimescaleDB error: "index for constraint not found on chunk"
+                DROP INDEX IF EXISTS ix_stg_social_posts_social_post_key;
+                DROP INDEX IF EXISTS ix_stg_social_posts_created_at;
+                DROP INDEX IF EXISTS ix_stg_social_posts_matched;
+
                 -- Insert dummy row to force chunk creation
-                -- NOTE: We DON'T use ON CONFLICT here because there are no chunks yet
-                -- Plain INSERT creates the first chunk with proper index propagation
                 INSERT INTO stg_social_posts (
                     platform,
                     post_id,
@@ -87,9 +92,19 @@ def upgrade():
                     DEFAULT
                 );
 
-                -- Delete the dummy row (chunk remains allocated with proper indexes)
+                -- Delete the dummy row (chunk remains allocated with proper primary key index)
                 DELETE FROM stg_social_posts
                 WHERE platform = '__init__' AND post_id = '__chunk_init__';
+
+                -- Recreate indexes (will now propagate correctly to existing chunk)
+                CREATE INDEX ix_stg_social_posts_created_at
+                    ON stg_social_posts (created_at);
+
+                CREATE INDEX ix_stg_social_posts_matched
+                    ON stg_social_posts (matched_to_game, created_at);
+
+                CREATE INDEX ix_stg_social_posts_social_post_key
+                    ON stg_social_posts (social_post_key, created_at);
 
                 RAISE NOTICE 'stg_social_posts: First chunk initialized successfully';
             ELSE
