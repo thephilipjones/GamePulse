@@ -78,9 +78,12 @@ class NCAAClient:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
     )
-    async def fetch_todays_games(self) -> list[dict[str, Any]]:
+    async def fetch_games_for_date(self, target_date: date) -> list[dict[str, Any]]:
         """
-        Fetch all games for today's date from NCAA API.
+        Fetch all games for a specific date from NCAA API.
+
+        Args:
+            target_date: Date to fetch games for (Python date object).
 
         Returns:
             List of raw game dictionaries from API response.
@@ -92,9 +95,8 @@ class NCAAClient:
         # Enforce rate limit before making request
         await self._enforce_rate_limit()
 
-        today = date.today()
-        date_str = today.strftime("%Y%m%d")
-        url = f"{self.BASE_URL}?date={date_str}"
+        date_str = target_date.strftime("%Y/%m/%d")
+        url = f"{self.BASE_URL}/{date_str}"
 
         logger.info("ncaa_api_fetch_started", url=url, date=date_str)
 
@@ -129,6 +131,21 @@ class NCAAClient:
         except Exception as e:
             logger.error("ncaa_api_fetch_failed", url=url, error=str(e))
             return []
+
+    async def fetch_todays_games(self) -> list[dict[str, Any]]:
+        """
+        Fetch all games for today's date from NCAA API.
+
+        Convenience wrapper around fetch_games_for_date() for backwards compatibility.
+
+        Returns:
+            List of raw game dictionaries from API response.
+            Returns empty list if no games scheduled or on error.
+
+        Raises:
+            httpx.HTTPStatusError: On 4xx/5xx responses (after retries exhausted).
+        """
+        return await self.fetch_games_for_date(date.today())
 
     @retry(
         stop=stop_after_attempt(3),

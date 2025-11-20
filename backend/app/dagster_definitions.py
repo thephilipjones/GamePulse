@@ -45,11 +45,17 @@ all_assets = load_assets_from_modules(
     ]
 )
 
-# Define asset job for manual materialization (NCAA)
-ncaa_games_job = define_asset_job(
-    name="materialize_ncaa_games",
-    selection="ncaa_games",
-    description="Manually materialize NCAA games asset",
+# Define asset jobs for NCAA games (Story 4-11: Split into today vs window)
+ncaa_games_today_job = define_asset_job(
+    name="materialize_ncaa_games_today",
+    selection="ncaa_games_today",
+    description="Materialize NCAA games for today only (live updates)",
+)
+
+ncaa_games_window_job = define_asset_job(
+    name="materialize_ncaa_games_window",
+    selection="ncaa_games_window",
+    description="Materialize NCAA games for 7 days historical + 7 days future",
 )
 
 # Reddit and Bluesky jobs and schedules imported from their modules
@@ -63,27 +69,25 @@ calculate_sentiment_job = define_asset_job(
 )
 
 
-# Define NCAA games schedule: every 1 minute (starts RUNNING automatically)
-# RATIONALE: Schedule auto-starts on daemon initialization to ensure continuous
-# game data ingestion during NCAA basketball season. The retry policy (3 attempts,
-# exponential backoff: 2s, 4s, 8s) handles API failures gracefully, making
-# auto-start safe. During off-season, materializations complete quickly with
-# zero games (no API load). The 1-minute interval provides real-time feel for
-# live sports while staying well below NCAA API rate limits (5 req/sec burst).
+# Define NCAA games schedule: every 15 minutes for today's games (live updates)
+# RATIONALE: 15-minute interval provides timely live score updates while being
+# API-friendly. Historical and future games are handled by the window schedule
+# (runs daily) since they don't change frequently.
 @schedule(
-    job=ncaa_games_job,
-    cron_schedule="* * * * *",  # Every 1 minute - real-time feel for live sports
-    execution_timezone="America/New_York",  # NCAA games typically in Eastern Time
-    default_status=DefaultScheduleStatus.RUNNING,  # Auto-start for continuous ingestion
+    job=ncaa_games_today_job,
+    cron_schedule="*/15 * * * *",  # Every 15 minutes
+    execution_timezone="America/New_York",
+    default_status=DefaultScheduleStatus.RUNNING,
 )
-def ncaa_games_schedule(context: ScheduleEvaluationContext) -> RunRequest | SkipReason:
+def ncaa_games_today_schedule(
+    context: ScheduleEvaluationContext,
+) -> RunRequest | SkipReason:
     """
-    Schedule NCAA games materialization every minute.
+    Schedule NCAA today's games materialization every 15 minutes.
     Skips if there are already queued or running runs for this job.
     """
-    job_name = "materialize_ncaa_games"
+    job_name = "materialize_ncaa_games_today"
 
-    # Check for queued or running runs for this specific job
     filters = RunsFilter(
         statuses=[DagsterRunStatus.QUEUED, DagsterRunStatus.STARTED],
         job_name=job_name,
@@ -98,6 +102,24 @@ def ncaa_games_schedule(context: ScheduleEvaluationContext) -> RunRequest | Skip
     return RunRequest()
 
 
+# Define NCAA games window schedule: once daily at 6 AM
+# Fetches historical (7 days back) and future (7 days forward) games
+@schedule(
+    job=ncaa_games_window_job,
+    cron_schedule="0 6 * * *",  # Daily at 6:00 AM Eastern
+    execution_timezone="America/New_York",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+def ncaa_games_window_schedule(
+    _context: ScheduleEvaluationContext,
+) -> RunRequest | SkipReason:
+    """
+    Schedule NCAA historical/future games window materialization once daily.
+    Runs at 6 AM to populate yesterday's games and upcoming week.
+    """
+    return RunRequest()
+
+
 # Initialize resources
 database_resource = DatabaseResource()
 
@@ -105,7 +127,8 @@ database_resource = DatabaseResource()
 defs = Definitions(
     assets=all_assets,
     schedules=[
-        ncaa_games_schedule,
+        ncaa_games_today_schedule,  # Every 15 min for live updates
+        ncaa_games_window_schedule,  # Daily at 6 AM for historical/future
         extract_reddit_posts_schedule,
         extract_bluesky_posts_schedule,
         cleanup_unmatched_posts_schedule,  # Daily cleanup of old unmatched posts (Story 4-7)
@@ -114,7 +137,8 @@ defs = Definitions(
         "database": database_resource,
     },
     jobs=[
-        ncaa_games_job,
+        ncaa_games_today_job,
+        ncaa_games_window_job,
         reddit_posts_job,
         bluesky_posts_job,
         calculate_sentiment_job,  # Manual materialization only (auto-materialize policy)

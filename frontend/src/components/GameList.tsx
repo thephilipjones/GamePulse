@@ -16,7 +16,7 @@ import { useGames } from "../hooks/useGames";
 import { GameCard } from "./GameCard";
 
 /**
- * GameList component displays today's NCAA basketball games grouped by status.
+ * GameList component displays NCAA basketball games for a specific date, grouped by status.
  *
  * Handles five states:
  * 1. Loading: Shows skeleton placeholders in grid layout
@@ -29,20 +29,29 @@ import { GameCard } from "./GameCard";
  * - Status-based grouping with section headers
  * - Responsive grid: Mobile (1 col), Tablet (2 col), Desktop (3 col)
  * - Empty sections automatically hidden
- * - Preserves existing polling behavior (60s interval)
+ * - Adaptive caching: Today's games poll every 60s, historical games cached for 5 min
  *
  * Uses TanStack Query via useGames hook for efficient data fetching
- * with automatic caching, retry logic, and polling.
+ * with automatic caching, retry logic, and intelligent polling.
+ *
+ * @param date - Optional date in YYYY-MM-DD format. Defaults to today.
  *
  * @example
  * ```tsx
- * <Container>
- *   <GameList />
- * </Container>
+ * // Show today's games
+ * <GameList />
+ *
+ * // Show games for specific date
+ * <GameList date="2025-11-19" />
  * ```
  */
-export function GameList() {
-  const { data, isLoading, isError, isFetching } = useGames();
+export interface GameListProps {
+  /** Optional date in YYYY-MM-DD format. Defaults to today. */
+  date?: string;
+}
+
+export function GameList({ date }: GameListProps = {}) {
+  const { data, isLoading, isError, isFetching } = useGames(date);
 
   // Group games by status (memoized to prevent unnecessary recalculations)
   const { liveGames, finalGames, upcomingGames } = useMemo(() => {
@@ -113,17 +122,30 @@ export function GameList() {
   if (!data || data.games.length === 0) {
     return (
       <Text fontSize="lg" color="gray.500" textAlign="center">
-        No games scheduled for today.
+        No games scheduled for this date.
       </Text>
     );
   }
 
   // Success state: display grouped game cards
   return (
-    <VStack gap={4} align="stretch">
-      {/* Background refetch indicator */}
+    <Box position="relative">
+      {/* Background refetch indicator - absolutely positioned to avoid layout shift */}
       {isFetching && !isLoading && (
-        <HStack justify="center" color="gray.500" fontSize="sm">
+        <HStack
+          position="fixed"
+          top={{ base: "110px", md: "90px" }}
+          left="50%"
+          transform="translateX(-50%)"
+          color="gray.500"
+          fontSize="sm"
+          bg="bg.surface"
+          px={4}
+          py={2}
+          borderRadius="full"
+          boxShadow="md"
+          zIndex={5}
+        >
           <Spinner size="sm" />
           <Text>Updating...</Text>
         </HStack>
@@ -134,7 +156,7 @@ export function GameList() {
         finalGames={finalGames}
         upcomingGames={upcomingGames}
       />
-    </VStack>
+    </Box>
   );
 }
 
@@ -160,7 +182,7 @@ function GameListContent({
   if (!hasGames) {
     return (
       <Text fontSize="lg" color="gray.500" textAlign="center">
-        No games scheduled for today.
+        No games scheduled for this date.
       </Text>
     );
   }

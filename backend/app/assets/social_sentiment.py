@@ -18,6 +18,7 @@ Transform Logic:
 """
 
 from datetime import timedelta
+from decimal import Decimal
 
 import structlog
 from dagster import (
@@ -146,7 +147,7 @@ async def calculate_sentiment(
                         match_type = "single_team"
                         # Apply confidence penalty for single-team matches (70% of original)
                         # This ensures dual-team posts rank higher in queries
-                        post.match_confidence = post.match_confidence * 0.7
+                        post.match_confidence = post.match_confidence * Decimal("0.7")
 
             # Skip posts without valid game_key
             if not game_key:

@@ -266,12 +266,13 @@ Start with robust data pipeline and time-series storage, then build UI to visual
    - Auto-refresh every 10-15 minutes (polling, not WebSocket to frontend)
    - Dark theme matching mockups
    - Team color accents in game cards
+   - **Date navigation** (Prev/Next day controls): Defaults to yesterday's games to surface social content
+     - 💡 **Product Discovery**: Testing revealed yesterday's completed games have rich social posts and sentiment, while today's upcoming games have none. This feature is critical for delivering core user value.
    - **Simplification acceptable**: Basic list view works if timeline charts are complex
 
 **Acceptable MVP Simplifications (If Timeline Tight):**
 
 - ⚠️ **UI Polish**: Basic functional UI > pixel-perfect mockup
-- ⚠️ **Historical Browsing**: Today's games only (no date picker for past days)
 - ⚠️ **Excitement Algorithm**: Simple multi-factor formula (can tune post-launch)
 - ⚠️ **Coverage**: 5-10 top games with rich data > all 50 games with shallow data
 - ⚠️ **Win Probability Chart**: Optional if time-constrained (betting odds streaming is primary goal)
@@ -294,7 +295,8 @@ Start with robust data pipeline and time-series storage, then build UI to visual
    - Demonstrates advanced data fusion and visualization
 
 2. **Historical Data & Trends**
-   - Date picker to browse past games
+   - ✅ **Basic date navigation** (Prev/Next day controls) - **IMPLEMENTED in MVP** (Story 4-11)
+   - 📅 Date picker / calendar widget to browse past games (advanced enhancement)
    - Season-long excitement trends
    - "Most exciting games of the season" leaderboard
    - Demonstrates batch processing and historical analysis

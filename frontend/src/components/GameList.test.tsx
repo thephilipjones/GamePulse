@@ -134,7 +134,7 @@ describe("GameList", () => {
       renderGameList();
 
       expect(
-        screen.getByText("No games scheduled for today."),
+        screen.getByText("No games scheduled for this date."),
       ).toBeInTheDocument();
     });
   });

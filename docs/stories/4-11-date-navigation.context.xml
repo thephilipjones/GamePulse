@@ -1,0 +1,414 @@
+<story-context id="bmad/bmm/workflows/4-implementation/story-context/template" v="1.0">
+  <metadata>
+    <epicId>4</epicId>
+    <storyId>11</storyId>
+    <title>Add Date Navigation (Prev/Next Day)</title>
+    <status>ready-for-dev</status>
+    <generatedAt>2025-11-20</generatedAt>
+    <generator>BMAD Story Context Workflow</generator>
+    <sourceStoryPath>docs/stories/4-11-date-navigation.md</sourceStoryPath>
+  </metadata>
+
+  <story>
+    <asA>basketball fan</asA>
+    <iWant>to navigate between yesterday's and today's games using prev/next day controls</iWant>
+    <soThat>I can view social media posts and game stories from completed games (yesterday) where the most interesting content exists</soThat>
+    <tasks>
+## Implementation Tasks
+
+### Component Development
+1. Create DateNavigator component with prev/next navigation
+2. Update useGames hook to accept date parameter
+3. Add URL state management to Dashboard
+4. Implement date formatting utilities
+
+### Testing
+5. Write component tests for DateNavigator
+6. Write integration tests for date navigation flow
+7. Manual verification on all breakpoints
+
+### Documentation
+8. Update PRD.md to reflect new date navigation feature
+9. Add JSDoc comments to new/modified components
+    </tasks>
+  </story>
+
+  <acceptanceCriteria>
+### AC-4.11.1: DateNavigator Component
+- Create `DateNavigator.tsx` component in `frontend/src/components/`
+- Component accepts `currentDate` (string, YYYY-MM-DD) and `onDateChange` (callback) props
+- Displays formatted date: "Wednesday, November 20, 2025" format
+- Prev button (←) calls `onDateChange` with previous day's date
+- Next button (→) calls `onDateChange` with next day's date
+- Uses Chakra UI components (IconButton, HStack, Text)
+- Accessible: aria-labels on buttons ("Previous day", "Next day")
+
+### AC-4.11.2: Update useGames Hook
+- Modify `useGames` hook to accept optional `date` parameter (string, YYYY-MM-DD)
+- If `date` provided: fetch from `GET /api/v1/games?date={date}`
+- If `date` omitted: fetch from `GET /api/v1/games` (defaults to today)
+- Update queryKey to include date: `['games', date || 'today']`
+- Different dates create separate cache entries
+- Preserve existing error handling and retry logic
+
+### AC-4.11.3: URL State Management
+- Use TanStack Router `useSearch()` to read `date` query param from URL
+- Use `useNavigate()` to update URL when date changes
+- URL format: `http://localhost:5173/?date=2025-11-19`
+- Browser back/forward buttons navigate between dates correctly
+- URL shareable (copy-paste includes date)
+
+### AC-4.11.4: Dashboard Integration
+- Add `DateNavigator` component to Dashboard page (above GameList)
+- Default to **yesterday's date** when no URL param present
+- Pass current date to `useGames(date)` hook
+- Update URL when user navigates dates
+- Preserve existing layout and styling
+
+### AC-4.11.5: Cache Optimization
+- Historical dates (not today): `staleTime: 5 * 60 * 1000` (5 minutes)
+- Today's date: `staleTime: 60 * 1000` (1 minute, existing behavior)
+- Historical dates: No auto-refresh polling (games already final)
+- Today's date: `refetchInterval: 60 * 1000` (60 seconds, existing behavior)
+- Verify in TanStack Query DevTools: separate cache entries per date
+
+### AC-4.11.6: Date Formatting
+- Display format: "Wednesday, November 20, 2025" (long weekday, month, day, year)
+- Use `Intl.DateTimeFormat('en-US', { ... })` for locale-aware formatting
+- API format: "2025-11-20" (YYYY-MM-DD, ISO 8601)
+- Internal Date objects: UTC timezone (consistent with backend)
+
+### AC-4.11.7: Component Tests
+- Test: Prev button decrements date by 1 day
+- Test: Next button increments date by 1 day
+- Test: Date formatted correctly (long format)
+- Test: `onDateChange` callback called with correct date string
+- Test: Aria-labels present on navigation buttons
+- All tests passing (no regressions)
+
+### AC-4.11.8: Integration Tests
+- Test: Dashboard defaults to yesterday when no URL param
+- Test: Dashboard uses URL param date when present
+- Test: Date change updates URL via navigate()
+- Test: useGames called with correct date parameter
+- Test: GameList re-renders when date changes
+
+### AC-4.11.9: Manual Verification
+- Load dashboard → Shows yesterday's date and games
+- Social posts visible for yesterday's completed games
+- Click prev/next → Games refresh, URL updates
+- Edit URL `?date=2025-03-15` → Loads games for that date
+- Browser back/forward buttons work
+- Auto-refresh continues for today's date (60s polling)
+- No auto-refresh for historical dates (performance optimization)
+- Mobile responsive (navigator fits on small screens)
+
+### AC-4.11.10: Documentation Updates
+- Update PRD.md: Move "Historical Browsing" from "Acceptable Simplifications" to "Core MVP Features"
+- Update PRD.md: Add note documenting product discovery insight (yesterday > today)
+- Add JSDoc comments to DateNavigator component
+- Add JSDoc comments to updated useGames hook
+- Update CLAUDE.md if navigation usage patterns need documentation
+  </acceptanceCriteria>
+
+  <artifacts>
+    <docs>
+      <doc>
+        <path>docs/PRD.md</path>
+        <title>Product Requirements Document</title>
+        <section>MVP Scope - Historical Browsing</section>
+        <snippet>PRD currently lists "Historical Browsing: Today's games only (no date picker for past days)" as acceptable MVP simplification. This story changes that decision based on product usage data showing yesterday's games have the most valuable social content.</snippet>
+      </doc>
+      <doc>
+        <path>docs/architecture.md</path>
+        <title>Architecture Document</title>
+        <section>Frontend Stack</section>
+        <snippet>React + TypeScript + Vite + TanStack Query/Router + Chakra UI. TanStack Router provides URL state management, TanStack Query handles data fetching with automatic caching.</snippet>
+      </doc>
+      <doc>
+        <path>docs/epics/epic-4-social-media-elt.md</path>
+        <title>Epic 4: Social Media Data Ingestion via ELT Pattern</title>
+        <section>Story 4-10: Social Posts Feed</section>
+        <snippet>Story 4-10 integrated social posts feed into game cards. This story (4-11) enables navigation to yesterday's games where the social posts actually exist, unblocking the core user value.</snippet>
+      </doc>
+      <doc>
+        <path>docs/stories/3-4-build-game-list.md</path>
+        <title>Story 3-4: Build Game List</title>
+        <section>useGames Hook Implementation</section>
+        <snippet>Current useGames hook fetches games without parameters. This story extends it to accept optional date parameter while preserving existing auto-refresh behavior.</snippet>
+      </doc>
+      <doc>
+        <path>docs/sprint-change-proposal-2025-11-20.md</path>
+        <title>Sprint Change Proposal: Date Navigation</title>
+        <section>Full Analysis</section>
+        <snippet>Comprehensive analysis of the product discovery insight (yesterday > today), impact assessment, and implementation plan. Documents rationale for adding date navigation to MVP scope.</snippet>
+      </doc>
+    </docs>
+    <code>
+      <artifact>
+        <path>frontend/src/hooks/useGames.ts</path>
+        <kind>custom hook</kind>
+        <symbol>useGames</symbol>
+        <lines>1-48</lines>
+        <reason>Existing hook that fetches games for local date. Need to extend with optional date parameter to support historical date queries.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/routes/_layout/index.tsx</path>
+        <kind>route component</kind>
+        <symbol>Dashboard</symbol>
+        <lines>1-24</lines>
+        <reason>Main dashboard page. Need to add DateNavigator component and URL state management for date query params.</reason>
+      </artifact>
+      <artifact>
+        <path>frontend/src/components/GameList.tsx</path>
+        <kind>component</kind>
+        <symbol>GameList</symbol>
+        <lines>N/A</lines>
+        <reason>Existing component that renders game cards. No changes needed - will automatically render games for new dates.</reason>
+      </artifact>
+      <artifact>
+        <path>backend/app/api/routes/games.py</path>
+        <kind>api route</kind>
+        <symbol>get_games</symbol>
+        <lines>26-63</lines>
+        <reason>Backend API endpoint that already supports optional date parameter. No changes needed - validates implementation pattern.</reason>
+      </artifact>
+    </code>
+    <dependencies>
+      <frontend>
+        <package name="react" version="^18.2.0" />
+        <package name="react-dom" version="^18.2.0" />
+        <package name="@tanstack/react-query" version="^5.28.14" />
+        <package name="@tanstack/react-router" version="1.19.1" />
+        <package name="@chakra-ui/react" version="^3.8.0" />
+        <package name="date-fns" version="^4.1.0" />
+        <package name="react-icons" version="^5.4.0" />
+      </frontend>
+      <frontend-dev>
+        <package name="vitest" version="^4.0.9" />
+        <package name="@testing-library/react" version="^16.3.0" />
+        <package name="@testing-library/jest-dom" version="^6.9.1" />
+        <package name="@testing-library/user-event" version="^14.6.1" />
+        <package name="typescript" version="^5.2.2" />
+        <package name="vite" version="^5.4.14" />
+      </frontend-dev>
+    </dependencies>
+  </artifacts>
+
+  <constraints>
+## Development Constraints
+
+### Frontend-Only Implementation
+- **No backend changes required** - API already supports `?date=YYYY-MM-DD` parameter
+- All implementation work is in frontend (React components, hooks, routing)
+
+### TanStack Router Patterns
+- Use `useSearch()` hook to read URL query parameters
+- Use `useNavigate()` hook to update URL when date changes
+- URL format: `?date=YYYY-MM-DD` (ISO 8601 format)
+- Browser back/forward navigation must work correctly
+
+### TanStack Query Patterns
+- Query keys must include date: `['games', date || 'today']`
+- Different dates create separate cache entries (automatic by queryKey)
+- Preserve existing refetch intervals and error handling
+
+### Chakra UI Component Standards
+- Use existing Chakra UI components (IconButton, HStack, Text)
+- Match existing design system (spacing, colors, typography)
+- Maintain responsive behavior on all breakpoints
+
+### Date Handling
+- Default to **yesterday's date** (not today) when no URL param
+- Use `Intl.DateTimeFormat` for locale-aware date display
+- Send dates to API in YYYY-MM-DD format (ISO 8601)
+- Use UTC timezone for consistency with backend
+
+### Performance
+- Historical dates: 5-minute staleTime (games already final)
+- Today's date: 1-minute staleTime + 60s polling (existing behavior)
+- No polling for historical dates (optimization)
+
+### Testing Requirements
+- Component tests with Vitest + React Testing Library
+- Integration tests for URL state and data fetching
+- Manual testing on mobile, tablet, desktop breakpoints
+  </constraints>
+
+  <interfaces>
+## Key Interfaces
+
+### API Endpoint (Existing - No Changes Needed)
+```http
+GET /api/v1/games?date={date}
+```
+**Query Parameters:**
+- `date` (optional): YYYY-MM-DD format, defaults to today in UTC
+
+**Response:** `GameListResponse`
+```typescript
+{
+  games: GamePublic[];
+  date: string;  // YYYY-MM-DD
+  count: number;
+}
+```
+
+### useGames Hook (To be Modified)
+```typescript
+// BEFORE (Current):
+export function useGames(): UseQueryResult<GameListResponse>
+
+// AFTER (New Signature):
+export function useGames(date?: string): UseQueryResult<GameListResponse>
+```
+
+### DateNavigator Component (New)
+```typescript
+interface DateNavigatorProps {
+  currentDate: string;  // YYYY-MM-DD format
+  onDateChange: (newDate: string) => void;
+}
+
+export function DateNavigator({ currentDate, onDateChange }: DateNavigatorProps): JSX.Element
+```
+
+### TanStack Router Search Params
+```typescript
+// URL search params type
+interface SearchParams {
+  date?: string;  // YYYY-MM-DD format
+}
+
+// Usage in Dashboard component
+const { date } = useSearch<SearchParams>();
+const navigate = useNavigate();
+navigate({ search: { date: '2025-11-19' } });
+```
+
+### Date Formatting Utilities
+```typescript
+// Get yesterday's date in YYYY-MM-DD format
+function getYesterdayDate(): string
+
+// Format date for display: "Wednesday, November 20, 2025"
+function formatDisplayDate(dateStr: string): string
+```
+  </interfaces>
+
+  <tests>
+    <standards>
+Frontend tests use Vitest as the test runner with React Testing Library for component testing. Tests follow Arrange-Act-Assert pattern with descriptive test names. Mock data uses factory functions for consistency. All components have corresponding .test.tsx files in the same directory.
+
+Component tests verify:
+- Props handling and callbacks
+- User interactions (clicks, inputs)
+- Conditional rendering
+- Accessibility (aria-labels, keyboard navigation)
+
+Integration tests verify:
+- Data fetching with TanStack Query
+- URL state management with TanStack Router
+- Component composition and data flow
+    </standards>
+    <locations>
+frontend/src/components/**/*.test.tsx
+frontend/src/hooks/**/*.test.ts
+frontend/src/routes/**/*.test.tsx
+    </locations>
+    <ideas>
+#### AC-4.11.7: Component Tests for DateNavigator
+```typescript
+// frontend/src/components/DateNavigator.test.tsx
+
+describe('DateNavigator', () => {
+  it('should call onDateChange with previous day when prev button clicked', () => {
+    const mockOnChange = vi.fn();
+    render(<DateNavigator currentDate="2025-11-20" onDateChange={mockOnChange} />);
+    fireEvent.click(screen.getByLabelText('Previous day'));
+    expect(mockOnChange).toHaveBeenCalledWith('2025-11-19');
+  });
+
+  it('should call onDateChange with next day when next button clicked', () => {
+    const mockOnChange = vi.fn();
+    render(<DateNavigator currentDate="2025-11-20" onDateChange={mockOnChange} />);
+    fireEvent.click(screen.getByLabelText('Next day'));
+    expect(mockOnChange).toHaveBeenCalledWith('2025-11-21');
+  });
+
+  it('should format date as "Wednesday, November 20, 2025"', () => {
+    render(<DateNavigator currentDate="2025-11-20" onDateChange={vi.fn()} />);
+    expect(screen.getByText(/Wednesday, November 20, 2025/i)).toBeInTheDocument();
+  });
+
+  it('should have accessible aria-labels on navigation buttons', () => {
+    render(<DateNavigator currentDate="2025-11-20" onDateChange={vi.fn()} />);
+    expect(screen.getByLabelText('Previous day')).toBeInTheDocument();
+    expect(screen.getByLabelText('Next day')).toBeInTheDocument();
+  });
+});
+```
+
+#### AC-4.11.8: Integration Tests for Dashboard
+```typescript
+// frontend/src/routes/_layout/index.test.tsx
+
+describe('Dashboard with date navigation', () => {
+  it('should default to yesterday when no URL param', () => {
+    vi.mocked(useSearch).mockReturnValue({});
+    render(<Dashboard />);
+    const yesterday = getYesterdayDate();
+    expect(useGames).toHaveBeenCalledWith(yesterday);
+  });
+
+  it('should use date from URL query param if present', () => {
+    vi.mocked(useSearch).mockReturnValue({ date: '2025-11-15' });
+    render(<Dashboard />);
+    expect(useGames).toHaveBeenCalledWith('2025-11-15');
+  });
+
+  it('should update URL when date changes', () => {
+    const mockNavigate = vi.fn();
+    vi.mocked(useNavigate).mockReturnValue(mockNavigate);
+    render(<Dashboard />);
+    fireEvent.click(screen.getByLabelText('Next day'));
+    expect(mockNavigate).toHaveBeenCalledWith({
+      search: { date: expect.stringMatching(/\d{4}-\d{2}-\d{2}/) },
+    });
+  });
+});
+```
+
+#### AC-4.11.2: useGames Hook Tests
+```typescript
+// frontend/src/hooks/useGames.test.ts
+
+describe('useGames hook', () => {
+  it('should fetch games with date parameter when provided', async () => {
+    const { result } = renderHook(() => useGames('2025-11-19'));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('date=2025-11-19'));
+  });
+
+  it('should use different cache keys for different dates', () => {
+    const { result: result1 } = renderHook(() => useGames('2025-11-19'));
+    const { result: result2 } = renderHook(() => useGames('2025-11-20'));
+    expect(result1.current.queryKey).not.toEqual(result2.current.queryKey);
+  });
+
+  it('should apply 5min staleTime for historical dates', () => {
+    const { result } = renderHook(() => useGames('2025-11-15'));
+    expect(result.current.staleTime).toBe(5 * 60 * 1000);
+  });
+
+  it('should apply 1min staleTime and polling for today', () => {
+    const today = new Date().toISOString().split('T')[0];
+    const { result } = renderHook(() => useGames(today));
+    expect(result.current.staleTime).toBe(60 * 1000);
+    expect(result.current.refetchInterval).toBe(60 * 1000);
+  });
+});
+```
+    </ideas>
+  </tests>
+</story-context>

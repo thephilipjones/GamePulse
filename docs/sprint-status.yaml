@@ -89,6 +89,7 @@ development_status:
   4-8-game-matching-post-processor: ready-for-dev # Optimization - batch match stg_social_posts to games - Context ready 2025-11-16 (DEFERRED - do after 4-9, 4-10)
   4-9-game-card-ui-design: done # UX - Enhanced game cards with team branding, colors, and status grouping - Review complete 2025-11-17: 40 tests passing, accessibility fixes applied, game_period display added
   4-10-social-posts-feed: done # UX - Display social media posts and sentiment for each game - Review approved 2025-11-18
+  4-11-date-navigation: ready-for-dev # UX - Prev/next day navigation to view yesterday's games (where social posts are) - Story created 2025-11-20 via correct-course workflow
   epic-4-retrospective: optional
 
   # Epic 5: Moment Detection & Excitement Scoring (1 story defined, rest to be decomposed)
