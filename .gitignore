@@ -25,3 +25,9 @@ terraform.tfvars
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+*.pyc
+__pycache__/

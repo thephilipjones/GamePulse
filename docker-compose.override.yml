@@ -139,6 +139,25 @@ services:
   dagster-daemon:
     restart: "no"
 
+  jupyter:
+    build:
+      context: ./notebooks
+      dockerfile: Dockerfile
+    restart: "no"
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-app}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      - db
+    command: start-notebook.sh --NotebookApp.token=''
+
 networks:
   traefik-public:
     # For local dev, don't expect an external Traefik network

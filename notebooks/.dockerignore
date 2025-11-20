@@ -1,0 +1,13 @@
+# Don't copy notebooks into image (they're volume mounted)
+analysis/
+*.ipynb
+.ipynb_checkpoints/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/

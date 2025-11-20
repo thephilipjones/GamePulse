@@ -143,6 +143,70 @@ docker compose exec dagster-daemon python
 # - View freshness status in Dagster UI Assets tab
 ```
 
+### Jupyter Notebooks (Data Analysis)
+
+```bash
+# Start Jupyter with database
+docker compose up -d db jupyter
+
+# Or start with full stack
+docker compose watch
+
+# Access JupyterLab at: http://localhost:8888
+# (No token required in development)
+
+# Notebooks are persisted in ./notebooks/analysis/
+```
+
+**Getting Started:**
+
+1. Open http://localhost:8888 in your browser
+2. Navigate to `analysis/getting_started.ipynb`
+3. Run cells to explore pipeline data and social post lifecycle
+
+**Available Analysis:**
+
+- **Pipeline Overview**: Row counts at each stage (raw → staged → fact)
+- **Social Post Lifecycle**: Track posts from ingestion → processing → matching
+- **Volume Trends**: Daily ingestion metrics over time
+- **Match Analysis**: Match rates by subreddit, game coverage
+- **Sentiment Distribution**: Positive/negative/neutral breakdown
+
+**Database Connection:**
+
+The Jupyter container connects to the same database as the backend. Environment variables are automatically configured:
+
+```python
+# In notebook cells, use the pre-configured connection:
+from sqlmodel import create_engine, Session, text
+import pandas as pd
+import os
+
+DATABASE_URL = (
+    f"postgresql+psycopg://{os.environ['POSTGRES_USER']}:"
+    f"{os.environ['POSTGRES_PASSWORD']}@"
+    f"{os.environ['POSTGRES_SERVER']}:"
+    f"{os.environ['POSTGRES_PORT']}/"
+    f"{os.environ['POSTGRES_DB']}"
+)
+
+engine = create_engine(DATABASE_URL)
+
+# Query example
+with Session(engine) as session:
+    df = pd.read_sql(text("SELECT * FROM fact_game LIMIT 10"), session.connection())
+```
+
+**Directory Structure:**
+
+```
+notebooks/
+├── Dockerfile           # Jupyter container definition
+└── analysis/
+    ├── exploratory/     # EDA notebooks
+    └── getting_started.ipynb  # Starter notebook with examples
+```
+
 ### Frontend Development
 
 ```bash
