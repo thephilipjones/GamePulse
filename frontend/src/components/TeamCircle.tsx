@@ -8,34 +8,23 @@ interface TeamCircleProps {
 }
 
 /**
- * TeamCircle component displays team as a colored circle with abbreviation.
+ * TeamCircle component displays team as a subtle circle with abbreviation.
  *
  * Features:
- * - Large circular avatar (96px diameter)
- * - 2-letter team abbreviation in white
- * - Team color as background (with fallback)
- * - Uses secondary color when primary is white
+ * - Subtle circular placeholder (future logo container)
+ * - 2-letter team abbreviation
+ * - Muted background to not compete with gradient
  * - Team name displayed below circle
- * - Designed to match mockup specifications
+ * - Designed as placeholder for future team logos
  */
-export function TeamCircle({
-  teamName,
-  primaryColor,
-  secondaryColor,
-  abbreviation,
-}: TeamCircleProps) {
-  // Use secondary color if primary is white (invisible on light backgrounds)
-  const isWhite = primaryColor?.toUpperCase() === "#FFFFFF";
-  const bgColor =
-    isWhite && secondaryColor ? secondaryColor : primaryColor || "#6b7280";
-
+export function TeamCircle({ teamName, abbreviation }: TeamCircleProps) {
   return (
     <VStack gap={1}>
-      {/* Colored Circle with Abbreviation */}
+      {/* Subtle Circle with Abbreviation (future logo placeholder) */}
       <Box
         w={{ base: 10, md: 16 }}
         h={{ base: 10, md: 16 }}
-        bg={bgColor}
+        bg="rgba(128, 128, 128, 0.15)"
         borderRadius="full"
         display="flex"
         alignItems="center"
@@ -46,7 +35,7 @@ export function TeamCircle({
         <Text
           fontSize={{ base: "xs", md: "lg" }}
           fontWeight="bold"
-          color="white"
+          color="text.primary"
           textTransform="uppercase"
           userSelect="none"
         >
