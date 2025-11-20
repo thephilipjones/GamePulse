@@ -31,3 +31,6 @@ terraform.tfvars
 **/.ipynb_checkpoints/
 *.pyc
 __pycache__/
+
+# Color values export
+team_colors_export-*.sql

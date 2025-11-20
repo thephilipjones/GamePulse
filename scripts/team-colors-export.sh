@@ -25,4 +25,5 @@ COUNT=$(wc -l < "$OUTPUT_FILE")
 echo "Exported $COUNT team(s) to $OUTPUT_FILE"
 echo ""
 echo "To apply on target database:"
-echo "  cat $OUTPUT_FILE | docker compose exec -T db psql -U postgres -d app"
+# echo "  cat $OUTPUT_FILE | docker compose exec -T db psql -U postgres -d app"
+echo "  cat $OUTPUT_FILE | docker compose exec -T db psql -U gamepulse -d gamepulse"
