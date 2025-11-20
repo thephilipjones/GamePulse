@@ -24,6 +24,13 @@ repos:
         args:
           - --fix
       - id: ruff-format
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.2
+    hooks:
+      - id: nbstripout
+        args:
+          - --extra-keys
+          - metadata.kernelspec metadata.language_info cell.metadata.execution cell.metadata.scrolled
 
 ci:
   autofix_commit_msg: 🎨 [pre-commit.ci] Auto format from pre-commit.com hooks
