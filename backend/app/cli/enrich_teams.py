@@ -71,6 +71,19 @@ def main() -> None:
         help="Delete duplicate teams (keeps slug-based IDs, removes numeric seed data IDs)",
     )
 
+    parser.add_argument(
+        "--show-unmatched",
+        action="store_true",
+        help="Show unmatched teams with candidate alternatives from the colors dataset",
+    )
+
+    parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Interactively select matches for unmatched teams",
+    )
+
     args = parser.parse_args()
 
     # Configure logging
@@ -106,6 +119,7 @@ def main() -> None:
                     sport=args.sport,
                     dry_run=args.dry_run,
                     force=args.force,
+                    track_unmatched=args.show_unmatched or args.interactive,
                 )
             else:
                 # Skip enrichment, just detect duplicates
@@ -170,6 +184,136 @@ def main() -> None:
                 for error in report.errors:
                     print(f"  - {error}")
                 print()
+
+            # Show unmatched teams if requested
+            if args.show_unmatched and report.unmatched_teams:
+                print()
+                print("=" * 60)
+                print(
+                    f"Unmatched Teams ({len(report.unmatched_teams)} below 85% threshold)"
+                )
+                print("=" * 60)
+                print()
+
+                # Sort by best score descending (highest near-misses first)
+                sorted_unmatched = sorted(
+                    report.unmatched_teams, key=lambda x: x["best_score"], reverse=True
+                )
+
+                for team_info in sorted_unmatched:
+                    team_name = team_info["team_name"]
+                    team_id = team_info["team_id"]
+                    best_score = team_info["best_score"]
+                    candidates = team_info["candidates"]
+
+                    print(f"• {team_name} ({team_id}) - Best: {best_score}%")
+
+                    if candidates:
+                        print("  Candidates:")
+                        for i, candidate in enumerate(candidates, 1):
+                            score = candidate["score"]
+                            name = candidate["name"]
+                            color_preview = ""
+                            if candidate.get("primary"):
+                                color_preview = f" [{candidate['primary']}]"
+                            print(f"    {i}. {name}: {score}%{color_preview}")
+                    else:
+                        print("  No candidates above 50% threshold")
+                    print()
+
+            # Interactive selection mode
+            if args.interactive and report.unmatched_teams:
+                print()
+                print("=" * 60)
+                print("Interactive Match Selection")
+                print("=" * 60)
+                print("Enter a number to select a match, or press Enter to skip.")
+                print("Type 'q' to quit and save changes, 'x' to quit without saving.")
+                print()
+
+                # Sort by best score descending (highest near-misses first)
+                sorted_unmatched = sorted(
+                    report.unmatched_teams, key=lambda x: x["best_score"], reverse=True
+                )
+
+                teams_matched = 0
+                for idx, team_info in enumerate(sorted_unmatched, 1):
+                    team_name = team_info["team_name"]
+                    team_id = team_info["team_id"]
+                    best_score = team_info["best_score"]
+                    candidates = team_info["candidates"]
+
+                    if not candidates:
+                        continue  # Skip teams with no candidates
+
+                    print(f"[{idx}/{len(sorted_unmatched)}] {team_name} ({team_id})")
+                    print(f"Best score: {best_score}%")
+                    print()
+
+                    for i, candidate in enumerate(candidates, 1):
+                        score = candidate["score"]
+                        name = candidate["name"]
+                        primary = candidate.get("primary", "N/A")
+                        secondary = candidate.get("secondary", "N/A")
+                        print(f"  {i}. {name}")
+                        print(f"     Score: {score}% | Colors: {primary}, {secondary}")
+
+                    print()
+                    try:
+                        max_choice = len(candidates)
+                        choice = (
+                            input(
+                                f"Select (1-{max_choice}), Enter to skip, q to save & quit: "
+                            )
+                            .strip()
+                            .lower()
+                        )
+                    except EOFError:
+                        # Handle non-interactive environments
+                        print("\nNon-interactive environment detected, skipping...")
+                        break
+
+                    if choice == "q":
+                        print("\nSaving changes and exiting...")
+                        break
+                    elif choice == "x":
+                        print("\nDiscarding changes and exiting...")
+                        session.rollback()
+                        sys.exit(0)
+                    elif choice == "":
+                        print("Skipped.\n")
+                        continue
+                    else:
+                        try:
+                            choice_num = int(choice)
+                            if 1 <= choice_num <= len(candidates):
+                                selected = candidates[choice_num - 1]
+                                success = enricher.apply_manual_match(
+                                    team_id=team_id,
+                                    primary_color=selected.get("primary"),
+                                    secondary_color=selected.get("secondary"),
+                                    matched_name=selected["name"],
+                                )
+                                if success:
+                                    teams_matched += 1
+                                    print(f"✓ Matched to {selected['name']}\n")
+                                else:
+                                    print("✗ Failed to apply match\n")
+                            else:
+                                print(f"Invalid choice. Enter 1-{len(candidates)}.\n")
+                        except ValueError:
+                            print("Invalid input. Enter a number or press Enter.\n")
+
+                # Commit interactive changes
+                if teams_matched > 0 and not args.dry_run:
+                    session.commit()
+                    print()
+                    print(f"✅ Saved {teams_matched} manual match(es) to database")
+                elif teams_matched > 0 and args.dry_run:
+                    print()
+                    print(
+                        f"🔍 DRY RUN - Would have saved {teams_matched} manual match(es)"
+                    )
 
             # Delete duplicates if requested
             deletion_result = None

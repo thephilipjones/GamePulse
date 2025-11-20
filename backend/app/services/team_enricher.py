@@ -48,6 +48,7 @@ class EnrichmentReport:
     duplicates_found: int = 0
     duplicate_groups: list[dict[str, Any]] | None = None
     errors: list[str] | None = None
+    unmatched_teams: list[dict[str, Any]] | None = None
 
     def __post_init__(self) -> None:
         """Initialize lists if None."""
@@ -55,6 +56,8 @@ class EnrichmentReport:
             self.errors = []
         if self.duplicate_groups is None:
             self.duplicate_groups = []
+        if self.unmatched_teams is None:
+            self.unmatched_teams = []
 
 
 class TeamEnricher:
@@ -143,6 +146,135 @@ class TeamEnricher:
             logger.error("fetch_colors_dataset.parse_error", error=str(e))
             raise
 
+    def _is_acronym(self, name: str) -> bool:
+        """Check if a name appears to be an acronym (2-6 uppercase letters)."""
+        clean = name.replace(".", "").replace("-", "").replace(" ", "")
+        return clean.isupper() and 2 <= len(clean) <= 6
+
+    def _get_acronym_from_name(self, name: str) -> str:
+        """
+        Generate acronym from a full name by taking first letter of each word.
+
+        Examples:
+            "Stephen F. Austin Lumberjacks" → "SFAL"
+            "Virginia Commonwealth Rams" → "VCR"
+            "Louisiana-Monroe Warhawks" → "LMW"
+        """
+        # Split on spaces and hyphens
+        import re
+
+        words = re.split(r"[\s\-]+", name)
+        # Take first letter of each word, skip common suffixes
+        skip_words = {"of", "the", "at", "and"}
+        acronym = "".join(
+            word[0].upper() for word in words if word and word.lower() not in skip_words
+        )
+        return acronym
+
+    def _acronym_match_score(self, team_acronym: str, dataset_name: str) -> float:
+        """
+        Score how well a team acronym matches a dataset name.
+
+        Returns score 0-100 based on how many letters match in order.
+        """
+        dataset_acronym = self._get_acronym_from_name(dataset_name)
+        team_upper = team_acronym.upper().replace(".", "")
+
+        # Exact acronym match
+        if team_upper == dataset_acronym:
+            return 95.0
+
+        # Check if team acronym is a prefix of dataset acronym
+        if dataset_acronym.startswith(team_upper):
+            return 90.0
+
+        # Check sequential letter matching (e.g., "SFA" in "SFAL")
+        if len(team_upper) >= 2:
+            matches = 0
+            dataset_idx = 0
+            for char in team_upper:
+                while dataset_idx < len(dataset_acronym):
+                    if dataset_acronym[dataset_idx] == char:
+                        matches += 1
+                        dataset_idx += 1
+                        break
+                    dataset_idx += 1
+
+            if matches == len(team_upper):
+                return 88.0
+            elif matches >= len(team_upper) - 1:
+                return 80.0
+
+        return 0.0
+
+    def _is_grayscale(self, hex_color: str | None) -> bool:
+        """
+        Check if a hex color is grayscale (white, black, or gray).
+
+        A color is grayscale if R=G=B (or very close).
+
+        Args:
+            hex_color: Hex color code like "#ffffff" or "#000"
+
+        Returns:
+            True if color is grayscale
+        """
+        if not hex_color:
+            return False
+
+        # Normalize hex color
+        color = hex_color.strip().lstrip("#").lower()
+
+        # Handle 3-char shorthand (#fff -> #ffffff)
+        if len(color) == 3:
+            color = "".join(c * 2 for c in color)
+
+        if len(color) != 6:
+            return False
+
+        try:
+            r = int(color[0:2], 16)
+            g = int(color[2:4], 16)
+            b = int(color[4:6], 16)
+
+            # Check if R, G, B are all equal (or very close for near-grays)
+            tolerance = 10  # Allow slight variation for near-grays
+            return (
+                abs(r - g) <= tolerance
+                and abs(g - b) <= tolerance
+                and abs(r - b) <= tolerance
+            )
+
+        except ValueError:
+            return False
+
+    def _swap_grayscale_colors(
+        self, primary: str | None, secondary: str | None
+    ) -> tuple[str | None, str | None]:
+        """
+        Swap primary and secondary colors if primary is grayscale but secondary isn't.
+
+        This ensures teams don't end up with white/black/gray as their primary
+        display color when a more distinctive color is available.
+
+        Args:
+            primary: Primary color hex code
+            secondary: Secondary color hex code
+
+        Returns:
+            Tuple of (primary, secondary), potentially swapped
+        """
+        if primary and secondary:
+            if self._is_grayscale(primary) and not self._is_grayscale(secondary):
+                logger.debug(
+                    "swap_grayscale_colors.swapped",
+                    original_primary=primary,
+                    original_secondary=secondary,
+                )
+                return secondary, primary
+
+        return primary, secondary
+
     def match_team_to_colors_dataset(
         self, team: DimTeam
     ) -> dict[str, str | None] | None:
@@ -170,18 +302,30 @@ class TeamEnricher:
             return None
 
         team_name_lower = team.team_name.lower()
+        is_acronym = self._is_acronym(team.team_name)
         best_match = None
         best_score: float = 0.0
 
         for entry in self.colors_data:
-            dataset_name = entry.get("name", "").lower()
+            dataset_name = entry.get("name", "")
+            dataset_name_lower = dataset_name.lower()
 
             # Try exact match first
-            if team_name_lower == dataset_name or team_name_lower in dataset_name:
+            if (
+                team_name_lower == dataset_name_lower
+                or team_name_lower in dataset_name_lower
+            ):
                 score: float = 100.0
             else:
                 # Fuzzy match
-                score = fuzz.partial_ratio(team_name_lower, dataset_name)
+                score = fuzz.partial_ratio(team_name_lower, dataset_name_lower)
+
+                # If team name looks like an acronym, also try acronym matching
+                if is_acronym:
+                    acronym_score = self._acronym_match_score(
+                        team.team_name, dataset_name
+                    )
+                    score = max(score, acronym_score)
 
             if score > best_score:
                 best_score = score
@@ -190,9 +334,15 @@ class TeamEnricher:
         # Only return match if confidence is high enough
         if best_score >= self.MATCH_THRESHOLD and best_match:
             colors = best_match.get("colors", [])
+            primary = colors[0] if len(colors) > 0 else None
+            secondary = colors[1] if len(colors) > 1 else None
+
+            # Swap if primary is grayscale but secondary isn't
+            primary, secondary = self._swap_grayscale_colors(primary, secondary)
+
             result = {
-                "primary": colors[0] if len(colors) > 0 else None,
-                "secondary": colors[1] if len(colors) > 1 else None,
+                "primary": primary,
+                "secondary": secondary,
             }
 
             logger.debug(
@@ -213,6 +363,143 @@ class TeamEnricher:
             best_score=best_score,
         )
         return None
+
+    def get_all_match_candidates(
+        self, team: DimTeam, min_score: float = 50.0
+    ) -> list[dict[str, Any]]:
+        """
+        Get all potential matches for a team above a minimum score threshold.
+
+        Returns all matches sorted by score descending, useful for diagnostics
+        when a team doesn't meet the primary match threshold.
+
+        Args:
+            team: DimTeam instance to match
+            min_score: Minimum score to include in results (default: 50)
+
+        Returns:
+            List of match candidates, each containing:
+            - name: Dataset team name
+            - score: Match score (0-100)
+            - primary: Primary color hex code
+            - secondary: Secondary color hex code
+
+        Example:
+            [
+                {"name": "Duke Blue Devils", "score": 82.5, "primary": "#003087", "secondary": "#FFFFFF"},
+                {"name": "Duquesne Dukes", "score": 68.0, "primary": "#002D72", "secondary": "#BA0C2F"},
+            ]
+        """
+        if not self.colors_data:
+            return []
+
+        team_name_lower = team.team_name.lower()
+        is_acronym = self._is_acronym(team.team_name)
+        candidates = []
+
+        for entry in self.colors_data:
+            dataset_name = entry.get("name", "")
+            dataset_name_lower = dataset_name.lower()
+
+            # Calculate score
+            if (
+                team_name_lower == dataset_name_lower
+                or team_name_lower in dataset_name_lower
+            ):
+                score: float = 100.0
+            else:
+                score = fuzz.partial_ratio(team_name_lower, dataset_name_lower)
+
+                # If team name looks like an acronym, also try acronym matching
+                if is_acronym:
+                    acronym_score = self._acronym_match_score(
+                        team.team_name, dataset_name
+                    )
+                    score = max(score, acronym_score)
+
+            if score >= min_score:
+                colors = entry.get("colors", [])
+                primary = colors[0] if len(colors) > 0 else None
+                secondary = colors[1] if len(colors) > 1 else None
+
+                # Swap if primary is grayscale but secondary isn't
+                primary, secondary = self._swap_grayscale_colors(primary, secondary)
+
+                candidates.append(
+                    {
+                        "name": entry.get("name", ""),
+                        "score": round(score, 1),
+                        "primary": primary,
+                        "secondary": secondary,
+                    }
+                )
+
+        # Sort by score descending
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+
+        return candidates[:10]  # Return top 10 candidates
+
+    def apply_manual_match(
+        self,
+        team_id: str,
+        primary_color: str | None,
+        secondary_color: str | None,
+        matched_name: str,
+    ) -> bool:
+        """
+        Apply a manually selected match to a team.
+
+        Sets the team's colors from the selected candidate and adds
+        the matched dataset name as an alias.
+
+        Args:
+            team_id: Team ID to update
+            primary_color: Primary color hex code
+            secondary_color: Secondary color hex code
+            matched_name: Name from the colors dataset to add as alias
+
+        Returns:
+            True if team was updated, False if team not found
+        """
+        from sqlmodel import select
+
+        stmt = select(DimTeam).where(DimTeam.team_id == team_id)
+        team = self.session.exec(stmt).first()
+
+        if not team:
+            logger.warning("apply_manual_match.team_not_found", team_id=team_id)
+            return False
+
+        # Swap if primary is grayscale but secondary isn't
+        primary_color, secondary_color = self._swap_grayscale_colors(
+            primary_color, secondary_color
+        )
+
+        # Apply colors
+        if primary_color:
+            team.primary_color = primary_color
+        if secondary_color:
+            team.secondary_color = secondary_color
+
+        # Add matched name as alias
+        # Extract just the school name from "Duke Blue Devils" -> "duke blue devils"
+        matched_alias = matched_name.lower()
+        current_aliases = team.aliases or []
+
+        if matched_alias not in [a.lower() for a in current_aliases]:
+            team.aliases = self.merge_aliases(current_aliases, [matched_alias])
+
+        # Update timestamp
+        team.updated_at = datetime.now(timezone.utc)
+
+        logger.info(
+            "apply_manual_match.completed",
+            team_id=team_id,
+            primary_color=primary_color,
+            matched_name=matched_name,
+        )
+
+        return True
 
     def generate_aliases(self, team_name: str) -> list[str]:
         """
@@ -566,6 +853,7 @@ class TeamEnricher:
         sport: str = "ncaam",
         dry_run: bool = False,
         force: bool = False,
+        track_unmatched: bool = False,
     ) -> EnrichmentReport:
         """
         Enrich all teams for a given sport.
@@ -574,6 +862,7 @@ class TeamEnricher:
             sport: Sport code (default: "ncaam")
             dry_run: If True, don't commit changes to database
             force: If True, update even if data already exists
+            track_unmatched: If True, collect diagnostic info for unmatched teams
 
         Returns:
             EnrichmentReport with summary of enrichment results
@@ -628,6 +917,21 @@ class TeamEnricher:
                             report.aliases_added += 1
                     else:
                         report.teams_skipped += 1
+
+                    # Track unmatched teams (no colors after enrichment)
+                    # This is idempotent: teams with colors from previous runs
+                    # (auto or manual) won't be included
+                    if track_unmatched and not team.primary_color:
+                        candidates = self.get_all_match_candidates(team)
+                        best_score = candidates[0]["score"] if candidates else 0
+                        unmatched_info = {
+                            "team_id": team.team_id,
+                            "team_name": team.team_name,
+                            "best_score": best_score,
+                            "candidates": candidates,  # Top 10 candidates
+                        }
+                        if report.unmatched_teams is not None:
+                            report.unmatched_teams.append(unmatched_info)
 
                 except Exception as e:
                     report.teams_failed += 1
