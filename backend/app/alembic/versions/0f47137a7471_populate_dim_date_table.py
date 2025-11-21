@@ -40,7 +40,6 @@ def upgrade():
             'day_of_month': current_date.day,
             'day_of_week': current_date.weekday() + 1,  # Monday=1
             'day_name': current_date.strftime('%A'),
-            'week_of_year': int(current_date.strftime('%U')),
             'is_weekend': current_date.weekday() >= 5,
             'is_march_madness': False,  # Can be updated later for specific dates
         })
@@ -58,7 +57,6 @@ def upgrade():
             sa.column('day_of_month', sa.Integer),
             sa.column('day_of_week', sa.Integer),
             sa.column('day_name', sa.String),
-            sa.column('week_of_year', sa.Integer),
             sa.column('is_weekend', sa.Boolean),
             sa.column('is_march_madness', sa.Boolean),
         ),
