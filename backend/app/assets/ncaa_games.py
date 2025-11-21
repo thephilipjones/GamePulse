@@ -379,7 +379,7 @@ async def transform_to_fact_game(
 )
 async def ncaa_games_window(
     context: AssetExecutionContext, database: DatabaseResource
-) -> dict[str, int | str]:
+) -> dict[str, Any]:
     """
     Materialize NCAA Men's Basketball games for a 14-day window (excluding today).
 
