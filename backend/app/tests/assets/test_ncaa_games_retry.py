@@ -25,14 +25,14 @@ import pytest
 try:
     from dagster import Backoff, RetryPolicy
 
-    from app.assets.ncaa_games import ncaa_games
+    from app.assets.ncaa_games import ncaa_games_today
 
     DAGSTER_AVAILABLE = True
 except (ImportError, Exception):
     DAGSTER_AVAILABLE = False
     Backoff = None  # type: ignore[assignment, misc]
     RetryPolicy = None  # type: ignore[assignment, misc]
-    ncaa_games = None  # type: ignore[assignment]
+    ncaa_games_today = None  # type: ignore[assignment]
 
 
 @pytest.mark.skipif(
@@ -44,7 +44,7 @@ class TestNCAAGamesRetryPolicy:
 
     def test_retry_policy_configuration(self) -> None:
         """
-        AC1: Verify ncaa_games asset has correct RetryPolicy configuration.
+        AC1: Verify ncaa_games_today asset has correct RetryPolicy configuration.
 
         Expected config (from Story 2-4):
         - max_retries: 3
@@ -57,7 +57,7 @@ class TestNCAAGamesRetryPolicy:
         - Backoff strategy is exponential
         """
         # Access asset definition
-        assets_def = ncaa_games
+        assets_def = ncaa_games_today
 
         # Validate retry_policy is configured
         # In Dagster 1.12+, retry_policy is stored in jobs, not assets
@@ -96,13 +96,15 @@ class TestNCAAGamesRetryPolicy:
         Dagster UI should display retry policy in asset details.
         Test validates asset definition includes required metadata.
         """
-        assets_def = ncaa_games
+        assets_def = ncaa_games_today
 
         # Get asset spec
         asset_spec = list(assets_def.specs)[0]
 
         # Validate asset metadata
-        assert asset_spec.key.path == ["ncaa_games"], "Asset key should be ncaa_games"
+        assert asset_spec.key.path == ["ncaa_games_today"], (
+            "Asset key should be ncaa_games_today"
+        )
         assert asset_spec.group_name == "sports_data", (
             "Asset should be in sports_data group"
         )
